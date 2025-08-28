@@ -1,0 +1,3 @@
+[submodule "mipcandy-docs"]
+	path = mipcandy-docs
+	url = https://github.com/ProjectNeura/mipcandy-docs
