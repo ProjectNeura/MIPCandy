@@ -8,9 +8,9 @@ from typing import Literal, override, Self, Sized, Sequence
 import torch
 from torch.utils.data import Dataset
 
-from mip_candy.data.io import load_image
-from mip_candy.layer import HasDevice
-from mip_candy.types import Transform
+from mipcandy.data.io import load_image
+from mipcandy.layer import HasDevice
+from mipcandy.types import Transform
 
 
 class Loader(object):

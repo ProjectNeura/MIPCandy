@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mip_candy"
+name = "mipcandy"
 version = "1.0.0-alpha.0"
 description = "A Candy for Medical Image Processing"
 license = "Apache-2.0"
@@ -18,10 +18,10 @@ dependencies = ["torch", "ptflops", "numpy", "SimpleITK", "matplotlib", "rich", 
 standard = ["pyvista"]
 
 [tool.hatch.build.targets.sdist]
-only-include = ["mip_candy"]
+only-include = ["mipcandy"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["mip_candy"]
+packages = ["mipcandy"]
 
 [project.urls]
 Homepage = "https://mipcandy.projectneura.org"

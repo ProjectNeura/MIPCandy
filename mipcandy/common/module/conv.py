@@ -3,7 +3,7 @@ from typing import override
 import torch
 from torch import nn
 
-from mip_candy.layer import LayerT
+from mipcandy.layer import LayerT
 
 
 class AbstractConvBlock(nn.Module):

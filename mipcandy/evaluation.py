@@ -3,9 +3,9 @@ from typing import Callable, Sequence, Generator, override
 
 import torch
 
-from mip_candy.data import SupervisedDataset, MergedDataset, Loader, DatasetFromMemory
-from mip_candy.inference import parse_predictant, Predictor
-from mip_candy.types import SupportedPredictant
+from mipcandy.data import SupervisedDataset, MergedDataset, Loader, DatasetFromMemory
+from mipcandy.inference import parse_predictant, Predictor
+from mipcandy.types import SupportedPredictant
 
 
 @dataclass

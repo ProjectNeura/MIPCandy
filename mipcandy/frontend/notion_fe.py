@@ -3,8 +3,8 @@ from typing import override, Literal
 
 from requests import get, post, patch, Response
 
-from mip_candy.frontend.prototype import Frontend
-from mip_candy.types import Secrets
+from mipcandy.frontend.prototype import Frontend
+from mipcandy.types import Secrets
 
 
 class NotionFrontend(Frontend):

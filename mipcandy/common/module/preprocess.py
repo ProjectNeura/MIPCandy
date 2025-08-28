@@ -4,7 +4,7 @@ from typing import Literal
 import torch
 from torch import nn
 
-from mip_candy.types import Colormap
+from mipcandy.types import Colormap
 
 
 class Pad(nn.Module):

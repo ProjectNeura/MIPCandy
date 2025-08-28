@@ -3,7 +3,7 @@ from typing import Literal
 import torch
 from torch import nn
 
-from mip_candy.metrics import do_reduction, soft_dice_coefficient
+from mipcandy.metrics import do_reduction, soft_dice_coefficient
 
 
 class FocalBCEWithLogits(nn.Module):

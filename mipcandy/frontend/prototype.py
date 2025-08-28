@@ -4,7 +4,7 @@ from typing import override
 
 from yaml import load as _load, SafeLoader as _SafeLoader
 
-from mip_candy.types import Secret, Secrets
+from mipcandy.types import Secret, Secrets
 
 
 def load_secrets(*, path: str | PathLike[str] = f"{abspath(__file__)[:-12]}secrets.yml") -> Secrets:

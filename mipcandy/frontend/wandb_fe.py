@@ -2,8 +2,8 @@ from typing import override
 
 from wandb import init, Run
 
-from mip_candy.frontend.prototype import Frontend
-from mip_candy.types import Secrets
+from mipcandy.frontend.prototype import Frontend
+from mipcandy.types import Secrets
 
 
 class WandBFrontend(Frontend):

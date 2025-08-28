@@ -9,8 +9,8 @@ import torch
 from matplotlib import pyplot as plt
 from torch import nn
 
-from mip_candy.common import ColorizeLabel
-from mip_candy.data.geometric import ensure_num_dimensions
+from mipcandy.common import ColorizeLabel
+from mipcandy.data.geometric import ensure_num_dimensions
 
 
 def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",

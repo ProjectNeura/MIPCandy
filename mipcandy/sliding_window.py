@@ -5,7 +5,7 @@ from typing import Literal
 import torch
 from torch import nn
 
-from mip_candy.layer import HasDevice
+from mipcandy.layer import HasDevice
 
 
 @dataclass

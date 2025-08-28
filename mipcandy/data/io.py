@@ -4,7 +4,7 @@ from os import PathLike
 import SimpleITK as SpITK
 import torch
 
-from mip_candy.data.geometric import ensure_num_dimensions
+from mipcandy.data.geometric import ensure_num_dimensions
 
 
 def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None,

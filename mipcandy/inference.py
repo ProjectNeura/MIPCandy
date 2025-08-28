@@ -7,11 +7,11 @@ from typing import Sequence, Mapping, Any, override
 import torch
 from torch import nn
 
-from mip_candy.common import Pad2d, Pad3d, Restore2d, Restore3d
-from mip_candy.data import save_image, Loader, UnsupervisedDataset
-from mip_candy.layer import WithPaddingModule
-from mip_candy.sliding_window import SlidingWindow
-from mip_candy.types import SupportedPredictant
+from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
+from mipcandy.data import save_image, Loader, UnsupervisedDataset
+from mipcandy.layer import WithPaddingModule
+from mipcandy.sliding_window import SlidingWindow
+from mipcandy.types import SupportedPredictant
 
 
 def parse_predictant(x: SupportedPredictant, loader: type[Loader], *, as_label: bool = False) -> tuple[list[

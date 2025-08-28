@@ -19,11 +19,11 @@ from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from mip_candy.common import Pad2d, Pad3d
-from mip_candy.frontend import Frontend, load_secrets
-from mip_candy.layer import WithPaddingModule
-from mip_candy.sliding_window import SWMetadata, SlidingWindow
-from mip_candy.types import Params
+from mipcandy.common import Pad2d, Pad3d
+from mipcandy.frontend import Frontend, load_secrets
+from mipcandy.layer import WithPaddingModule
+from mipcandy.sliding_window import SWMetadata, SlidingWindow
+from mipcandy.types import Params
 
 
 def try_append(new: float, to: dict[str, list[float]], key: str) -> None:

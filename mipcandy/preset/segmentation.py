@@ -4,10 +4,10 @@ from typing import override
 import torch
 from torch import nn, optim
 
-from mip_candy.common import AbsoluteLinearLR, DiceBCELossWithLogits
-from mip_candy.data import visualize2d, visualize3d, overlay
-from mip_candy.training import Trainer, TrainerToolbox
-from mip_candy.types import Params
+from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
+from mipcandy.data import visualize2d, visualize3d, overlay
+from mipcandy.training import Trainer, TrainerToolbox
+from mipcandy.types import Params
 
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
