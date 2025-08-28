@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mip_candy"
+version = "1.0.0-alpha.0"
+description = "A Candy for Medical Image Processing"
+license = "Apache-2.0"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Project Neura", email = "central@projectneura.org" }
+]
+dependencies = ["torch", "ptflops", "numpy", "SimpleITK", "matplotlib", "rich", "pandas", "requests"]
+
+[project.optional-dependencies]
+standard = ["pyvista"]
+
+[tool.hatch.build.targets.sdist]
+only-include = ["mip_candy"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["mip_candy"]
+
+[project.urls]
+Homepage = "https://mipcandy.projectneura.org"
+Documentation = "https://mipcandy-docs.projectneura.org"
+Repository = "https://github.com/ProjectNeura/MIPCandy"
