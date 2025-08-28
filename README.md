@@ -10,6 +10,8 @@ handful number of common network architectures with their corresponding training
 that are out-of-the-box ready to use. Additionally, it also provides adapters to popular frontend dashboards such as
 Notion, WandB, and TensorBoard.
 
+:link: [Home](https://mipcandy.projectneura.org)
+
 :link: [Docs](https://mipcandy-docs.projectneura.org)
 
 ## Installation
