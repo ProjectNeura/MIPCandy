@@ -20,7 +20,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from mipcandy.common import Pad2d, Pad3d
-from mipcandy.frontend import Frontend, load_secrets
+from mipcandy.frontend import Frontend
+from mipcandy.config import load_secrets
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params
