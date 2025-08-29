@@ -4,11 +4,11 @@ from typing import override, Literal
 from requests import get, post, patch, Response
 
 from mipcandy.frontend.prototype import Frontend
-from mipcandy.types import Secrets
+from mipcandy.types import Settings
 
 
 class NotionFrontend(Frontend):
-    def __init__(self, secrets: Secrets) -> None:
+    def __init__(self, secrets: Settings) -> None:
         super().__init__(secrets)
         self._api_key: str = self.require_nonempty_secret("notion_api_key", require_type=str)
         self._database_id: str = self.require_nonempty_secret("notion_database_id", require_type=str)

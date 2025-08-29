@@ -1,14 +1,14 @@
 from typing import override
 
 
-from mipcandy.types import Secret, Secrets
+from mipcandy.types import Setting, Settings
 
 
 class Frontend(object):
-    def __init__(self, secrets: Secrets) -> None:
-        self._secrets: Secrets = secrets
+    def __init__(self, secrets: Settings) -> None:
+        self._secrets: Settings = secrets
 
-    def require_nonempty_secret(self, entry: str, *, require_type: type | None = None) -> Secret:
+    def require_nonempty_secret(self, entry: str, *, require_type: type | None = None) -> Setting:
         if entry not in self._secrets:
             raise ValueError(f"Missing secret {entry}")
         secret = self._secrets[entry]
@@ -33,7 +33,7 @@ class Frontend(object):
 
 def create_hybrid_frontend(*frontends: Frontend) -> type[Frontend]:
     class HybridFrontend(Frontend):
-        def __init__(self, secrets: Secrets) -> None:
+        def __init__(self, secrets: Settings) -> None:
             super().__init__(secrets)
 
         @override
