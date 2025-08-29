@@ -1,4 +1,5 @@
 from mipcandy.common import *
+from mipcandy.config import load_settings, save_settings, load_secrets, save_secrets
 from mipcandy.data import *
 from mipcandy.evaluation import EvalCase, EvalResult, Evaluator
 from mipcandy.frontend import *
@@ -10,4 +11,6 @@ from mipcandy.metrics import do_reduction, dice_similarity_coefficient_binary, \
 from mipcandy.preset import *
 from mipcandy.sanity_check import num_trainable_params, sanity_check
 from mipcandy.training import TrainerToolbox, Trainer, SWMetadata, SlidingTrainer
-from mipcandy.types import Secret, Secrets, Params, Transform, SupportedPredictant, Colormap
+from mipcandy.types import Setting, Settings, Params, Transform, SupportedPredictant, Colormap
+from mipcandy.__entry__ import __entry__
+from mipcandy.run import config

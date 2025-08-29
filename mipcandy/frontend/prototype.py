@@ -1,30 +1,14 @@
-from os import PathLike
-from os.path import abspath, exists
 from typing import override
 
-from yaml import load as _load, SafeLoader as _SafeLoader
 
-from mipcandy.types import Secret, Secrets
-
-
-def load_secrets(*, path: str | PathLike[str] = f"{abspath(__file__)[:-12]}secrets.yml") -> Secrets:
-    if not exists(path):
-        with open(path, "w") as f:
-            f.write("# fill in your secrets here, do not commit this file")
-    with open(path) as f:
-        secrets = _load(f.read(), _SafeLoader)
-        if secrets is None:
-            return {}
-        if not isinstance(secrets, dict):
-            raise ValueError(f"Invalid secrets file: {path}")
-        return secrets
+from mipcandy.types import Setting, Settings
 
 
 class Frontend(object):
-    def __init__(self, secrets: Secrets) -> None:
-        self._secrets: Secrets = secrets
+    def __init__(self, secrets: Settings) -> None:
+        self._secrets: Settings = secrets
 
-    def require_nonempty_secret(self, entry: str, *, require_type: type | None = None) -> Secret:
+    def require_nonempty_secret(self, entry: str, *, require_type: type | None = None) -> Setting:
         if entry not in self._secrets:
             raise ValueError(f"Missing secret {entry}")
         secret = self._secrets[entry]
@@ -49,7 +33,7 @@ class Frontend(object):
 
 def create_hybrid_frontend(*frontends: Frontend) -> type[Frontend]:
     class HybridFrontend(Frontend):
-        def __init__(self, secrets: Secrets) -> None:
+        def __init__(self, secrets: Settings) -> None:
             super().__init__(secrets)
 
         @override

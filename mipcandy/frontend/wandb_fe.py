@@ -3,11 +3,11 @@ from typing import override
 from wandb import init, Run
 
 from mipcandy.frontend.prototype import Frontend
-from mipcandy.types import Secrets
+from mipcandy.types import Settings
 
 
 class WandBFrontend(Frontend):
-    def __init__(self, secrets: Secrets) -> None:
+    def __init__(self, secrets: Settings) -> None:
         super().__init__(secrets)
         self._entity: str = self.require_nonempty_secret("wandb_entity", require_type=str)
         self._project: str = self.require_nonempty_secret("wandb_project", require_type=str)
