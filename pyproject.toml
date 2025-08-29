@@ -27,3 +27,6 @@ packages = ["mipcandy"]
 Homepage = "https://mipcandy.projectneura.org"
 Documentation = "https://mipcandy-docs.projectneura.org"
 Repository = "https://github.com/ProjectNeura/MIPCandy"
+
+[project.scripts]
+mipcandy = "mipcandy:__entry__"

@@ -12,3 +12,5 @@ from mipcandy.preset import *
 from mipcandy.sanity_check import num_trainable_params, sanity_check
 from mipcandy.training import TrainerToolbox, Trainer, SWMetadata, SlidingTrainer
 from mipcandy.types import Setting, Settings, Params, Transform, SupportedPredictant, Colormap
+from mipcandy.__entry__ import __entry__
+from mipcandy.run import config
