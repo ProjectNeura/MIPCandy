@@ -1,8 +1,528 @@
-<html lang="en">
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
 <head>
-    <title>MIP Candy</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MIPCandy - A Candy for Medical Image Processing</title>
+    <meta name="description" content="Next-generation PyTorch framework for medical imaging with out-of-the-box training, inference, evaluation, and rich integrations.">
+    <meta name="keywords" content="medical imaging, deep learning, pytorch, segmentation, medical AI, DICOM, NIfTI">
+    <meta name="author" content="Project Neura">
+    
+    <!-- Open Graph -->
+    <meta property="og:title" content="MIPCandy - Medical Image Processing Framework">
+    <meta property="og:description" content="Professional PyTorch framework for medical imaging with complete workflows">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://mipcandy.projectneura.org">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/logo.png">
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        },
+                        medical: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            200: '#bae6fd',
+                            300: '#7dd3fc',
+                            400: '#38bdf8',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    animation: {
+                        'float': 'float 6s ease-in-out infinite',
+                        'pulse-glow': 'pulse-glow 2s ease-in-out infinite alternate',
+                    }
+                }
+            },
+            darkMode: 'class',
+        }
+    </script>
+    
+    <style>
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        @keyframes pulse-glow {
+            0% { box-shadow: 0 0 5px #3b82f6; }
+            100% { box-shadow: 0 0 20px #3b82f6; }
+        }
+        .bg-mesh {
+            background-image: 
+                radial-gradient(circle at 25% 25%, #1e40af 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, #0ea5e9 0%, transparent 50%);
+        }
+        .glass-effect {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .code-block {
+            background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            border: 1px solid #475569;
+        }
+    </style>
 </head>
-<body>
-<h1>MIP Candy</h1>
+
+<body class="bg-gray-900 text-white font-sans overflow-x-hidden">
+    <!-- Background -->
+    <div class="fixed inset-0 bg-mesh opacity-30"></div>
+    <div class="fixed inset-0 bg-gradient-to-br from-gray-900 via-blue-900/20 to-gray-900"></div>
+    
+    <!-- Navigation -->
+    <nav class="fixed top-0 w-full z-50 glass-effect">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-8">
+                    <div class="flex items-center space-x-3">
+                        <img src="assets/logo.png" alt="MIPCandy Logo" class="w-8 h-8 animate-pulse-glow">
+                        <span class="text-xl font-bold bg-gradient-to-r from-primary-400 to-medical-400 bg-clip-text text-transparent" data-i18n="brand">MIP Candy</span>
+                    </div>
+                    <div class="hidden md:flex space-x-6">
+                        <a href="#features" class="hover:text-primary-400 transition-colors" data-i18n="nav.features">Features</a>
+                        <a href="#quickstart" class="hover:text-primary-400 transition-colors" data-i18n="nav.quickstart">Quick Start</a>
+                        <a href="#architecture" class="hover:text-primary-400 transition-colors" data-i18n="nav.arch">Architecture</a>
+                        <a href="#links" class="hover:text-primary-400 transition-colors" data-i18n="nav.links">Links</a>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="langToggle" class="px-3 py-1 text-sm bg-gray-800/50 hover:bg-gray-700/50 rounded-md transition-colors">
+                        EN / 中文 / FR
+                    </button>
+                    <!-- GitHub Link -->
+                    <a href="https://github.com/ProjectNeura/MIPCandy" target="_blank" rel="noreferrer" class="group flex items-center rounded-md hover:text-primary-400 transition-colors">
+                        <div class="flex items-center gap-1.5 h-8">
+                            <div class="flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="currentColor" class="size-4">
+                                    <path fill-rule="evenodd" clip-rule="evenodd" d="M8 0C3.58 0 0 3.58 0 8C0 11.54 2.29 14.53 5.47 15.59C5.87 15.66 6.02 15.42 6.02 15.21C6.02 15.02 6.01 14.39 6.01 13.72C4 14.09 3.48 13.23 3.32 12.78C3.23 12.55 2.84 11.84 2.5 11.65C2.22 11.5 1.82 11.13 2.49 11.12C3.12 11.11 3.57 11.7 3.72 11.94C4.44 13.15 5.59 12.81 6.05 12.6C6.12 12.08 6.33 11.73 6.56 11.53C4.78 11.33 2.92 10.64 2.92 7.58C2.92 6.71 3.23 5.99 3.74 5.43C3.66 5.23 3.38 4.41 3.82 3.31C3.82 3.31 4.49 3.1 6.02 4.13C6.66 3.95 7.34 3.86 8.02 3.86C8.7 3.86 9.38 3.95 10.02 4.13C11.55 3.09 12.22 3.31 12.22 3.31C12.66 4.41 12.38 5.23 12.3 5.43C12.81 5.99 13.12 6.7 13.12 7.58C13.12 10.65 11.25 11.33 9.47 11.53C9.76 11.78 10.01 12.26 10.01 13.01C10.01 14.08 10 14.94 10 15.21C10 15.42 10.15 15.67 10.55 15.59C13.71 14.53 16 11.53 16 8C16 3.58 12.42 0 8 0Z" transform="scale(64)"></path>
+                                </svg>
+                                <span class="text-sm font-medium text-gray-300 group-hover:text-white">ProjectNeura/MIPCandy</span>
+                            </div>
+                            <div class="flex items-center gap-1.5 ml-1">
+                                <svg class="size-3.5" style="mask-image: url('https://d3gk2c5xim1je2.cloudfront.net/v6.6.0/regular/star.svg'); mask-repeat: no-repeat; mask-position: center center; background-color: currentcolor;"></svg>
+                                <span id="stargazers" class="text-sm"></span>
+                                <script>
+                                    fetch('https://api.github.com/repos/ProjectNeura/MIPCandy')
+                                        .then(res => res.json())
+                                        .then(data => {
+                                            document.getElementById('stargazers').textContent = data.stargazers_count;
+                                        })
+                                        .catch(() => {
+                                            document.getElementById('stargazers').textContent = '★';
+                                        });
+                                </script>
+                            </div>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="relative">
+        <!-- Hero Section -->
+        <section class="min-h-screen flex items-center justify-center pt-16">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <div class="animate-float">
+                    <img src="assets/logo.png" alt="MIPCandy" class="w-24 h-24 mx-auto mb-8 animate-pulse-glow">
+                </div>
+                <h1 class="text-5xl md:text-7xl font-bold mb-6 bg-gradient-to-r from-white via-primary-200 to-medical-200 bg-clip-text text-transparent leading-tight" data-i18n="hero.title">
+                    A Candy for Medical Image Processing
+                </h1>
+                <p class="text-xl md:text-2xl text-gray-300 mb-12 max-w-4xl mx-auto leading-relaxed" data-i18n="hero.subtitle">
+                    Next-generation framework for medical imaging with out-of-the-box training, inference, evaluation, and rich integrations.
+                </p>
+                <div class="flex flex-col sm:flex-row gap-4 justify-center">
+                    <a href="#quickstart" class="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 rounded-lg font-semibold transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl">
+                        <span data-i18n="cta.getStarted">Get Started</span>
+                        <svg class="ml-2 w-5 h-5 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                        </svg>
+                    </a>
+                    <a href="https://mipcandy-docs.projectneura.org" target="_blank" class="group inline-flex items-center px-8 py-4 border-2 border-gray-600 hover:border-primary-500 bg-transparent hover:bg-primary-500/10 rounded-lg font-semibold transition-all duration-300">
+                        <span data-i18n="cta.docs">Docs & Home</span>
+                        <svg class="ml-2 w-5 h-5 group-hover:rotate-12 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Section -->
+        <section id="features" class="py-20 relative">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary-400 to-medical-400 bg-clip-text text-transparent" data-i18n="features.title">
+                        Key Features
+                    </h2>
+                </div>
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <!-- Training Pipeline -->
+                    <div class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center mb-6 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-4 group-hover:text-primary-400 transition-colors" data-i18n="features.training.title">
+                            Out-of-the-box Training Pipeline
+                        </h3>
+                        <p class="text-gray-400 group-hover:text-gray-300 transition-colors" data-i18n="features.training.desc">
+                            Complete training workflows for segmentation and other medical tasks.
+                        </p>
+                    </div>
+
+                    <!-- Data Handling -->
+                    <div class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-medical-500 to-medical-600 rounded-lg flex items-center justify-center mb-6 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-4 group-hover:text-medical-400 transition-colors" data-i18n="features.data.title">
+                            Data Handling & Formats
+                        </h3>
+                        <p class="text-gray-400 group-hover:text-gray-300 transition-colors" data-i18n="features.data.desc">
+                            NIfTI/DICOM via SimpleITK, preprocessing, transforms, and visualization.
+                        </p>
+                    </div>
+
+                    <!-- Specialized Architectures -->
+                    <div class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center mb-6 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-4 group-hover:text-purple-400 transition-colors" data-i18n="features.arch.title">
+                            Specialized Architectures
+                        </h3>
+                        <p class="text-gray-400 group-hover:text-gray-300 transition-colors" data-i18n="features.arch.desc">
+                            Pre-configured models and sliding-window inference for large volumes.
+                        </p>
+                    </div>
+
+                    <!-- Medical Metrics -->
+                    <div class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center mb-6 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-4 group-hover:text-green-400 transition-colors" data-i18n="features.metrics.title">
+                            Medical Metrics
+                        </h3>
+                        <p class="text-gray-400 group-hover:text-gray-300 transition-colors" data-i18n="features.metrics.desc">
+                            Dice, IoU, precision/recall and evaluation helpers.
+                        </p>
+                    </div>
+
+                    <!-- Experiment Tracking -->
+                    <div class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-lg flex items-center justify-center mb-6 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 8v8m-4-5v5m-4-2v2m-2 4h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-4 group-hover:text-yellow-400 transition-colors" data-i18n="features.exp.title">
+                            Experiment Tracking
+                        </h3>
+                        <p class="text-gray-400 group-hover:text-gray-300 transition-colors" data-i18n="features.exp.desc">
+                            Integrations with Notion, WandB, and TensorBoard.
+                        </p>
+                    </div>
+
+                    <!-- Visualization -->
+                    <div class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-pink-500 to-pink-600 rounded-lg flex items-center justify-center mb-6 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-4 group-hover:text-pink-400 transition-colors" data-i18n="features.viz.title">
+                            2D/3D Visualization
+                        </h3>
+                        <p class="text-gray-400 group-hover:text-gray-300 transition-colors" data-i18n="features.viz.desc">
+                            From slice viewers to volume rendering (pyvista via optional extras).
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Quick Start Section -->
+        <section id="quickstart" class="py-20 bg-gray-800/30">
+            <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary-400 to-medical-400 bg-clip-text text-transparent" data-i18n="quick.title">
+                        Quick Start
+                    </h2>
+                </div>
+                
+                <div class="grid lg:grid-cols-2 gap-12 items-center">
+                    <div>
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold mb-4" data-i18n="quick.require">Requirements</h3>
+                            <div class="code-block rounded-lg p-6">
+                                <code class="text-green-400">
+                                    <span class="text-gray-400"># Python >= 3.12</span><br>
+                                    <span class="text-primary-400">torch</span> >= 2.0<br>
+                                    <span class="text-primary-400">SimpleITK</span><br>
+                                    <span class="text-primary-400">numpy</span>, <span class="text-primary-400">matplotlib</span>
+                                </code>
+                            </div>
+                        </div>
+
+                        <div class="mb-8">
+                            <h3 class="text-2xl font-bold mb-4" data-i18n="quick.install">Install</h3>
+                            <div class="code-block rounded-lg p-6">
+                                <code class="text-green-400">
+                                    pip install mipcandy<br>
+                                    <span class="text-gray-400"># Optional: for 3D visualization</span><br>
+                                    pip install mipcandy[standard]
+                                </code>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="code-block rounded-lg p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <span class="text-sm font-medium text-gray-400">Basic Usage</span>
+                                <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition-colors">
+                                    Copy
+                                </button>
+                            </div>
+                            <code class="text-sm">
+<span class="text-blue-400">import</span> <span class="text-green-400">mipcandy</span> <span class="text-blue-400">as</span> <span class="text-green-400">mc</span>
+
+<span class="text-gray-400"># Load medical images</span>
+<span class="text-yellow-400">loader</span> = <span class="text-green-400">mc</span>.<span class="text-blue-400">Loader</span>()
+<span class="text-yellow-400">image</span> = <span class="text-yellow-400">loader</span>.<span class="text-blue-400">do_load</span>(<span class="text-red-400">"brain_scan.nii.gz"</span>)
+
+<span class="text-gray-400"># Create dataset</span>
+<span class="text-yellow-400">dataset</span> = <span class="text-green-400">mc</span>.<span class="text-blue-400">SupervisedDataset</span>(
+    <span class="text-yellow-400">images_folder</span>=<span class="text-red-400">"data/images"</span>,
+    <span class="text-yellow-400">labels_folder</span>=<span class="text-red-400">"data/labels"</span>
+)
+
+<span class="text-gray-400"># Train segmentation model</span>
+<span class="text-blue-400">class</span> <span class="text-green-400">MyTrainer</span>(<span class="text-green-400">mc</span>.<span class="text-blue-400">SegmentationTrainer</span>):
+    <span class="text-blue-400">def</span> <span class="text-blue-400">build_network</span>(<span class="text-yellow-400">self</span>, <span class="text-yellow-400">shape</span>):
+        <span class="text-blue-400">return</span> <span class="text-green-400">MyUNet</span>(<span class="text-yellow-400">shape</span>)
+
+<span class="text-yellow-400">trainer</span> = <span class="text-green-400">MyTrainer</span>(<span class="text-red-400">"experiments"</span>, <span class="text-yellow-400">dataloader</span>)
+<span class="text-yellow-400">trainer</span>.<span class="text-blue-400">train</span>(<span class="text-purple-400">100</span>)
+                            </code>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Architecture Section -->
+        <section id="architecture" class="py-20">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="text-center mb-16">
+                    <h2 class="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-primary-400 to-medical-400 bg-clip-text text-transparent" data-i18n="arch.title">
+                        Architecture
+                    </h2>
+                </div>
+
+                <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="glass-effect rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
+                        <div class="w-16 h-16 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">data</h3>
+                        <p class="text-sm text-gray-400" data-i18n="arch.data">I/O, datasets, transforms, visualization.</p>
+                    </div>
+
+                    <div class="glass-effect rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
+                        <div class="w-16 h-16 bg-gradient-to-br from-medical-500 to-medical-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">training</h3>
+                        <p class="text-sm text-gray-400" data-i18n="arch.train">Trainer / SlidingTrainer, metrics tracking.</p>
+                    </div>
+
+                    <div class="glass-effect rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
+                        <div class="w-16 h-16 bg-gradient-to-br from-purple-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">inference</h3>
+                        <p class="text-sm text-gray-400" data-i18n="arch.infer">Predictor and inference utilities.</p>
+                    </div>
+
+                    <div class="glass-effect rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
+                        <div class="w-16 h-16 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">evaluation</h3>
+                        <p class="text-sm text-gray-400" data-i18n="arch.eval">Evaluator and medical metrics.</p>
+                    </div>
+
+                    <div class="glass-effect rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
+                        <div class="w-16 h-16 bg-gradient-to-br from-yellow-500 to-yellow-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">frontend</h3>
+                        <p class="text-sm text-gray-400" data-i18n="arch.fe">Notion/W&B integrations.</p>
+                    </div>
+
+                    <div class="glass-effect rounded-xl p-6 text-center hover:bg-white/10 transition-colors">
+                        <div class="w-16 h-16 bg-gradient-to-br from-pink-500 to-pink-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">preset</h3>
+                        <p class="text-sm text-gray-400" data-i18n="arch.preset">Pre-configured trainers for common tasks.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Links Section -->
+        <section id="links" class="py-20 bg-gray-800/30">
+            <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+                <h2 class="text-4xl md:text-5xl font-bold mb-16 bg-gradient-to-r from-primary-400 to-medical-400 bg-clip-text text-transparent" data-i18n="links.title">
+                    Links
+                </h2>
+                <div class="grid md:grid-cols-3 gap-8">
+                    <a href="https://mipcandy.projectneura.org" target="_blank" class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2 group-hover:text-primary-400 transition-colors" data-i18n="links.home">Homepage</h3>
+                    </a>
+                    <a href="https://mipcandy-docs.projectneura.org" target="_blank" class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-medical-500 to-medical-600 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2 group-hover:text-medical-400 transition-colors" data-i18n="links.docs">Documentation</h3>
+                    </a>
+                    <a href="https://github.com/ProjectNeura/MIPCandy/issues" class="group glass-effect rounded-xl p-8 hover:bg-white/20 transition-all duration-300 transform hover:scale-105">
+                        <div class="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center mx-auto mb-4 group-hover:rotate-6 transition-transform">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                            </svg>
+                        </div>
+                        <h3 class="text-xl font-bold mb-2 group-hover:text-purple-400 transition-colors" data-i18n="links.issue">Issue</h3>
+                    </a>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 py-8">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-400">
+            <p data-i18n="footer">Apache-2.0 Licensed. © Project Neura.</p>
+        </div>
+    </footer>
+
+    <!-- Mobile Menu Toggle -->
+    <button id="mobileMenuToggle" class="fixed top-4 right-4 md:hidden z-50 p-2 bg-gray-800/90 rounded-lg">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
+        </svg>
+    </button>
+
+    <!-- Scripts -->
+    <script src="app.js"></script>
+    <script>
+        // Smooth scrolling for navigation links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+
+        // Mobile menu functionality
+        const mobileMenuToggle = document.getElementById('mobileMenuToggle');
+        const nav = document.querySelector('nav');
+        
+        mobileMenuToggle.addEventListener('click', () => {
+            nav.classList.toggle('mobile-open');
+        });
+
+        // Parallax effect
+        window.addEventListener('scroll', () => {
+            const scrolled = window.pageYOffset;
+            const parallaxElements = document.querySelectorAll('.animate-float');
+            
+            parallaxElements.forEach(el => {
+                const speed = 0.5;
+                el.style.transform = `translateY(${scrolled * speed}px)`;
+            });
+        });
+
+        // Intersection Observer for animations
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('animate-fade-in');
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+
+        document.querySelectorAll('.glass-effect').forEach(el => {
+            observer.observe(el);
+        });
+    </script>
 </body>
 </html>
