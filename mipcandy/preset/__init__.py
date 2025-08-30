@@ -1,1 +1,0 @@
-from mipcandy.preset.segmentation import SegmentationTrainer
