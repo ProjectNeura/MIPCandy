@@ -9,8 +9,12 @@ import torch
 from matplotlib import pyplot as plt
 from torch import nn
 
-from mipcandy.common import ColorizeLabel
+from mipcandy.common import Normalize, ColorizeLabel
 from mipcandy.data.geometric import ensure_num_dimensions
+
+
+def auto_convert(image: torch.Tensor) -> torch.Tensor:
+    return (image * 255 if 0 <= image.min() < image.max() <= 1 else Normalize(domain=(0, 255))(image)).int()
 
 
 def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
@@ -25,7 +29,8 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
             image = image.squeeze(0)
         else:
             image = image.permute(1, 2, 0)
-    plt.imshow(image.numpy(), cmap=cmap)
+    image = auto_convert(image)
+    plt.imshow(image.numpy(), cmap, vmin=0, vmax=255)
     plt.title(title)
     plt.axis("off")
     if screenshot_as:
@@ -94,15 +99,14 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: floa
         raise ValueError("Only 2D images can be overlaid")
     image = ensure_num_dimensions(image, 3)
     label = ensure_num_dimensions(label, 2)
+    image = auto_convert(image)
     if image.shape[0] == 1:
-        if 0 <= image.min() < image.max() <= 1:
-            image *= 255
         image = image.repeat(3, 1, 1)
     image_c, image_shape = image.shape[0], image.shape[1:]
     label_shape = label.shape
     if image_shape != label_shape:
         raise ValueError(f"Unmatched shapes {image_shape} and {label_shape}")
-    alpha = torch.ones(label_shape, device=image.device).unsqueeze(0)
+    alpha = (label > 0).int()
     if label_colorizer:
         label = label_colorizer(label)
         if label.shape[0] == 4:
@@ -113,5 +117,5 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: floa
     if not (image_c == label.shape[0] == 3):
         raise ValueError("Unsupported number of channels")
     if alpha.max() > 0:
-        alpha = alpha / alpha.max() * max_label_opacity
-    return (image * (1 - alpha) + label * alpha).round().int()
+        alpha = alpha * max_label_opacity / alpha.max()
+    return image * (1 - alpha) + label * alpha
