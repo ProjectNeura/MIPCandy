@@ -47,7 +47,7 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
         p.show()
 
 
-def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 1e8,
+def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 1e6,
                 backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
                 screenshot_as: str | PathLike[str] | None = None) -> None:
     image = image.detach().float().cpu()
