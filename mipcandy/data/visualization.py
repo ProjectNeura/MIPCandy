@@ -1,4 +1,5 @@
 from importlib.util import find_spec
+from math import ceil
 from multiprocessing import get_context
 from os import PathLike
 from typing import Literal
@@ -6,6 +7,7 @@ from typing import Literal
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
+from torch import nn
 
 from mipcandy.common import ColorizeLabel
 from mipcandy.data.geometric import ensure_num_dimensions
@@ -45,7 +47,7 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
         p.show()
 
 
-def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
+def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 1e8,
                 backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
                 screenshot_as: str | PathLike[str] | None = None) -> None:
     image = image.detach().float().cpu()
@@ -55,6 +57,12 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
         image = ensure_num_dimensions(image, 4)
     if image.ndim == 4 and image.shape[0] == 1:
         image = image.squeeze(0)
+    d, h, w = image.shape
+    total = d * h * w
+    ratio = int(ceil((total / max_volume) ** (1 / 3))) if total > max_volume else 1
+    if ratio > 1:
+        image = ensure_num_dimensions(nn.functional.avg_pool3d(ensure_num_dimensions(image, 5), kernel_size=ratio,
+                                                               stride=ratio, ceil_mode=True), 3)
     image /= image.max()
     image = image.numpy()
     if backend == "auto":
