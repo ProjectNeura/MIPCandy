@@ -1,5 +1,4 @@
 from importlib.util import find_spec
-from math import ceil
 from multiprocessing import get_context
 from os import PathLike
 from typing import Literal
@@ -7,7 +6,6 @@ from typing import Literal
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from torch import nn
 
 from mipcandy.common import ColorizeLabel
 from mipcandy.data.geometric import ensure_num_dimensions
@@ -47,7 +45,7 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
         p.show()
 
 
-def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 5e5,
+def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
                 backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
                 screenshot_as: str | PathLike[str] | None = None) -> None:
     image = image.detach().float().cpu()
@@ -57,12 +55,6 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
         image = ensure_num_dimensions(image, 4)
     if image.ndim == 4 and image.shape[0] == 1:
         image = image.squeeze(0)
-    d, h, w = image.shape
-    total = d * h * w
-    ds = int(ceil((total / max_volume) ** (1 / 3))) if total > max_volume else 1
-    if ds > 1:
-        image = ensure_num_dimensions(nn.functional.avg_pool3d(ensure_num_dimensions(image, 5), kernel_size=ds,
-                                                               stride=ds, ceil_mode=True), 3)
     image /= image.max()
     image = image.numpy()
     if backend == "auto":
@@ -88,7 +80,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
                                daemon=False).start()
 
 
-def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: float = .8,
+def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: float = .5,
             label_colorizer: ColorizeLabel | None = ColorizeLabel()) -> torch.Tensor:
     if image.ndim < 2 or label.ndim < 2:
         raise ValueError("Only 2D images can be overlaid")
