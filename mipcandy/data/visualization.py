@@ -14,6 +14,8 @@ from mipcandy.data.geometric import ensure_num_dimensions
 
 
 def auto_convert(image: torch.Tensor) -> torch.Tensor:
+    # Convert to float first to avoid UInt16 min/max issues
+    image = image.float()
     return (image * 255 if 0 <= image.min() < image.max() <= 1 else Normalize(domain=(0, 255))(image)).int()
 
 
@@ -93,29 +95,110 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
                                daemon=False).start()
 
 
-def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: float = .5,
-            label_colorizer: ColorizeLabel | None = ColorizeLabel()) -> torch.Tensor:
+def prepare_for_display(image: torch.Tensor, mode="auto", channels=None) -> np.ndarray:
+    """
+    Convert an arbitrary channel image to a displayable numpy array (H,W), (H,W,3) or (H,W,4)
+    mode: "auto" | "select" | "pca" | "all"
+    channels: specify the channel indices to use (for mode="select")
+    """
+    c, h, w = image.shape
+
+    if c == 1:
+        return image.squeeze(0).cpu().numpy()  # (H,W)
+    elif c == 3:
+        return image.permute(1,2,0).cpu().numpy()  # (H,W,3)
+    elif c == 4 and mode=="auto":
+        # default to RGBA
+        return image.permute(1,2,0).cpu().numpy()
+    elif c > 4:
+        if mode == "select" and channels:
+            return image[channels,:,:].permute(1,2,0).cpu().numpy()
+        elif mode == "pca":
+            # simple PCA to 3D
+            flat = image.view(c, -1).T  # (H*W, C)
+            from sklearn.decomposition import PCA
+            rgb = PCA(n_components=3).fit_transform(flat)
+            return rgb.reshape(h,w,3)
+        elif mode == "all":
+            # return (C,H,W), upper layer is responsible for subplot
+            return image.cpu().numpy()
+        else:
+            raise ValueError(f"Cannot auto-display {c}-channel image. "
+                             f"Use mode='select' or 'pca'.")
+
+
+def overlay(image: torch.Tensor, label: torch.Tensor, *,
+            max_label_opacity: float = .5,
+            label_colorizer: ColorizeLabel | None = ColorizeLabel(),
+            image_mode: str = "auto",
+            channels: list[int] | None = None) -> torch.Tensor:
+    """
+    Overlay a 2D image with a label, returning a CHW (torch) tensor for later visualization.
+    - image: (C,H,W) or (H,W) torch.Tensor
+    - label: (H,W) or (1,H,W) torch.Tensor
+    - image_mode: "auto" | "select" | "pca"
+    - channels: if select mode, specify three channel indices
+    """
     if image.ndim < 2 or label.ndim < 2:
         raise ValueError("Only 2D images can be overlaid")
-    image = ensure_num_dimensions(image, 3)
-    label = ensure_num_dimensions(label, 2)
-    image = auto_convert(image)
-    if image.shape[0] == 1:
-        image = image.repeat(3, 1, 1)
-    image_c, image_shape = image.shape[0], image.shape[1:]
-    label_shape = label.shape
-    if image_shape != label_shape:
-        raise ValueError(f"Unmatched shapes {image_shape} and {label_shape}")
-    alpha = (label > 0).int()
+
+    # Unify shapes
+    image = ensure_num_dimensions(image, 3).detach().cpu().float()  # (C,H,W)
+    label = ensure_num_dimensions(label, 2).detach().cpu().long()  # (H,W)
+
+    C, H, W = image.shape
+    if label.shape != (H, W):
+        raise ValueError(f"Unmatched shapes {(H, W)} and {tuple(label.shape)}")
+
+    # ---- Channel handling for images: convert any number of channels to 3 (RGB) ----
+    if C == 1:
+        image3 = image.repeat(3, 1, 1)
+    elif C == 3:
+        image3 = image
+    elif C == 4:
+        if image_mode == "select" and channels:
+            assert len(channels) == 3, "select mode requires 3 channel indices"
+            image3 = image[channels, :, :]
+        else:
+            # 4 channels are commonly RGBA or 4 modalities: default to first three
+            image3 = image[:3, :, :]
+    else:  # C > 4
+        if image_mode == "select" and channels:
+            assert len(channels) == 3, "select mode requires 3 channel indices"
+            image3 = image[channels, :, :]
+        elif image_mode == "pca":
+            # PCA to 3 channels
+            flat = image.view(C, -1).T  # (H*W, C)
+            from sklearn.decomposition import PCA
+            rgb = PCA(n_components=3).fit_transform(flat.numpy())
+            image3 = torch.from_numpy(rgb.T).view(3, H, W).float()
+        else:
+            # safe fallback: take first three and hint user to use select/pca
+            image3 = image[:3, :, :]
+
+    # Convert to 0..255 int domain
+    image3 = auto_convert(image3).float()  # (3,H,W), 0..255
+
+    # ---- Label color and alpha ----
+    alpha = (label > 0).float()  # (H,W)
     if label_colorizer:
-        label = label_colorizer(label)
-        if label.shape[0] == 4:
-            alpha = label[-1]
-            label = label[:-1]
-    elif label.shape[0] == 1:
-        label = label.repeat(3, 1, 1)
-    if not (image_c == label.shape[0] == 3):
-        raise ValueError("Unsupported number of channels")
+        lab = label_colorizer(label)  # expected (3,H,W) or (4,H,W)
+        if lab.shape[0] == 4:
+            a = lab[-1].float()
+            # Normalize to [0,1]
+            if a.max() > 0:
+                alpha = a / a.max()
+            lab = lab[:3]
+    else:
+        lab = label.float().unsqueeze(0).repeat(3, 1, 1)  # single channel copied to 3
+
+    lab = auto_convert(lab).float()  # (3,H,W), 0..255
+
+    # Alpha scaling to desired opacity
     if alpha.max() > 0:
-        alpha = alpha * max_label_opacity / alpha.max()
-    return image * (1 - alpha) + label * alpha
+        alpha = alpha * (max_label_opacity / alpha.max())  # (H,W), 0..max
+
+    # Blending (broadcasting: 3×H×W and H×W)
+    blended = image3 * (1 - alpha) + lab * alpha  # (3,H,W), float 0..255
+    return blended.int()  # still returns CHW; visualize2d will handle HWC conversion and imshow
+
