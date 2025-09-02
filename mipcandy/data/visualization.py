@@ -21,6 +21,18 @@ def auto_convert(image: torch.Tensor) -> torch.Tensor:
 
 def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
                 blocking: bool = False, screenshot_as: str | PathLike[str] | None = None) -> None:
+    """Displays a 2D image using matplotlib.
+
+    Args:
+        image: The 2D image tensor to display. Can be (H, W), (1, H, W),
+            or (H, W, C).
+        title: Optional title for the plot.
+        cmap: Colormap to use for single-channel images. Defaults to "gray".
+        blocking: If True, the plot will block execution until closed.
+            Defaults to False.
+        screenshot_as: If provided, saves the plot to this file path instead
+            of showing it interactively.
+    """
     image = image.detach().cpu()
     if image.ndim < 2:
         raise ValueError(f"`image` must have at least 2 dimensions, got {image.shape}")
@@ -45,6 +57,19 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
 
 def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
                               screenshot_as: str | PathLike[str] | None, auto_close: bool) -> None:
+    """Renders a 3D volume using PyVista.
+
+    Note: This function is intended to be run in a separate process to avoid
+    GUI conflicts.
+
+    Args:
+        image: The 3D numpy array to render.
+        title: Optional title for the plotter window.
+        cmap: Colormap to use for the volume rendering.
+        screenshot_as: If provided, saves a screenshot to this file path.
+        auto_close: If True, closes the plotter window after showing or
+            taking a screenshot.
+    """
     from pyvista import Plotter
     p = Plotter(title=title)
     p.add_volume(image, cmap=cmap)
@@ -57,6 +82,28 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
 def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 1e6,
                 backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
                 screenshot_as: str | PathLike[str] | None = None) -> None:
+    """Displays a 3D volume using either PyVista or Matplotlib.
+
+    If the volume's size exceeds `max_volume`, it will be downsampled
+    using average pooling before rendering to improve performance.
+
+    The backend is chosen automatically: 'pyvista' if available, otherwise 'matplotlib'.
+    For non-blocking behavior with PyVista, the rendering is launched in a
+    separate process.
+
+    Args:
+        image: The 3D image tensor to display, expected as (D, H, W) or (1, D, H, W).
+        title: Optional title for the plot.
+        cmap: Colormap to use for the volume. Defaults to "gray".
+        max_volume: Maximum number of voxels to render without downsampling.
+            Defaults to 1e6.
+        backend: The rendering backend, one of "auto", "matplotlib", "pyvista".
+            Defaults to "auto".
+        blocking: If True, the plot will block execution until closed.
+            Note: For PyVista, non-blocking is achieved via a separate process.
+            Defaults to False.
+        screenshot_as: If provided, saves the plot to this file path.
+    """
     image = image.detach().float().cpu()
     if image.ndim < 3:
         raise ValueError(f"`image` must have at least 3 dimensions, got {image.shape}")
@@ -96,29 +143,45 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
 
 
 def prepare_for_display(image: torch.Tensor, mode="auto", channels=None) -> np.ndarray:
-    """
-    Convert an arbitrary channel image to a displayable numpy array (H,W), (H,W,3) or (H,W,4)
-    mode: "auto" | "select" | "pca" | "all"
-    channels: specify the channel indices to use (for mode="select")
+    """Convert an arbitrary channel image to a displayable numpy array.
+
+    The output format will be (H,W), (H,W,3), or (H,W,4) depending on the
+    number of channels.
+
+    Args:
+        image: The input image tensor, expected as (C, H, W).
+        mode: The conversion mode. One of "auto", "select", "pca", "all".
+            - "auto": Automatically handles 1, 3, and 4-channel images.
+            - "select": Selects specific channels to use.
+            - "pca": Uses PCA to reduce channels to 3.
+            - "all": Returns all channels as a (C, H, W) numpy array.
+        channels: A list of channel indices to use when `mode` is "select".
+
+    Returns:
+        The converted image as a numpy array.
+
+    Raises:
+        ValueError: If the image has more than 4 channels and `mode` is not
+            specified as 'select' or 'pca'.
     """
     c, h, w = image.shape
 
     if c == 1:
         return image.squeeze(0).cpu().numpy()  # (H,W)
     elif c == 3:
-        return image.permute(1,2,0).cpu().numpy()  # (H,W,3)
-    elif c == 4 and mode=="auto":
+        return image.permute(1, 2, 0).cpu().numpy()  # (H,W,3)
+    elif c == 4 and mode == "auto":
         # default to RGBA
-        return image.permute(1,2,0).cpu().numpy()
+        return image.permute(1, 2, 0).cpu().numpy()
     elif c > 4:
         if mode == "select" and channels:
-            return image[channels,:,:].permute(1,2,0).cpu().numpy()
+            return image[channels, :, :].permute(1, 2, 0).cpu().numpy()
         elif mode == "pca":
             # simple PCA to 3D
             flat = image.view(c, -1).T  # (H*W, C)
             from sklearn.decomposition import PCA
             rgb = PCA(n_components=3).fit_transform(flat)
-            return rgb.reshape(h,w,3)
+            return rgb.reshape(h, w, 3)
         elif mode == "all":
             # return (C,H,W), upper layer is responsible for subplot
             return image.cpu().numpy()
@@ -132,12 +195,29 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *,
             label_colorizer: ColorizeLabel | None = ColorizeLabel(),
             image_mode: str = "auto",
             channels: list[int] | None = None) -> torch.Tensor:
-    """
-    Overlay a 2D image with a label, returning a CHW (torch) tensor for later visualization.
-    - image: (C,H,W) or (H,W) torch.Tensor
-    - label: (H,W) or (1,H,W) torch.Tensor
-    - image_mode: "auto" | "select" | "pca"
-    - channels: if select mode, specify three channel indices
+    """Overlays a label on a 2D image, returning a CHW tensor for visualization.
+
+    This function robustly handles multi-channel images by converting them to
+    a 3-channel RGB representation before blending with the colorized label.
+
+    Args:
+        image: The base image, as a (C,H,W) or (H,W) torch.Tensor.
+        label: The label mask, as a (H,W) or (1,H,W) torch.Tensor.
+        max_label_opacity: The maximum opacity for the label overlay, in the
+            range [0, 1]. Defaults to 0.5.
+        label_colorizer: An optional callable to convert the integer label mask
+            to a color image. If None, the label is treated as a single-channel
+            grayscale mask. Defaults to a standard ColorizeLabel instance.
+        image_mode: The mode for handling multi-channel images (if C > 3).
+            One of "auto", "select", "pca". Defaults to "auto".
+        channels: A list of 3 channel indices to use if `image_mode` is "select".
+
+    Returns:
+        A (3, H, W) integer torch.Tensor representing the blended image in the
+        0-255 range, ready for visualization.
+
+    Raises:
+        ValueError: If the image and label dimensions are not compatible.
     """
     if image.ndim < 2 or label.ndim < 2:
         raise ValueError("Only 2D images can be overlaid")
@@ -198,7 +278,6 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *,
     if alpha.max() > 0:
         alpha = alpha * (max_label_opacity / alpha.max())  # (H,W), 0..max
 
-    # Blending (broadcasting: 3×H×W and H×W)
+    # Blending (broadcasting: 3xH×W and H×W)
     blended = image3 * (1 - alpha) + lab * alpha  # (3,H,W), float 0..255
     return blended.int()  # still returns CHW; visualize2d will handle HWC conversion and imshow
-
