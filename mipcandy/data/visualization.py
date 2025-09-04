@@ -136,7 +136,7 @@ def prepare_for_display(
 
 
 def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: float = .5,
-            label_colorizer: ColorizeLabel | None = ColorizeLabel()) -> torch.Tensor:
+            label_colorizer: ColorizeLabel | None = ColorizeLabel(), mode="auto", channels=None) -> torch.Tensor:
     if image.ndim < 2 or label.ndim < 2:
         raise ValueError("Only 2D images can be overlaid")
 
@@ -153,7 +153,7 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: floa
         case 3:
             image3 = image
         case 4:
-            match image_mode:
+            match mode:
                 case "select" if channels:
                     if len(channels) != 3:
                         raise AssertionError("select mode requires 3 channel indices")
@@ -161,7 +161,7 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: floa
                 case _:
                     image3 = image[:3, :, :]
         case _ if C > 4:
-            match image_mode:
+            match mode:
                 case "select" if channels:
                     if len(channels) != 3:
                         raise AssertionError("select mode requires 3 channel indices")
