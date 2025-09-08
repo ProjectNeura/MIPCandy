@@ -269,6 +269,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         if self.initialized():
             self.log(f"Set to manual seed {seed}")
 
+    @staticmethod
+    def model_complexity_info(model: nn.Module, example_shape: tuple[int, ...]) -> tuple[float, float]:
+        return get_model_complexity_info(model, example_shape, False, False)
+
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
               val_score_prediction_degree: int = 5) -> None:
@@ -286,7 +290,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self.log(f"Example input shape: {example_shape}")
         model = self.build_network(example_shape).to(self._device)
         model_name = model.__class__.__name__
-        num_macs, num_params = get_model_complexity_info(model, example_shape, False, False)
+        num_macs, num_params = self.model_complexity_info(model, example_shape)
         if num_macs is None or num_params is None:
             raise RuntimeError("Failed to validate model")
         num_macs /= 1e9

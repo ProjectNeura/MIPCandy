@@ -9,7 +9,7 @@ from mipcandy.metrics import do_reduction, dice_similarity_coefficient_binary, \
     dice_similarity_coefficient_multiclass, soft_dice_coefficient, accuracy_binary, accuracy_multiclass, \
     precision_binary, precision_multiclass, recall_binary, recall_multiclass, iou_binary, iou_multiclass
 from mipcandy.presets import *
-from mipcandy.sanity_check import num_trainable_params, sanity_check
+from mipcandy.sanity_check import num_trainable_params, sanity_check, model_complexity_info
 from mipcandy.training import TrainerToolbox, Trainer, SWMetadata, SlidingTrainer
 from mipcandy.types import Setting, Settings, Params, Transform, SupportedPredictant, Colormap
 from mipcandy.__entry__ import __entry__

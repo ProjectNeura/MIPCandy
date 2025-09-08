@@ -119,8 +119,8 @@ class NNUNetDataset(SupervisedDataset):
             raise ValueError(f"Invalid test set size {size}, expected (0, {self._num_cases})")
         images_folder = f"{self._folder}/images{split}"
         labels_folder = f"{self._folder}/labels{split}"
-        NNUNetDataset._create_subset(images_folder)
-        NNUNetDataset._create_subset(labels_folder)
+        self._create_subset(images_folder)
+        self._create_subset(labels_folder)
         op = move if exclusive else copy
         images, labels = self._images.copy(), self._labels.copy()
         num_cases = self._num_cases
