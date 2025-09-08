@@ -43,7 +43,8 @@ class Pad2d(Pad):
         return self._paddings
 
     def padded_shape(self, in_shape: tuple[int, int, ...]) -> tuple[int, int, ...]:
-        return *in_shape[:-2], Pad._c_t(in_shape[-2], self._min_factor[0]), Pad._c_t(in_shape[-1], self._min_factor[1])
+        return *in_shape[:-2], self._c_t(in_shape[-2], self._min_factor[0]), self._c_t(
+            in_shape[-1], self._min_factor[1])
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.batch:
@@ -52,7 +53,7 @@ class Pad2d(Pad):
         else:
             _, h, w = x.shape
             suffix = (0,) * 2
-        self._paddings = Pad._c_p(h, self._min_factor[0]) + Pad._c_p(w, self._min_factor[1])
+        self._paddings = self._c_p(h, self._min_factor[0]) + self._c_p(w, self._min_factor[1])
         return nn.functional.pad(x, self._paddings[::-1] + suffix, self._mode, self._value)
 
 
@@ -66,8 +67,8 @@ class Pad3d(Pad):
         return self._paddings
 
     def padded_shape(self, in_shape: tuple[int, int, int, ...]) -> tuple[int, int, int, ...]:
-        return (*in_shape[:-3], Pad._c_t(in_shape[-3], self._min_factor[0]), Pad._c_t(
-            in_shape[-2], self._min_factor[1]), Pad._c_t(in_shape[-1], self._min_factor[2]))
+        return (*in_shape[:-3], self._c_t(in_shape[-3], self._min_factor[0]), self._c_t(
+            in_shape[-2], self._min_factor[1]), self._c_t(in_shape[-1], self._min_factor[2]))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.batch:
@@ -76,7 +77,7 @@ class Pad3d(Pad):
         else:
             _, d, h, w = x.shape
             suffix = (0,) * 2
-        self._paddings = Pad._c_p(d, self._min_factor[2]) + Pad._c_p(h, self._min_factor[0]) + Pad._c_p(
+        self._paddings = self._c_p(d, self._min_factor[2]) + self._c_p(h, self._min_factor[0]) + self._c_p(
             w, self._min_factor[1])
         return nn.functional.pad(x, self._paddings[::-1] + suffix, self._mode, self._value)
 
