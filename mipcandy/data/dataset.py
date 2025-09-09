@@ -4,7 +4,6 @@ from os.path import exists
 from random import choice, randint
 from shutil import move, copy
 from typing import Literal, override, Self, Sized, Sequence
-import json
 
 import torch
 from torch.utils.data import Dataset
@@ -36,76 +35,8 @@ class UnsupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
 
 
 class SupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
-    def __init__(self, device: torch.device | str = "cpu", *,
-                 fold_config: dict | str | None = None,
-                 current_fold: int | None = None,
-                 fold_mode: Literal["train", "val"] | None = None,
-                 _shared_metadata: dict | None = None) -> None:
+    def __init__(self, device: torch.device | str = "cpu") -> None:
         super().__init__(device)
-        self._shared_metadata = _shared_metadata or {}
-        self._fold_config = fold_config
-        self._current_fold = current_fold
-        self._fold_mode = fold_mode
-        self._fold_data: dict = {}
-        
-        if fold_config:
-            self._initialize_fold_system()
-    
-    def _initialize_fold_system(self) -> None:
-        if isinstance(self._fold_config, str):
-            self._fold_data = self._load_folds_from_json(self._fold_config)
-        elif isinstance(self._fold_config, dict):
-            self._fold_data = self._fold_config
-        else:
-            raise ValueError("fold_config must be dict or JSON file path")
-    
-    def _load_folds_from_json(self, json_path: str) -> dict:
-        with open(json_path, 'r') as f:
-            return json.load(f)
-    
-    def generate_folds(self, num_folds: int = 5, *, 
-                      stratified: bool = True,
-                      positive_ratio_threshold: float = 0.1) -> dict:
-        try:
-            from sklearn.model_selection import StratifiedKFold, KFold
-        except ImportError:
-            raise ImportError("scikit-learn is required for fold generation while it is not installed."
-                            "To use this feature, run: pip install scikit-learn")
-        
-        total_cases = self._get_total_cases()
-        indices = list(range(total_cases))
-        
-        if stratified:
-            labels = []
-            for i in indices:
-                _, label = self.load(i)
-                is_positive = label.max() > positive_ratio_threshold
-                labels.append(1 if is_positive else 0)
-            
-            skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
-            fold_splits = list(skf.split(indices, labels))
-        else:
-            kf = KFold(n_splits=num_folds, shuffle=True, random_state=42)
-            fold_splits = list(kf.split(indices))
-        
-        fold_data = {}
-        for fold_idx, (train_indices, val_indices) in enumerate(fold_splits):
-            fold_data[str(fold_idx)] = {
-                "train": train_indices.tolist(),
-                "val": val_indices.tolist()
-            }
-        
-        return fold_data
-    
-    def get_effective_indices(self) -> list[int]:
-        if self._current_fold is None or self._fold_mode is None:
-            return list(range(self._get_total_cases()))
-        
-        fold_key = str(self._current_fold)
-        if fold_key not in self._fold_data:
-            raise ValueError(f"Fold {self._current_fold} not found in fold configuration")
-        
-        return self._fold_data[fold_key][self._fold_mode]
     
     @abstractmethod
     def _get_total_cases(self) -> int:
@@ -117,50 +48,11 @@ class SupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
 
     @override
     def __len__(self) -> int:
-        if self._current_fold is not None:
-            return len(self.get_effective_indices())
         return self._get_total_cases()
 
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        if self._current_fold is not None:
-            effective_indices = self.get_effective_indices()
-            if idx >= len(effective_indices):
-                raise IndexError(f"Index {idx} out of range for current fold")
-            real_idx = effective_indices[idx]
-            return self.load(real_idx)
         return self.load(idx)
-    
-    def create_fold_view(self, fold_config: dict, current_fold: int, 
-                        fold_mode: Literal["train", "val"]) -> Self:
-        import copy
-        new_dataset: Self = copy.copy(self)
-        
-        new_dataset._shared_metadata: dict = self._shared_metadata
-        new_dataset._fold_config: dict = fold_config
-        new_dataset._current_fold: int = current_fold
-        new_dataset._fold_mode: Literal["train", "val"] = fold_mode
-        new_dataset._fold_data: dict = {}
-        new_dataset._initialize_fold_system()
-        
-        return new_dataset
-    
-    @classmethod
-    def create_cross_validation_datasets(cls, num_folds: int = 5, current_fold: int = 0,
-                                        stratified: bool = True, **dataset_kwargs) -> tuple[Self, Self, dict]:
-        base_dataset: Self = cls(**dataset_kwargs)
-        
-        folds: dict = base_dataset.generate_folds(num_folds=num_folds, stratified=stratified)
-        
-        train_dataset: Self = base_dataset.create_fold_view(folds, current_fold, "train")
-        val_dataset: Self = base_dataset.create_fold_view(folds, current_fold, "val")
-        
-        return train_dataset, val_dataset, folds
-    
-    def switch_fold(self, new_fold: int, new_mode: Literal["train", "val"]) -> Self:
-        if self._fold_config is None:
-            raise ValueError("No fold configuration available")
-        return self.create_fold_view(self._fold_config, new_fold, new_mode)
 
 
 class DatasetFromMemory(UnsupervisedDataset):
@@ -180,8 +72,8 @@ class DatasetFromMemory(UnsupervisedDataset):
 
 class MergedDataset(SupervisedDataset):
     def __init__(self, images: UnsupervisedDataset, labels: UnsupervisedDataset, *,
-                 device: torch.device | str = "cpu", **kwargs) -> None:
-        super().__init__(device, **kwargs)
+                 device: torch.device | str = "cpu") -> None:
+        super().__init__(device)
         if len(images) != len(labels):
             raise ValueError("Unmatched number of images and labels")
         self._images: UnsupervisedDataset = images
@@ -199,126 +91,27 @@ class MergedDataset(SupervisedDataset):
 class NNUNetDataset(SupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, split: Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
-                 label_transform: Transform | None = None, device: torch.device | str = "cpu",
-                 num_modalities: int = 1,
-                 modality_pattern: str = "_{:04d}",
-                 **kwargs) -> None:
+                 label_transform: Transform | None = None, device: torch.device | str = "cpu") -> None:
         
+        super().__init__(device)
         self._folder: str = str(folder)
         self._split: str = split
         self._prefix: str = prefix
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
-        self._num_modalities: int = num_modalities
-        self._modality_pattern: str = modality_pattern
         
-        shared_metadata: dict = kwargs.get('_shared_metadata', {})
-        metadata_key: str = self._get_metadata_key()
+        # Discover cases and labels
+        images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
+        images.sort()
+        self._labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
+        self._labels.sort()
+        self._cases: list[str] = images
         
-        if shared_metadata and metadata_key in shared_metadata:
-            metadata: dict = shared_metadata[metadata_key]
-            self._cases: list[str] = metadata['cases']
-            self._labels: list[str] = metadata['labels']
-            self._num_cases: int = metadata['num_cases']
-        else:
-            if num_modalities > 1:
-                self._cases, self._labels = self._discover_multimodal_cases()
-            else:
-                images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
-                images.sort()
-                self._labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
-                self._labels.sort()
-                self._cases: list[str] = images
-            
-            self._num_cases: int = len(self._cases)
-            num_labels: int = len(self._labels)
-            if num_labels != self._num_cases:
-                raise FileNotFoundError(f"Inconsistent number of labels ({num_labels}) and images ({self._num_cases})")
-            
-            kwargs['_shared_metadata'] = kwargs.get('_shared_metadata', {})
-            kwargs['_shared_metadata'][metadata_key] = {
-                'cases': self._cases,
-                'labels': self._labels, 
-                'num_cases': self._num_cases
-            }
-        
-        super().__init__(device, **kwargs)
-
-    def _discover_multimodal_cases(self) -> tuple[list[str], list[str]]:
-        images_dir = f"{self._folder}/images{self._split}"
-        labels_dir = f"{self._folder}/labels{self._split}"
-        
-        image_files = [f for f in listdir(images_dir) if f.startswith(self._prefix)]
-        
-        case_bases = set()
-        for filename in image_files:
-            base_name = self._extract_case_base(filename)
-            if self._validate_case_completeness(base_name):
-                case_bases.add(base_name)
-        
-        case_bases = sorted(list(case_bases))
-        
-        valid_cases = []
-        valid_labels = []
-        
-        for case_base in case_bases:
-            label_candidates = [
-                f"{case_base}.nii.gz",
-                f"{case_base}_seg.nii.gz",
-                f"{case_base}.nii",
-            ]
-            
-            label_found = None
-            for candidate in label_candidates:
-                if exists(f"{labels_dir}/{candidate}"):
-                    label_found = candidate
-                    break
-            
-            if label_found:
-                valid_cases.append(case_base)
-                valid_labels.append(label_found)
-            else:
-                print(f"Warning: No label found for case {case_base}")
-        
-        return valid_cases, valid_labels
-
-    def _extract_case_base(self, filename: str) -> str:
-        name_without_ext = filename.split('.')[0]
-        parts = name_without_ext.split('_')
-        
-        if len(parts) >= 2 and parts[-1].isdigit() and len(parts[-1]) == 4:
-            return '_'.join(parts[:-1])
-        
-        return name_without_ext
-
-    def _validate_case_completeness(self, case_base: str) -> bool:
-        images_dir = f"{self._folder}/images{self._split}"
-        
-        for modality_idx in range(self._num_modalities):
-            expected_file = f"{case_base}{self._modality_pattern.format(modality_idx)}.nii.gz"
-            if not exists(f"{images_dir}/{expected_file}"):
-                expected_file_uncompressed = f"{case_base}{self._modality_pattern.format(modality_idx)}.nii"
-                if not exists(f"{images_dir}/{expected_file_uncompressed}"):
-                    return False
-        
-        return True
-
-    def _get_metadata_key(self) -> str:
-        return f"{self._folder}_{self._split}_{self._prefix}_{self._num_modalities}"
-    
-    def _load_multimodal_image(self, image_paths: list[str]) -> torch.Tensor:
-        if len(image_paths) == 1:
-            return self.do_load(image_paths[0], device=self._device, 
-                              align_spacing=self._align_spacing)
-        
-        modalities = []
-        for path in image_paths:
-            modal_data = self.do_load(path, device=self._device,
-                                    align_spacing=self._align_spacing)
-            modalities.append(modal_data)
-        
-        return torch.cat(modalities, dim=0)
+        self._num_cases: int = len(self._cases)
+        num_labels: int = len(self._labels)
+        if num_labels != self._num_cases:
+            raise FileNotFoundError(f"Inconsistent number of labels ({num_labels}) and images ({self._num_cases})")
     
     @staticmethod
     def _create_subset(folder: str) -> None:
@@ -369,34 +162,73 @@ class NNUNetDataset(SupervisedDataset):
         return NNUNetDataset(self._folder, split=split, prefix=self._prefix, image_transform=self._image_transform,
                              label_transform=self._label_transform)
 
+    def fold(self, n: int | Literal["all"]) -> tuple[Self, Self]:
+        """
+        Split dataset into train/val (80%/20%)
+        Args:
+            n: fold number (0-4) or "all" for no split
+        Returns:
+            tuple[train_dataset, val_dataset]
+        """
+        if n == "all":
+            # Return copies of the same dataset
+            train_dataset = NNUNetDataset(self._folder, split=self._split, prefix=self._prefix, 
+                                        align_spacing=self._align_spacing, image_transform=self._image_transform,
+                                        label_transform=self._label_transform, device=self._device)
+            val_dataset = NNUNetDataset(self._folder, split=self._split, prefix=self._prefix,
+                                      align_spacing=self._align_spacing, image_transform=self._image_transform, 
+                                      label_transform=self._label_transform, device=self._device)
+            return train_dataset, val_dataset
+        
+        if not (0 <= n <= 4):
+            raise ValueError("n must be 0-4 or 'all'")
+        
+        # Simple 20% split logic
+        total = self._num_cases
+        val_size = total // 5
+        start_idx = n * val_size
+        end_idx = start_idx + val_size if n < 4 else total
+        
+        # Create val dataset indices
+        val_indices = set(range(start_idx, end_idx))
+        train_indices = [i for i in range(total) if i not in val_indices]
+        val_indices = list(val_indices)
+        
+        # Create new dataset instances with filtered cases
+        train_dataset = self._create_subset_with_indices(train_indices)
+        val_dataset = self._create_subset_with_indices(val_indices)
+        
+        return train_dataset, val_dataset
+    
+    def _create_subset_with_indices(self, indices: list[int]) -> Self:
+        """Create a new dataset instance with filtered cases"""
+        subset = NNUNetDataset.__new__(NNUNetDataset)
+        subset._folder = self._folder
+        subset._split = self._split
+        subset._prefix = self._prefix
+        subset._align_spacing = self._align_spacing
+        subset._image_transform = self._image_transform
+        subset._label_transform = self._label_transform
+        subset._device = self._device
+        
+        # Filter cases and labels based on indices
+        subset._cases = [self._cases[i] for i in indices]
+        subset._labels = [self._labels[i] for i in indices]
+        subset._num_cases = len(indices)
+        
+        return subset
+
     @override
     def _get_total_cases(self) -> int:
         return self._num_cases
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        if self._num_modalities > 1:
-            case_base = self._cases[idx]
-            image_paths = []
-            
-            for modality_idx in range(self._num_modalities):
-                modal_filename = f"{case_base}{self._modality_pattern.format(modality_idx)}.nii.gz"
-                modal_path = f"{self._folder}/images{self._split}/{modal_filename}"
-                
-                if not exists(modal_path):
-                    modal_filename = f"{case_base}{self._modality_pattern.format(modality_idx)}.nii"
-                    modal_path = f"{self._folder}/images{self._split}/{modal_filename}"
-                
-                image_paths.append(modal_path)
-            
-            image = self._load_multimodal_image(image_paths)
-            
-        else:
-            image = self.do_load(
-                f"{self._folder}/images{self._split}/{self._cases[idx]}",
-                align_spacing=self._align_spacing,
-                device=self._device
-            )
+        image = self.do_load(
+            f"{self._folder}/images{self._split}/{self._cases[idx]}",
+            align_spacing=self._align_spacing,
+            device=self._device
+        )
         
         label = self.do_load(
             f"{self._folder}/labels{self._split}/{self._labels[idx]}",
