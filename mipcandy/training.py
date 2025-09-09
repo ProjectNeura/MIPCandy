@@ -3,6 +3,7 @@ from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import md5
+from io import StringIO
 from os import PathLike, urandom, makedirs, environ
 from os.path import exists
 from shutil import copy
@@ -20,8 +21,8 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from mipcandy.common import Pad2d, Pad3d
-from mipcandy.frontend import Frontend
 from mipcandy.config import load_secrets
+from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params
@@ -270,8 +271,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             self.log(f"Set to manual seed {seed}")
 
     @staticmethod
-    def model_complexity_info(model: nn.Module, example_shape: tuple[int, ...]) -> tuple[float, float]:
-        return get_model_complexity_info(model, example_shape, False, False)
+    def model_complexity_info(model: nn.Module, example_shape: Sequence[int]) -> tuple[float, float, str]:
+        layer_stats = StringIO()
+        macs, params = get_model_complexity_info(model, tuple(example_shape), ost=layer_stats, as_strings=False)
+        return macs, params, layer_stats.getvalue()
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
@@ -290,7 +293,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self.log(f"Example input shape: {example_shape}")
         model = self.build_network(example_shape).to(self._device)
         model_name = model.__class__.__name__
-        num_macs, num_params = self.model_complexity_info(model, example_shape)
+        num_macs, num_params, _ = self.model_complexity_info(model, example_shape)
         if num_macs is None or num_params is None:
             raise RuntimeError("Failed to validate model")
         num_macs /= 1e9
