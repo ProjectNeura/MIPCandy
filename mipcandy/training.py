@@ -289,7 +289,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         sanity_check_result = sanity_check(model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
         self.log(str(sanity_check_result))
-        self.log(f"Example output shape: {sanity_check_result.output.shape}")
+        self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
