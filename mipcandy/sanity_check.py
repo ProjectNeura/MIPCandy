@@ -17,8 +17,8 @@ def model_complexity_info(model: nn.Module, example_shape: Sequence[int]) -> tup
 
 @dataclass
 class SanityCheckResult(object):
-    macs: float
-    params: float
+    num_macs: float
+    num_params: float
     layer_stats: str
     output: torch.Tensor
 
@@ -27,6 +27,6 @@ def sanity_check(model: nn.Module, input_shape: Sequence[int], *,
                  device: torch.device | str | None = None) -> SanityCheckResult:
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
-    macs, params, layer_stats = model_complexity_info(model, input_shape)
+    num_macs, num_params, layer_stats = model_complexity_info(model, input_shape)
     output = model.to(device)(torch.randn(1, *input_shape, device=device))
-    return SanityCheckResult(macs, params, layer_stats, output)
+    return SanityCheckResult(num_macs, num_params, layer_stats, output)
