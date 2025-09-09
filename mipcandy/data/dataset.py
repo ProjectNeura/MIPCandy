@@ -39,8 +39,10 @@ class SupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
     def __init__(self, device: torch.device | str = "cpu", *,
                  fold_config: dict | str | None = None,
                  current_fold: int | None = None,
-                 fold_mode: Literal["train", "val"] | None = None) -> None:
+                 fold_mode: Literal["train", "val"] | None = None,
+                 _shared_metadata: dict | None = None) -> None:
         super().__init__(device)
+        self._shared_metadata = _shared_metadata or {}
         self._fold_config = fold_config
         self._current_fold = current_fold
         self._fold_mode = fold_mode
@@ -105,19 +107,6 @@ class SupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
         
         return self._fold_data[fold_key][self._fold_mode]
     
-    def load_multimodal_image(self, image_paths: list[str]) -> torch.Tensor:
-        if len(image_paths) == 1:
-            return self.do_load(image_paths[0], device=self._device, 
-                              align_spacing=getattr(self, '_align_spacing', False))
-        
-        modalities = []
-        for path in image_paths:
-            modal_data = self.do_load(path, device=self._device,
-                                    align_spacing=getattr(self, '_align_spacing', False))
-            modalities.append(modal_data)
-        
-        return torch.cat(modalities, dim=0)
-    
     @abstractmethod
     def _get_total_cases(self) -> int:
         raise NotImplementedError
@@ -141,6 +130,37 @@ class SupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
             real_idx = effective_indices[idx]
             return self.load(real_idx)
         return self.load(idx)
+    
+    def create_fold_view(self, fold_config: dict, current_fold: int, 
+                        fold_mode: Literal["train", "val"]) -> Self:
+        import copy
+        new_dataset: Self = copy.copy(self)
+        
+        new_dataset._shared_metadata: dict = self._shared_metadata
+        new_dataset._fold_config: dict = fold_config
+        new_dataset._current_fold: int = current_fold
+        new_dataset._fold_mode: Literal["train", "val"] = fold_mode
+        new_dataset._fold_data: dict = {}
+        new_dataset._initialize_fold_system()
+        
+        return new_dataset
+    
+    @classmethod
+    def create_cross_validation_datasets(cls, num_folds: int = 5, current_fold: int = 0,
+                                        stratified: bool = True, **dataset_kwargs) -> tuple[Self, Self, dict]:
+        base_dataset: Self = cls(**dataset_kwargs)
+        
+        folds: dict = base_dataset.generate_folds(num_folds=num_folds, stratified=stratified)
+        
+        train_dataset: Self = base_dataset.create_fold_view(folds, current_fold, "train")
+        val_dataset: Self = base_dataset.create_fold_view(folds, current_fold, "val")
+        
+        return train_dataset, val_dataset, folds
+    
+    def switch_fold(self, new_fold: int, new_mode: Literal["train", "val"]) -> Self:
+        if self._fold_config is None:
+            raise ValueError("No fold configuration available")
+        return self.create_fold_view(self._fold_config, new_fold, new_mode)
 
 
 class DatasetFromMemory(UnsupervisedDataset):
@@ -193,21 +213,37 @@ class NNUNetDataset(SupervisedDataset):
         self._num_modalities: int = num_modalities
         self._modality_pattern: str = modality_pattern
         
-        super().__init__(device, **kwargs)
+        shared_metadata: dict = kwargs.get('_shared_metadata', {})
+        metadata_key: str = self._get_metadata_key()
         
-        if num_modalities > 1:
-            self._cases, self._labels = self._discover_multimodal_cases()
+        if shared_metadata and metadata_key in shared_metadata:
+            metadata: dict = shared_metadata[metadata_key]
+            self._cases: list[str] = metadata['cases']
+            self._labels: list[str] = metadata['labels']
+            self._num_cases: int = metadata['num_cases']
         else:
-            self._images = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
-            self._images.sort()
-            self._labels = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
-            self._labels.sort()
-            self._cases = self._images
+            if num_modalities > 1:
+                self._cases, self._labels = self._discover_multimodal_cases()
+            else:
+                images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
+                images.sort()
+                self._labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
+                self._labels.sort()
+                self._cases: list[str] = images
+            
+            self._num_cases: int = len(self._cases)
+            num_labels: int = len(self._labels)
+            if num_labels != self._num_cases:
+                raise FileNotFoundError(f"Inconsistent number of labels ({num_labels}) and images ({self._num_cases})")
+            
+            kwargs['_shared_metadata'] = kwargs.get('_shared_metadata', {})
+            kwargs['_shared_metadata'][metadata_key] = {
+                'cases': self._cases,
+                'labels': self._labels, 
+                'num_cases': self._num_cases
+            }
         
-        self._num_cases: int = len(self._cases)
-        num_labels = len(self._labels)
-        if num_labels != self._num_cases:
-            raise FileNotFoundError(f"Inconsistent number of labels ({num_labels}) and images ({self._num_cases})")
+        super().__init__(device, **kwargs)
 
     def _discover_multimodal_cases(self) -> tuple[list[str], list[str]]:
         images_dir = f"{self._folder}/images{self._split}"
@@ -268,6 +304,22 @@ class NNUNetDataset(SupervisedDataset):
         
         return True
 
+    def _get_metadata_key(self) -> str:
+        return f"{self._folder}_{self._split}_{self._prefix}_{self._num_modalities}"
+    
+    def _load_multimodal_image(self, image_paths: list[str]) -> torch.Tensor:
+        if len(image_paths) == 1:
+            return self.do_load(image_paths[0], device=self._device, 
+                              align_spacing=self._align_spacing)
+        
+        modalities = []
+        for path in image_paths:
+            modal_data = self.do_load(path, device=self._device,
+                                    align_spacing=self._align_spacing)
+            modalities.append(modal_data)
+        
+        return torch.cat(modalities, dim=0)
+    
     @staticmethod
     def _create_subset(folder: str) -> None:
         if exists(folder) and len(listdir(folder)) > 0:
@@ -293,7 +345,7 @@ class NNUNetDataset(SupervisedDataset):
         NNUNetDataset._create_subset(images_folder)
         NNUNetDataset._create_subset(labels_folder)
         op = move if exclusive else copy
-        images, labels = self._images.copy(), self._labels.copy()
+        cases, labels = self._cases.copy(), self._labels.copy()
         num_cases = self._num_cases
         positives = self.divide()[0]
         if positive_only and len(positives) < size:
@@ -302,17 +354,17 @@ class NNUNetDataset(SupervisedDataset):
             if positive_only:
                 i = choice(positives)
                 positives.remove(i)
-                image, label = self._images[i], self._labels[i]
-                images.remove(image)
+                case, label = self._cases[i], self._labels[i]
+                cases.remove(case)
                 labels.remove(label)
             else:
                 num_cases -= 1
                 i = randint(0, num_cases)
-                image, label = images.pop(i), labels.pop(i)
-            op(f"{self._folder}/images{self._split}/{image}", f"{images_folder}/{image}")
+                case, label = cases.pop(i), labels.pop(i)
+            op(f"{self._folder}/images{self._split}/{case}", f"{images_folder}/{case}")
             op(f"{self._folder}/labels{self._split}/{label}", f"{labels_folder}/{label}")
         if exclusive:
-            self._images, self._labels = images, labels
+            self._cases, self._labels = cases, labels
             self._num_cases -= size
         return NNUNetDataset(self._folder, split=split, prefix=self._prefix, image_transform=self._image_transform,
                              label_transform=self._label_transform)
@@ -320,10 +372,6 @@ class NNUNetDataset(SupervisedDataset):
     @override
     def _get_total_cases(self) -> int:
         return self._num_cases
-
-    @override
-    def __len__(self) -> int:
-        return super().__len__()
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -341,7 +389,7 @@ class NNUNetDataset(SupervisedDataset):
                 
                 image_paths.append(modal_path)
             
-            image = self.load_multimodal_image(image_paths)
+            image = self._load_multimodal_image(image_paths)
             
         else:
             image = self.do_load(
