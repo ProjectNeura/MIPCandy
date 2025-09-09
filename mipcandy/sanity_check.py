@@ -28,5 +28,5 @@ def sanity_check(model: nn.Module, input_shape: Sequence[int], *,
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     macs, params, layer_stats = model_complexity_info(model, input_shape)
-    output = model.to(device)(torch.randn(*input_shape, device=device))
+    output = model.to(device)(torch.randn(1, *input_shape, device=device))
     return SanityCheckResult(macs, params, layer_stats, output)
