@@ -35,7 +35,7 @@ class UnsupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
 
 
 class SupervisedDataset(_AbstractDataset, metaclass=ABCMeta):
-    def __init__(self, device: torch.device | str = "cpu") -> None:
+    def __init__(self, device: torch.device | str) -> None:
         super().__init__(device)
     
     @abstractmethod
@@ -101,14 +101,13 @@ class NNUNetDataset(SupervisedDataset):
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
         
-        # Discover cases and labels
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
         images.sort()
         self._labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
         self._labels.sort()
-        self._cases: list[str] = images
+        self._images: list[str] = images
         
-        self._num_cases: int = len(self._cases)
+        self._num_cases: int = len(self._images)
         num_labels: int = len(self._labels)
         if num_labels != self._num_cases:
             raise FileNotFoundError(f"Inconsistent number of labels ({num_labels}) and images ({self._num_cases})")
@@ -138,7 +137,7 @@ class NNUNetDataset(SupervisedDataset):
         NNUNetDataset._create_subset(images_folder)
         NNUNetDataset._create_subset(labels_folder)
         op = move if exclusive else copy
-        cases, labels = self._cases.copy(), self._labels.copy()
+        cases, labels = self._images.copy(), self._labels.copy()
         num_cases = self._num_cases
         positives = self.divide()[0]
         if positive_only and len(positives) < size:
@@ -147,7 +146,7 @@ class NNUNetDataset(SupervisedDataset):
             if positive_only:
                 i = choice(positives)
                 positives.remove(i)
-                case, label = self._cases[i], self._labels[i]
+                case, label = self._images[i], self._labels[i]
                 cases.remove(case)
                 labels.remove(label)
             else:
@@ -157,21 +156,13 @@ class NNUNetDataset(SupervisedDataset):
             op(f"{self._folder}/images{self._split}/{case}", f"{images_folder}/{case}")
             op(f"{self._folder}/labels{self._split}/{label}", f"{labels_folder}/{label}")
         if exclusive:
-            self._cases, self._labels = cases, labels
+            self._images, self._labels = cases, labels
             self._num_cases -= size
         return NNUNetDataset(self._folder, split=split, prefix=self._prefix, image_transform=self._image_transform,
                              label_transform=self._label_transform)
 
     def fold(self, n: int | Literal["all"]) -> tuple[Self, Self]:
-        """
-        Split dataset into train/val (80%/20%)
-        Args:
-            n: fold number (0-4) or "all" for no split
-        Returns:
-            tuple[train_dataset, val_dataset]
-        """
         if n == "all":
-            # Return copies of the same dataset
             train_dataset = NNUNetDataset(self._folder, split=self._split, prefix=self._prefix, 
                                         align_spacing=self._align_spacing, image_transform=self._image_transform,
                                         label_transform=self._label_transform, device=self._device)
@@ -179,29 +170,20 @@ class NNUNetDataset(SupervisedDataset):
                                       align_spacing=self._align_spacing, image_transform=self._image_transform, 
                                       label_transform=self._label_transform, device=self._device)
             return train_dataset, val_dataset
-        
         if not (0 <= n <= 4):
             raise ValueError("n must be 0-4 or 'all'")
-        
-        # Simple 20% split logic
         total = self._num_cases
         val_size = total // 5
         start_idx = n * val_size
         end_idx = start_idx + val_size if n < 4 else total
-        
-        # Create val dataset indices
         val_indices = set(range(start_idx, end_idx))
         train_indices = [i for i in range(total) if i not in val_indices]
         val_indices = list(val_indices)
-        
-        # Create new dataset instances with filtered cases
         train_dataset = self._create_subset_with_indices(train_indices)
         val_dataset = self._create_subset_with_indices(val_indices)
-        
         return train_dataset, val_dataset
     
     def _create_subset_with_indices(self, indices: list[int]) -> Self:
-        """Create a new dataset instance with filtered cases"""
         subset = NNUNetDataset.__new__(NNUNetDataset)
         subset._folder = self._folder
         subset._split = self._split
@@ -210,12 +192,9 @@ class NNUNetDataset(SupervisedDataset):
         subset._image_transform = self._image_transform
         subset._label_transform = self._label_transform
         subset._device = self._device
-        
-        # Filter cases and labels based on indices
         subset._cases = [self._cases[i] for i in indices]
         subset._labels = [self._labels[i] for i in indices]
         subset._num_cases = len(indices)
-        
         return subset
 
     @override
