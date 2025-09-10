@@ -3,7 +3,7 @@ from os import PathLike, listdir, makedirs
 from os.path import exists
 from random import choice, randint
 from shutil import move, copy
-from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
+from typing import Literal, override, Self, Sequence, TypeVar, Generic
 
 import torch
 from torch.utils.data import Dataset
@@ -53,6 +53,10 @@ D = TypeVar("D", bound=Sequence)
 
 
 class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=ABCMeta):
+    """
+    Do not use this as a generic class. Only parameterize it if you are inheriting from it.
+    """
+
     def __init__(self, images: D, *, device: torch.device | str = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
@@ -63,6 +67,10 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
+    """
+    Do not use this as a generic class. Only parameterize it if you are inheriting from it.
+    """
+
     def __init__(self, images: D, labels: D, *, device: torch.device | str = "cpu") -> None:
         super().__init__(device)
         if len(images) != len(labels):
