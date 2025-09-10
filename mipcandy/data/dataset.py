@@ -74,6 +74,10 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def __len__(self) -> int:
         return len(self._images)
 
+    def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> Self:
+        # Todo
+        ...
+
 
 class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
     def __init__(self, images: Sequence[torch.Tensor], device: torch.device | str = "cpu") -> None:
