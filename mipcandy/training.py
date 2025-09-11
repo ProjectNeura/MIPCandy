@@ -14,15 +14,15 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from pandas import DataFrame
-from ptflops import get_model_complexity_info
 from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from mipcandy.common import Pad2d, Pad3d
-from mipcandy.frontend import Frontend
 from mipcandy.config import load_secrets
+from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
+from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params
 
@@ -269,10 +269,6 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         if self.initialized():
             self.log(f"Set to manual seed {seed}")
 
-    @staticmethod
-    def model_complexity_info(model: nn.Module, example_shape: tuple[int, ...]) -> tuple[float, float]:
-        return get_model_complexity_info(model, example_shape, False, False)
-
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
               val_score_prediction_degree: int = 5) -> None:
@@ -290,13 +286,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self.log(f"Example input shape: {example_shape}")
         model = self.build_network(example_shape).to(self._device)
         model_name = model.__class__.__name__
-        num_macs, num_params = self.model_complexity_info(model, example_shape)
-        if num_macs is None or num_params is None:
-            raise RuntimeError("Failed to validate model")
-        num_macs /= 1e9
-        num_params /= 1e6
+        sanity_check_result = sanity_check(model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
-        self.log(f"MACs: {num_macs:.1f} G / Params: {num_params:.1f} M")
+        self.log(str(sanity_check_result))
+        self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
@@ -305,8 +298,9 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             toolbox.ema = optim.swa_utils.AveragedModel(model)
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
         es_tolerance = early_stop_tolerance
-        self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note, num_macs,
-                                             num_params, num_epochs, early_stop_tolerance)
+        self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
+                                             sanity_check_result.num_macs, sanity_check_result.num_params, num_epochs,
+                                             early_stop_tolerance)
         try:
             for epoch in range(1, num_epochs + 1):
                 if early_stop_tolerance == -1:
