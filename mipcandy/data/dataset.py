@@ -136,7 +136,9 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
 class NNUNetDataset(SupervisedDataset[list[str]]):
     def __init__(self, folder: str | PathLike[str], *, split: Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
-                 label_transform: Transform | None = None, device: torch.device | str = "cpu") -> None:
+                 label_transform: Transform | None = None, device: torch.device | str = "cpu",
+                 save_index_to: str | PathLike | None = None, index_format: str = "csv",
+                ) -> None:
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
@@ -148,7 +150,9 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
-
+        if save_index_to is not None:
+            self.save_paths(save_index_to, fmt=index_format)
+    
     @staticmethod
     def _create_subset(folder: str) -> None:
         if exists(folder) and len(listdir(folder)) > 0:
@@ -170,6 +174,49 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         if self._label_transform:
             label = self._label_transform(label)
         return image, label
+
+    def iter_paths(self) -> list[tuple[str, str]]:
+        images_dir = f"{self._folder}/images{self._split}"
+        labels_dir = f"{self._folder}/labels{self._split}"
+        n = len(self._images)
+        has_labels = len(self._labels) == n
+        m = min(n, len(self._labels)) if self._labels else n
+        out: list[tuple[str, str]] = []
+        for i in range(n):
+            img = f"{images_dir}/{self._images[i]}"
+            if self._labels and i < m and has_labels:
+                lbl = f"{labels_dir}/{self._labels[i]}"
+            else:
+                lbl = ""
+            out.append((img, lbl))
+        return out
+
+    def save_paths(self, path: str | PathLike[str], fmt: Literal["csv", "json", "txt"] = "csv") -> None:
+        import os
+        import csv
+        import json
+        p = str(path)
+        parent = os.path.dirname(p)
+        if parent and not exists(parent):
+            makedirs(parent, exist_ok=True)
+        pairs = self.iter_paths()
+        f = fmt.lower()
+        match f:
+            case "csv":
+                with open(p, "w", newline="", encoding="utf-8") as fh:
+                    writer = csv.writer(fh)
+                    writer.writerow(["image", "label"])
+                    writer.writerows(pairs)
+            case "json":
+                data = [{"image": i, "label": l} for (i, l) in pairs]
+                with open(p, "w", encoding="utf-8") as fh:
+                    json.dump(data, fh, ensure_ascii=False, indent=2)
+            case "txt":
+                with open(p, "w", encoding="utf-8") as fh:
+                    for i, l in pairs:
+                        fh.write(f"{i}\t{l}\n")
+            case _:
+                raise ValueError(f"Unsupported format: {fmt!r}. Choose from 'csv', 'json', 'txt'.")
 
     @override
     def construct_new(self, images: D, labels: D) -> Self:
