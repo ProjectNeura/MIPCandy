@@ -16,9 +16,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     def _save_preview(self, x: torch.Tensor, title: str) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
         if x.ndim == 3:
-            visualize2d((x * 255 / x.max()).to(torch.uint16), title=title, blocking=True, screenshot_as=path)
+            visualize2d((x * 255 / x.max()).to(torch.uint16), title=title, blocking=False, screenshot_as=path)
         elif x.ndim == 4:
-            visualize3d(x, title=title, blocking=True, screenshot_as=path)
+            visualize3d(x, title=title, blocking=False, screenshot_as=path)
         else:
             raise ValueError("MIP Candy only intends to support 2D and 3D data")
 
@@ -29,9 +29,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         self._save_preview(label, "label")
         self._save_preview(mask, "prediction")
         if image.ndim == label.ndim == mask.ndim == 3:
-            visualize2d(overlay(image, label), title="expected", blocking=True,
+            visualize2d(overlay(image, label), title="expected", blocking=False,
                         screenshot_as=f"{self.experiment_folder()}/expected (preview).png")
-            visualize2d(overlay(image, mask), title="actual", blocking=True,
+            visualize2d(overlay(image, mask), title="actual", blocking=False,
                         screenshot_as=f"{self.experiment_folder()}/actual (preview).png")
 
     @override
