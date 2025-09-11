@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from os import PathLike, listdir, makedirs
-from os.path import exists
+from os.path import exists, basename, dirname, join
 from random import choices
 from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
 
@@ -136,9 +136,7 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
 class NNUNetDataset(SupervisedDataset[list[str]]):
     def __init__(self, folder: str | PathLike[str], *, split: Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
-                 label_transform: Transform | None = None, device: torch.device | str = "cpu",
-                 save_index_to: str | PathLike | None = None, index_format: str = "csv",
-                ) -> None:
+                 label_transform: Transform | None = None, device: torch.device | str = "cpu") -> None:
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
@@ -150,8 +148,6 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
-        if save_index_to is not None:
-            self.save_paths(save_index_to, fmt=index_format)
     
     @staticmethod
     def _create_subset(folder: str) -> None:
@@ -191,12 +187,31 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
             out.append((img, lbl))
         return out
 
+    def save(self, split: str, target_folder: str | PathLike[str] | None = None) -> None:
+        import shutil
+        
+        target_base = str(target_folder) if target_folder else self._folder
+        images_target = f"{target_base}/images{split}"
+        labels_target = f"{target_base}/labels{split}"
+        
+        makedirs(images_target, exist_ok=True)
+        makedirs(labels_target, exist_ok=True)
+        
+        pairs = self.iter_paths()
+        for image_path, label_path in pairs:
+            if image_path:
+                image_filename = basename(image_path)
+                shutil.copy2(image_path, join(images_target, image_filename))
+            
+            if label_path:
+                label_filename = basename(label_path)
+                shutil.copy2(label_path, join(labels_target, label_filename))
+
     def save_paths(self, path: str | PathLike[str], fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        import os
         import csv
         import json
         p = str(path)
-        parent = os.path.dirname(p)
+        parent = dirname(p)
         if parent and not exists(parent):
             makedirs(parent, exist_ok=True)
         pairs = self.iter_paths()
