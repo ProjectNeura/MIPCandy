@@ -175,17 +175,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         return image, label
 
     def iter_paths(self) -> list[tuple[str, str]]:
-        images_dir = f"{self._folder}/images{self._split}"
-        labels_dir = f"{self._folder}/labels{self._split}"
-        n = len(self._images)
-        has_labels = len(self._labels) == n
-        m = min(n, len(self._labels)) if self._labels else n
-        out = []
-        for i in range(n):
-            img = f"{images_dir}/{self._images[i]}"
-            lbl = f"{labels_dir}/{self._labels[i]}" if self._labels and i < m and has_labels else ""
-            out.append((img, lbl))
-        return out
+        return [(self._images[i], self._labels[i]) for i in range(len(self))]
 
     def save(self, split: str, *, target_folder: str | PathLike[str] | None = None) -> None:
         target_base = target_folder if target_folder else self._folder
@@ -203,23 +193,19 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
                 shutil.copy2(label_path, f"{labels_target}/{label_filename}")
 
     def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        p = str(path)
-        parent = dirname(p)
-        if parent and not exists(parent):
-            makedirs(parent, exist_ok=True)
         pairs = self.iter_paths()
         match fmt.lower():
             case "csv":
-                with open(p, "w", newline="") as fh:
+                with open(path, "w", newline="") as fh:
                     writer = csv.writer(fh)
                     writer.writerow(["image", "label"])
                     writer.writerows(pairs)
             case "json":
                 data = [{"image": i, "label": l} for (i, l) in pairs]
-                with open(p, "w") as fh:
+                with open(path, "w") as fh:
                     json.dump(data, fh, ensure_ascii=False, indent=2)
             case "txt":
-                with open(p, "w") as fh:
+                with open(path, "w") as fh:
                     for i, l in pairs:
                         fh.write(f"{i}\t{l}\n")
 
