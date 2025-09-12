@@ -1,6 +1,9 @@
+import csv
+import json
+import shutil
 from abc import ABCMeta, abstractmethod
 from os import PathLike, listdir, makedirs
-from os.path import exists, basename, dirname, join
+from os.path import exists, basename, dirname
 from random import choices
 from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
 
@@ -177,61 +180,48 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         n = len(self._images)
         has_labels = len(self._labels) == n
         m = min(n, len(self._labels)) if self._labels else n
-        out: list[tuple[str, str]] = []
+        out = []
         for i in range(n):
             img = f"{images_dir}/{self._images[i]}"
-            if self._labels and i < m and has_labels:
-                lbl = f"{labels_dir}/{self._labels[i]}"
-            else:
-                lbl = ""
+            lbl = f"{labels_dir}/{self._labels[i]}" if self._labels and i < m and has_labels else ""
             out.append((img, lbl))
         return out
 
-    def save(self, split: str, target_folder: str | PathLike[str] | None = None) -> None:
-        import shutil
-        
-        target_base = str(target_folder) if target_folder else self._folder
+    def save(self, split: str, *, target_folder: str | PathLike[str] | None = None) -> None:
+        target_base = target_folder if target_folder else self._folder
         images_target = f"{target_base}/images{split}"
         labels_target = f"{target_base}/labels{split}"
-        
         makedirs(images_target, exist_ok=True)
         makedirs(labels_target, exist_ok=True)
-        
         pairs = self.iter_paths()
         for image_path, label_path in pairs:
             if image_path:
                 image_filename = basename(image_path)
-                shutil.copy2(image_path, join(images_target, image_filename))
-            
+                shutil.copy2(image_path, f"{images_target}/{image_filename}")
             if label_path:
                 label_filename = basename(label_path)
-                shutil.copy2(label_path, join(labels_target, label_filename))
+                shutil.copy2(label_path, f"{labels_target}/{label_filename}")
 
-    def save_paths(self, path: str | PathLike[str], fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        import csv
-        import json
+    def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
         p = str(path)
         parent = dirname(p)
         if parent and not exists(parent):
             makedirs(parent, exist_ok=True)
         pairs = self.iter_paths()
-        f = fmt.lower()
-        match f:
+        match fmt.lower():
             case "csv":
-                with open(p, "w", newline="", encoding="utf-8") as fh:
+                with open(p, "w", newline="") as fh:
                     writer = csv.writer(fh)
                     writer.writerow(["image", "label"])
                     writer.writerows(pairs)
             case "json":
                 data = [{"image": i, "label": l} for (i, l) in pairs]
-                with open(p, "w", encoding="utf-8") as fh:
+                with open(p, "w") as fh:
                     json.dump(data, fh, ensure_ascii=False, indent=2)
             case "txt":
-                with open(p, "w", encoding="utf-8") as fh:
+                with open(p, "w") as fh:
                     for i, l in pairs:
                         fh.write(f"{i}\t{l}\n")
-            case _:
-                raise ValueError(f"Unsupported format: {fmt!r}. Choose from 'csv', 'json', 'txt'.")
 
     @override
     def construct_new(self, images: D, labels: D) -> Self:
