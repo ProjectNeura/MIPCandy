@@ -184,8 +184,8 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._create_subset(images_target)
         self._create_subset(labels_target)
         for image_path, label_path in self.iter_paths():
-            copy2(image_path, f"{images_target}/{basename(image_path)}")
-            copy2(label_path, f"{labels_target}/{basename(label_path)}")
+            copy2(f"{self._folder}/{image_path}", f"{images_target}/{basename(image_path)}")
+            copy2(f"{self._folder}/{label_path}", f"{labels_target}/{basename(label_path)}")
 
     def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
         paths = self.iter_paths()
