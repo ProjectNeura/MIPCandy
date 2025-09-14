@@ -1,6 +1,9 @@
+import csv
+import json
+import shutil
 from abc import ABCMeta, abstractmethod
 from os import PathLike, listdir, makedirs
-from os.path import exists
+from os.path import exists, basename, dirname
 from random import choices
 from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
 
@@ -148,7 +151,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
-
+    
     @staticmethod
     def _create_subset(folder: str) -> None:
         if exists(folder) and len(listdir(folder)) > 0:
@@ -170,6 +173,41 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         if self._label_transform:
             label = self._label_transform(label)
         return image, label
+
+    def iter_paths(self) -> list[tuple[str, str]]:
+        return [(self._images[i], self._labels[i]) for i in range(len(self))]
+
+    def save(self, split: str, *, target_folder: str | PathLike[str] | None = None) -> None:
+        target_base = target_folder if target_folder else self._folder
+        images_target = f"{target_base}/images{split}"
+        labels_target = f"{target_base}/labels{split}"
+        makedirs(images_target, exist_ok=True)
+        makedirs(labels_target, exist_ok=True)
+        pairs = self.iter_paths()
+        for image_path, label_path in pairs:
+            if image_path:
+                image_filename = basename(image_path)
+                shutil.copy2(image_path, f"{images_target}/{image_filename}")
+            if label_path:
+                label_filename = basename(label_path)
+                shutil.copy2(label_path, f"{labels_target}/{label_filename}")
+
+    def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
+        pairs = self.iter_paths()
+        match fmt.lower():
+            case "csv":
+                with open(path, "w", newline="") as fh:
+                    writer = csv.writer(fh)
+                    writer.writerow(["image", "label"])
+                    writer.writerows(pairs)
+            case "json":
+                data = [{"image": i, "label": l} for (i, l) in pairs]
+                with open(path, "w") as fh:
+                    json.dump(data, fh, ensure_ascii=False, indent=2)
+            case "txt":
+                with open(path, "w") as fh:
+                    for i, l in pairs:
+                        fh.write(f"{i}\t{l}\n")
 
     @override
     def construct_new(self, images: D, labels: D) -> Self:
