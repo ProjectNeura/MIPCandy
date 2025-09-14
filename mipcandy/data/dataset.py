@@ -1,4 +1,3 @@
-import csv
 from abc import ABCMeta, abstractmethod
 from json import dump
 from os import PathLike, listdir, makedirs
@@ -8,6 +7,7 @@ from shutil import copy2
 from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
 
 import torch
+from pandas import DataFrame
 from torch.utils.data import Dataset
 
 from mipcandy.data.io import load_image
@@ -151,7 +151,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
-    
+
     @staticmethod
     def _create_subset(folder: str) -> None:
         if exists(folder) and len(listdir(folder)) > 0:
@@ -188,20 +188,19 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
             copy2(label_path, f"{labels_target}/{basename(label_path)}")
 
     def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        pairs = self.iter_paths()
+        paths = self.iter_paths()
         match fmt.lower():
             case "csv":
-                with open(path, "w", newline="") as f:
-                    writer = csv.writer(f)
-                    writer.writerow(["image", "label"])
-                    writer.writerows(pairs)
+                df = DataFrame([{"image": image_path, "label": label_path} for image_path, label_path in paths])
+                df.index = range(1, len(df) + 1)
+                df.index.name = "case"
+                df.to_csv(path)
             case "json":
-                data = [{"image": i, "label": l} for (i, l) in pairs]
                 with open(path, "w") as f:
-                    dump(data, f)
+                    dump([{"image": image_path, "label": label_path} for image_path, label_path in paths], f)
             case "txt":
                 with open(path, "w") as f:
-                    for i, l in pairs:
+                    for i, l in paths:
                         f.write(f"{i}\t{l}\n")
 
     @override
