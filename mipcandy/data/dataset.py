@@ -137,7 +137,7 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
 
 
 class NNUNetDataset(SupervisedDataset[list[str]]):
-    def __init__(self, folder: str | PathLike[str], *, split: Literal["Tr", "Ts"] = "Tr", prefix: str = "",
+    def __init__(self, folder: str | PathLike[str], *, split: str | Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
                  label_transform: Transform | None = None, device: torch.device | str = "cpu") -> None:
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
@@ -146,7 +146,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         labels.sort()
         super().__init__(images, labels, device=device)
         self._folder: str = folder
-        self._split: Literal["Tr", "Ts", "fold"] = split
+        self._split: str = split
         self._prefix: str = prefix
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
@@ -184,8 +184,8 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._create_subset(images_target)
         self._create_subset(labels_target)
         for image_path, label_path in self.iter_paths():
-            copy2(f"{self._folder}/{image_path}", f"{images_target}/{image_path}")
-            copy2(f"{self._folder}/{label_path}", f"{labels_target}/{label_path}")
+            copy2(f"{self._folder}/images{self._split}/{image_path}", f"{images_target}/{image_path}")
+            copy2(f"{self._folder}/labels{self._split}/{label_path}", f"{labels_target}/{label_path}")
 
     def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
         paths = self.iter_paths()
@@ -207,10 +207,9 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
     def construct_new(self, images: D, labels: D) -> Self:
         if self._split == "fold":
             raise ValueError("Cannot construct a new dataset from a fold")
-        new = NNUNetDataset(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
+        new = NNUNetDataset(self._folder, split="fold", prefix=self._prefix, align_spacing=self._align_spacing,
                             image_transform=self._image_transform, label_transform=self._label_transform,
                             device=self._device)
-        new._split = "fold"
         new._images = images
         new._labels = labels
         return new
