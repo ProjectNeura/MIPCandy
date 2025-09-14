@@ -147,6 +147,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         super().__init__(images, labels, device=device)
         self._folder: str = folder
         self._split: str = split
+        self._folded: bool = False
         self._prefix: str = prefix
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
@@ -177,7 +178,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
     def iter_paths(self) -> list[tuple[str, str]]:
         return [(self._images[i], self._labels[i]) for i in range(len(self))]
 
-    def save(self, split: str, *, target_folder: str | PathLike[str] | None = None) -> None:
+    def save(self, split: str | Literal["Tr", "Ts"], *, target_folder: str | PathLike[str] | None = None) -> None:
         target_base = target_folder if target_folder else self._folder
         images_target = f"{target_base}/images{split}"
         labels_target = f"{target_base}/labels{split}"
@@ -186,6 +187,8 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         for image_path, label_path in self.iter_paths():
             copy2(f"{self._folder}/images{self._split}/{image_path}", f"{images_target}/{image_path}")
             copy2(f"{self._folder}/labels{self._split}/{label_path}", f"{labels_target}/{label_path}")
+        self._split = split
+        self._folded = False
 
     def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
         paths = self.iter_paths()
@@ -205,13 +208,14 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
 
     @override
     def construct_new(self, images: D, labels: D) -> Self:
-        if self._split == "fold":
+        if self._folded:
             raise ValueError("Cannot construct a new dataset from a fold")
-        new = NNUNetDataset(self._folder, split="fold", prefix=self._prefix, align_spacing=self._align_spacing,
+        new = NNUNetDataset(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
                             image_transform=self._image_transform, label_transform=self._label_transform,
                             device=self._device)
         new._images = images
         new._labels = labels
+        new._folded = True
         return new
 
 
