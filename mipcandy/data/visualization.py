@@ -3,6 +3,7 @@ from math import ceil
 from multiprocessing import get_context
 from os import PathLike
 from typing import Literal
+from warnings import warn
 
 import numpy as np
 import torch
@@ -75,8 +76,9 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
         backend = "pyvista" if find_spec("pyvista") else "matplotlib"
     match backend:
         case "matplotlib":
+            warn("Using Matplotlib for 3D visualization is inefficient and inaccurate, consider using PyVista")
             face_colors = getattr(plt.cm, cmap)(image)
-            face_colors[..., 3] = image
+            face_colors[..., 3] = image * (image > 0)
             fig = plt.figure()
             ax = fig.add_subplot(111, projection="3d")
             ax.voxels(image, facecolors=face_colors)
@@ -88,6 +90,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
                     return
             plt.show(block=blocking)
         case "pyvista":
+            image = image.transpose(1, 2, 0)
             if blocking:
                 return _visualize3d_with_pyvista(image, title, cmap, screenshot_as)
             ctx = get_context("spawn")
