@@ -16,7 +16,7 @@ dependencies = ["torch", "ptflops", "numpy", "SimpleITK", "matplotlib", "rich", 
 
 [project.optional-dependencies]
 standard = ["pyvista"]
-all = ["pyvista", "mipcandy_bundles"]
+all = ["pyvista", "mipcandy-bundles"]
 
 [tool.hatch.build.targets.sdist]
 only-include = ["mipcandy"]
