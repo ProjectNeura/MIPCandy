@@ -13,21 +13,22 @@ from mipcandy.types import Params
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     num_classes: int = 1
 
-    def _save_preview(self, x: torch.Tensor, title: str) -> None:
+    def _save_preview(self, x: torch.Tensor, title: str, quality: float) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
         if x.ndim == 3:
             visualize2d((x * 255 / x.max()).to(torch.uint16), title=title, blocking=True, screenshot_as=path)
         elif x.ndim == 4:
-            visualize3d(x, title=title, blocking=True, screenshot_as=path)
+            visualize3d(x, title=title, max_volume=int(quality * 1e6), blocking=True, screenshot_as=path)
         else:
             raise ValueError("MIP Candy only intends to support 2D and 3D data")
 
     @override
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor) -> None:
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
+                     quality: float = .75) -> None:
         mask = mask.sigmoid()
-        self._save_preview(image, "input")
-        self._save_preview(label, "label")
-        self._save_preview(mask, "prediction")
+        self._save_preview(image, "input", quality)
+        self._save_preview(label, "label", quality)
+        self._save_preview(mask, "prediction", quality)
         if image.ndim == label.ndim == mask.ndim == 3:
             visualize2d(overlay(image, label), title="expected", blocking=True,
                         screenshot_as=f"{self.experiment_folder()}/expected (preview).png")

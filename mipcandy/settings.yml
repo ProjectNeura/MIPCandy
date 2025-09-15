@@ -1,2 +1,10 @@
 # fill in your settings here
-internal: false
+note: ""
+num_checkpoints: 5
+ema: true
+seed: ~
+early_stop_tolerance: 5
+val_score_prediction: true
+val_score_prediction_degree: 5
+save_preview: true
+preview_quality: 0.75

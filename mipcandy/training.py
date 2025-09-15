@@ -19,12 +19,12 @@ from torch import nn, optim
 from torch.utils.data import DataLoader
 
 from mipcandy.common import Pad2d, Pad3d
-from mipcandy.config import load_secrets
+from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
-from mipcandy.types import Params
+from mipcandy.types import Params, Setting
 
 
 def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
@@ -156,7 +156,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def save_progress(self, *, names: Sequence[str] = ("combined loss", "val score")) -> None:
         self.save_metric_curve_combo({name: self._metrics[name] for name in names}, title="Progress")
 
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor) -> None:
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
+                     quality: float = .75) -> None:
         ...
 
     @abstractmethod
@@ -269,9 +270,21 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         if self.initialized():
             self.log(f"Set to manual seed {seed}")
 
+    @staticmethod
+    def filter_train_params(**kwargs) -> dict[str, Setting]:
+        return {k: v for k, v in kwargs.items() if k in (
+            "note", "num_checkpoints", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
+            "val_score_prediction_degree", "save_preview", "preview_quality"
+        )}
+
+    def train_with_settings(self, num_epochs: int, **kwargs) -> None:
+        settings = self.filter_train_params(**load_settings())
+        settings.update(kwargs)
+        self.train(num_epochs, **settings)
+
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
-              val_score_prediction_degree: int = 5) -> None:
+              val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
         self.init_experiment()
         if note:
             self.log(f"Note: {note}")
@@ -345,7 +358,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     self.log(f"======== Best checkpoint updated ({self._best_score:.4f} -> {score:.4f}) ========")
                     self._best_score = score
                     early_stop_tolerance = es_tolerance
-                    self.save_preview(*self._worst_case)
+                    if save_preview:
+                        self.save_preview(*self._worst_case, quality=preview_quality)
                 else:
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
