@@ -156,7 +156,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def save_progress(self, *, names: Sequence[str] = ("combined loss", "val score")) -> None:
         self.save_metric_curve_combo({name: self._metrics[name] for name in names}, title="Progress")
 
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor) -> None:
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
+                     quality: float = .75) -> None:
         ...
 
     @abstractmethod
@@ -283,7 +284,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
-              val_score_prediction_degree: int = 5, save_preview: bool = True) -> None:
+              val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
         self.init_experiment()
         if note:
             self.log(f"Note: {note}")
@@ -358,7 +359,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     self._best_score = score
                     early_stop_tolerance = es_tolerance
                     if save_preview:
-                        self.save_preview(*self._worst_case)
+                        self.save_preview(*self._worst_case, quality=preview_quality)
                 else:
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
