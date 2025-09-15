@@ -152,6 +152,24 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
+        self._multimodal_images: list[list[str]] = []
+        self.try_multimodal()
+
+    @override
+    def __len__(self) -> int:
+        return len(self._labels)
+
+    def try_multimodal(self) -> None:
+        if len(self._images) == len(self._labels):
+            return
+        current_case = ""
+        for image in self._images:
+            case = image[:image.rfind("_")]
+            if case != current_case:
+                self._multimodal_images.append([])
+            self._multimodal_images[-1].append(image)
+        if len(self._multimodal_images) != len(self._labels):
+            raise ValueError("Multimodal detected, but numbers of images and labels still do not match")
 
     @staticmethod
     def _create_subset(folder: str) -> None:
@@ -161,7 +179,9 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image = self.do_load(
+        image = torch.cat([self.do_load(
+            f"{self._folder}/images{self._split}/{path}", align_spacing=self._align_spacing, device=self._device
+        ) for path in self._multimodal_images[idx]]) if self._multimodal_images else self.do_load(
             f"{self._folder}/images{self._split}/{self._images[idx]}", align_spacing=self._align_spacing,
             device=self._device
         )
