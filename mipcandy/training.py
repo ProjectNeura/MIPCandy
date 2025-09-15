@@ -274,7 +274,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def filter_train_params(**kwargs) -> dict[str, Setting]:
         return {k: v for k, v in kwargs.items() if k in (
             "note", "num_checkpoints", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
-            "val_score_prediction_degree", "save_preview"
+            "val_score_prediction_degree", "save_preview", "preview_quality"
         )}
 
     def train_with_settings(self, num_epochs: int, **kwargs) -> None:
