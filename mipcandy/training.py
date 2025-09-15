@@ -370,11 +370,13 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.save_progress()
                 self.save_metric_curves()
                 self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics, early_stop_tolerance)
-            self.log("Training completed")
         except Exception as e:
+            self.log("Training interrupted")
+            self.log(repr(e))
             self._frontend.on_experiment_interrupted(self._experiment_id, e)
             raise e
         else:
+            self.log("Training completed")
             self._frontend.on_experiment_completed(self._experiment_id)
 
     def __call__(self, *args, **kwargs) -> None:
