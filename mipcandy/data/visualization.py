@@ -42,12 +42,13 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
 
 
 def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
-                              screenshot_as: str | PathLike[str] | None, auto_close: bool) -> None:
+                              screenshot_as: str | PathLike[str] | None) -> None:
     from pyvista import Plotter
     p = Plotter(title=title)
     p.add_volume(image, cmap=cmap)
     if screenshot_as:
-        p.show(screenshot=screenshot_as, auto_close=auto_close)
+        p.off_screen = True
+        p.screenshot(screenshot_as)
     else:
         p.show()
 
@@ -83,13 +84,14 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
             if screenshot_as:
                 fig.savefig(screenshot_as)
                 if blocking:
+                    plt.close()
                     return
             plt.show(block=blocking)
         case "pyvista":
             if blocking:
-                return _visualize3d_with_pyvista(image, title, cmap, screenshot_as, blocking)
+                return _visualize3d_with_pyvista(image, title, cmap, screenshot_as)
             ctx = get_context("spawn")
-            return ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as, blocking),
+            return ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as),
                                daemon=False).start()
 
 
