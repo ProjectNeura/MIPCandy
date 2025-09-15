@@ -91,7 +91,7 @@ class Restore2d(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         paddings = self.conjugate_padding.paddings()
         if not paddings:
-            raise UserWarning("Paddings seem to be unset, did you forget to pad before restoring?")
+            raise ValueError("Paddings are not set yet, did you forget to pad before restoring?")
         pad_h0, pad_h1, pad_w0, pad_w1 = paddings
         if self.conjugate_padding.batch:
             _, _, h, w = x.shape
@@ -109,7 +109,7 @@ class Restore3d(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         paddings = self.conjugate_padding.paddings()
         if not paddings:
-            raise UserWarning("Paddings seem to be unset, did you forget to pad before restoring?")
+            raise ValueError("Paddings are not set yet, did you forget to pad before restoring?")
         pad_h0, pad_h1, pad_w0, pad_w1, pad_d0, pad_d1 = paddings
         if self.conjugate_padding.batch:
             _, _, d, h, w = x.shape
