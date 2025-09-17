@@ -154,6 +154,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
                 case = image[:image.rfind("_")]
                 if case != current_case:
                     self._multimodal_images.append([])
+                    current_case = case
                 self._multimodal_images[-1].append(image)
             if len(self._multimodal_images) != len(self._labels):
                 raise ValueError("Unmatched number of images and labels")
