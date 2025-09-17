@@ -3,6 +3,7 @@ from math import ceil
 from multiprocessing import get_context
 from os import PathLike
 from typing import Literal
+from warnings import warn
 
 import numpy as np
 import torch
@@ -42,12 +43,13 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
 
 
 def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
-                              screenshot_as: str | PathLike[str] | None, auto_close: bool) -> None:
+                              screenshot_as: str | PathLike[str] | None) -> None:
     from pyvista import Plotter
     p = Plotter(title=title)
     p.add_volume(image, cmap=cmap)
     if screenshot_as:
-        p.show(screenshot=screenshot_as, auto_close=auto_close)
+        p.off_screen = True
+        p.screenshot(screenshot_as)
     else:
         p.show()
 
@@ -74,8 +76,9 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
         backend = "pyvista" if find_spec("pyvista") else "matplotlib"
     match backend:
         case "matplotlib":
+            warn("Using Matplotlib for 3D visualization is inefficient and inaccurate, consider using PyVista")
             face_colors = getattr(plt.cm, cmap)(image)
-            face_colors[..., 3] = image
+            face_colors[..., 3] = image * (image > 0)
             fig = plt.figure()
             ax = fig.add_subplot(111, projection="3d")
             ax.voxels(image, facecolors=face_colors)
@@ -83,13 +86,15 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
             if screenshot_as:
                 fig.savefig(screenshot_as)
                 if blocking:
+                    plt.close()
                     return
             plt.show(block=blocking)
         case "pyvista":
+            image = image.transpose(1, 2, 0)
             if blocking:
-                return _visualize3d_with_pyvista(image, title, cmap, screenshot_as, blocking)
+                return _visualize3d_with_pyvista(image, title, cmap, screenshot_as)
             ctx = get_context("spawn")
-            return ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as, blocking),
+            return ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as),
                                daemon=False).start()
 
 
