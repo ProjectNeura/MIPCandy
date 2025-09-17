@@ -20,6 +20,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         if x.ndim == 3:
             visualize2d((x * 255 / x.max()).to(torch.uint16), title=title, blocking=True, screenshot_as=path)
         elif x.ndim == 4:
+            if x.shape[0] > 1:
+                x = x[0]
             visualize3d(x, title=title, max_volume=int(quality * 1e6), blocking=True, screenshot_as=path)
         else:
             raise ValueError("MIP Candy only intends to support 2D and 3D data")
