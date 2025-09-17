@@ -144,7 +144,20 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
         labels.sort()
-        super().__init__(images, labels, device=device)
+        self._multimodal_images: list[list[str]] = []
+        if len(images) == len(labels):
+            super().__init__(images, labels)
+        else:
+            super().__init__([""] * len(labels), labels)
+            current_case = ""
+            for image in images:
+                case = image[:image.rfind("_")]
+                if case != current_case:
+                    self._multimodal_images.append([])
+                    current_case = case
+                self._multimodal_images[-1].append(image)
+            if len(self._multimodal_images) != len(self._labels):
+                raise ValueError("Unmatched number of images and labels")
         self._folder: str = folder
         self._split: str = split
         self._folded: bool = False
@@ -161,7 +174,9 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image = self.do_load(
+        image = torch.cat([self.do_load(
+            f"{self._folder}/images{self._split}/{path}", align_spacing=self._align_spacing, device=self._device
+        ) for path in self._multimodal_images[idx]]) if self._multimodal_images else self.do_load(
             f"{self._folder}/images{self._split}/{self._images[idx]}", align_spacing=self._align_spacing,
             device=self._device
         )
