@@ -144,7 +144,19 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
         labels.sort()
-        super().__init__(images, labels, device=device)
+        self._multimodal_images: list[list[str]] = []
+        if len(images) == len(labels):
+            super().__init__(images, labels)
+        else:
+            super().__init__([""] * len(labels), labels)
+            current_case = ""
+            for image in self._images:
+                case = image[:image.rfind("_")]
+                if case != current_case:
+                    self._multimodal_images.append([])
+                self._multimodal_images[-1].append(image)
+            if len(self._multimodal_images) != len(self._labels):
+                raise ValueError("Unmatched number of images and labels")
         self._folder: str = folder
         self._split: str = split
         self._folded: bool = False
@@ -152,24 +164,6 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
-        self._multimodal_images: list[list[str]] = []
-        self.try_multimodal()
-
-    @override
-    def __len__(self) -> int:
-        return len(self._labels)
-
-    def try_multimodal(self) -> None:
-        if len(self._images) == len(self._labels):
-            return
-        current_case = ""
-        for image in self._images:
-            case = image[:image.rfind("_")]
-            if case != current_case:
-                self._multimodal_images.append([])
-            self._multimodal_images[-1].append(image)
-        if len(self._multimodal_images) != len(self._labels):
-            raise ValueError("Multimodal detected, but numbers of images and labels still do not match")
 
     @staticmethod
     def _create_subset(folder: str) -> None:
