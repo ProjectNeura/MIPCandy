@@ -15,14 +15,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
     def _save_preview(self, x: torch.Tensor, title: str, quality: float) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
-        if x.shape[0] not in (1, 3, 4):
-            return
-        if x.ndim == 3:
+        if x.ndim == 3 and x.shape[0] in (1, 3, 4):
             visualize2d((x * 255 / x.max()).to(torch.uint16), title=title, blocking=True, screenshot_as=path)
-        elif x.ndim == 4:
+        elif x.ndim == 4 and x.shape[0] == 1:
             visualize3d(x, title=title, max_volume=int(quality * 1e6), blocking=True, screenshot_as=path)
-        else:
-            raise ValueError("MIP Candy only intends to support 2D and 3D data")
 
     @override
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
