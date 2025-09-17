@@ -150,7 +150,7 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
         else:
             super().__init__([""] * len(labels), labels)
             current_case = ""
-            for image in self._images:
+            for image in images:
                 case = image[:image.rfind("_")]
                 if case != current_case:
                     self._multimodal_images.append([])
