@@ -60,10 +60,8 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
     image = image.detach().float().cpu()
     if image.ndim < 3:
         raise ValueError(f"`image` must have at least 3 dimensions, got {image.shape}")
-    if image.ndim > 4:
-        image = ensure_num_dimensions(image, 4)
-    if image.ndim == 4 and image.shape[0] == 1:
-        image = image.squeeze(0)
+    if image.ndim > 3:
+        image = ensure_num_dimensions(image, 3)
     d, h, w = image.shape
     total = d * h * w
     ratio = int(ceil((total / max_volume) ** (1 / 3))) if total > max_volume else 1
