@@ -6,8 +6,9 @@ from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay
-from mipcandy.training import Trainer, TrainerToolbox
+from mipcandy.training import Trainer, TrainerToolbox, SlidingTrainer
 from mipcandy.types import Params
+from mipcandy.sliding_window import SWMetadata
 
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
@@ -60,3 +61,35 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
         return -loss.item(), metrics, mask.squeeze(0)
+
+class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=ABCMeta):
+    num_classes: int = 1
+    sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
+
+    @override
+    def build_scheduler(self, optimizer: optim.Optimizer, num_epochs: int) -> optim.lr_scheduler.LRScheduler:
+        return AbsoluteLinearLR(optimizer, -4e-6 / len(self._dataloader), 1e-2)
+    
+    @override
+    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor,
+                          toolbox: TrainerToolbox, metadata: SWMetadata) -> tuple[float, dict[str, float]]:
+        mask = toolbox.model(images)
+        loss, metrics = toolbox.criterion(mask, labels)
+        loss.backward()
+        return loss.item(), metrics
+
+    @override
+    def validate_case(self, image: torch.Tensor, label: torch.Tensor, 
+                      toolbox: TrainerToolbox) -> tuple[float, dict[str, float], torch.Tensor]:
+        image, label = image.unsqueeze(0), label.unsqueeze(0)
+        windowed_images, metadata = self.do_sliding_window(image)
+        windowed_labels, _ = self.do_sliding_window(label)
+        model = toolbox.ema if toolbox.ema else toolbox.model
+        windowed_masks = model(windowed_images)
+        mask = self.revert_sliding_window(t=windowed_masks, metadata=metadata, clamp_min=1e-8)
+        loss, metrics = toolbox.criterion(mask, label)
+        return -loss.item(), metrics, mask.squeeze(0)
+
+    @override
+    def get_window_shape(self):
+        return self.sliding_window_shape
