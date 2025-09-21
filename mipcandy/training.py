@@ -390,15 +390,20 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
     
     @abstractmethod
-    def validate_case_windowed(self, image: torch.Tensor, label: torch.Tensor,
-                              toolbox: TrainerToolbox) -> tuple[float, dict[str, float], torch.Tensor]:
+    def validate_case_windowed(self, windowed_images: torch.Tensor, windowed_labels: torch.Tensor,
+                              toolbox: TrainerToolbox, metadata: SWMetadata) -> torch.Tensor:
         raise NotImplementedError
 
     @override
     def validate_case(self, image: torch.Tensor, label: torch.Tensor,
                       toolbox: TrainerToolbox) -> tuple[float, dict[str, float], torch.Tensor]:
         image, label = image.unsqueeze(0), label.unsqueeze(0)
-        return self.validate_case_windowed(image, label, toolbox)
+        windowed_images, metadata = self.do_sliding_window(image)
+        windowed_labels, _ = self.do_sliding_window(label)
+        windowed_masks = self.validate_case_windowed(windowed_images, windowed_labels, toolbox, metadata)
+        mask = self.revert_sliding_window(windowed_masks, metadata, clamp_min=1e-8)
+        loss, metrics = toolbox.criterion(mask, label)
+        return -loss.item(), metrics, mask.squeeze(0)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
