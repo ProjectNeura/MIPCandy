@@ -67,10 +67,6 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
     @override
-    def build_scheduler(self, optimizer: optim.Optimizer, num_epochs: int) -> optim.lr_scheduler.LRScheduler:
-        return AbsoluteLinearLR(optimizer, -4e-6 / len(self._dataloader), 1e-2)
-    
-    @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor,
                           toolbox: TrainerToolbox, metadata: SWMetadata) -> tuple[float, dict[str, float]]:
         mask = toolbox.model(images)
