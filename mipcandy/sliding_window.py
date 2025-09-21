@@ -55,7 +55,7 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
             t = torch.stack(image_windows, dim=0)
             n = t.shape[0]
             return (t.permute(0, 1, 2, 3, 4, 5).contiguous().view(b * n, c, kd, kh, kw),
-                    SWMetadata(kernel, stride, 3, b, (h, w), n))
+                    SWMetadata(kernel, stride, 3, b, (d, h, w), n))
 
     def revert_sliding_window(self, t: torch.Tensor, metadata: SWMetadata, *, clamp_min: float = 1e-8) -> torch.Tensor:
         kernel = metadata.kernel
