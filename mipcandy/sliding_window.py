@@ -23,8 +23,10 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
     def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         raise NotImplementedError
 
-    def gaussian_1d(self, k: int, *, sigma_scale: float = 0.5) -> torch.Tensor:
-        x = torch.linspace(-1.0, 1.0, steps=k, device=self._device)
+    def gaussian_1d(self, k: int, *, sigma_scale: float = 0.5, 
+                    device: torch.device | str | None = None) -> torch.Tensor:
+        device = self._device if device is None else device
+        x = torch.linspace(-1.0, 1.0, steps=k, device=device)
         sigma = sigma_scale
         g = torch.exp(-0.5 * (x / sigma) ** 2)
         g /= g.max()
@@ -67,8 +69,8 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
         dtype = t.dtype
         if dims == 2:
             kh, kw = kernel
-            gh = self.gaussian_1d(kh)
-            gw = self.gaussian_1d(kw)
+            gh = self.gaussian_1d(kh, device=t.device)
+            gw = self.gaussian_1d(kw, device=t.device)
             w2d = (gh[:, None] * gw[None, :]).to(dtype)
             w2d /= w2d.max()
             w2d = w2d.view(1, 1, kh, kw)
@@ -87,17 +89,17 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
             kd, kh, kw = kernel
             sd, sh, sw = stride
             d, h, w = out_size
-            gd = self.gaussian_1d(kd)
-            gh = self.gaussian_1d(kh)
-            gw = self.gaussian_1d(kw)
+            gd = self.gaussian_1d(kd, device=t.device)
+            gh = self.gaussian_1d(kh, device=t.device)
+            gw = self.gaussian_1d(kw, device=t.device)
             w3d = (gd[:, None, None] * gh[None, :, None] * gw[None, None, :]).to(dtype)
             w3d /= w3d.max()
             w3d = w3d.view(1, 1, kd, kh, kw)
             bn, c, _, _, _ = t.shape
             if bn != b * n:
                 raise RuntimeError("Inconsistent number of windows for reverting sliding window")
-            canvas = torch.zeros((b, c, d, h, w), dtype=dtype, device=self._device)
-            acc_w = torch.zeros((b, 1, d, h, w), dtype=dtype, device=self._device)
+            canvas = torch.zeros((b, c, d, h, w), dtype=dtype, device=t.device)
+            acc_w = torch.zeros((b, 1, d, h, w), dtype=dtype, device=t.device)
             idx = 0
             for z in range(0, d - kd + 1, sd):
                 for y in range(0, h - kh + 1, sh):
