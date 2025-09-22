@@ -225,9 +225,9 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
     def construct_new(self, images: D, labels: D) -> Self:
         if self._folded:
             raise ValueError("Cannot construct a new dataset from a fold")
-        new = NNUNetDataset(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
-                            image_transform=self._image_transform, label_transform=self._label_transform,
-                            device=self._device)
+        new = type(self)(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
+                         image_transform=self._image_transform, label_transform=self._label_transform,
+                         device=self._device)
         new._images = images
         new._labels = labels
         new._folded = True
