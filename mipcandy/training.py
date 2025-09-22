@@ -391,7 +391,8 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
     
     @abstractmethod
     def validate_case_windowed(self, windowed_images: torch.Tensor, windowed_labels: torch.Tensor,
-                              toolbox: TrainerToolbox, metadata: SWMetadata) -> torch.Tensor:
+                              toolbox: TrainerToolbox, metadata: SWMetadata,
+                              image: torch.Tensor, label: torch.Tensor) -> tuple[float, dict[str, float], torch.Tensor]:
         raise NotImplementedError
 
     @override
@@ -400,10 +401,8 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         windowed_images, metadata = self.do_sliding_window(image)
         windowed_labels, _ = self.do_sliding_window(label)
-        windowed_masks = self.validate_case_windowed(windowed_images, windowed_labels, toolbox, metadata)
-        mask = self.revert_sliding_window(windowed_masks, metadata, clamp_min=1e-8)
-        loss, metrics = toolbox.criterion(mask, label)
-        return -loss.item(), metrics, mask.squeeze(0)
+        loss, metrics, mask = self.validate_case_windowed(windowed_images, windowed_labels, toolbox, metadata, image, label)
+        return loss, metrics, mask.squeeze(0)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,

@@ -73,9 +73,13 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
 
     @override
     def validate_case_windowed(self, windowed_images: torch.Tensor, windowed_labels: torch.Tensor,
-                               toolbox: TrainerToolbox, metadata: SWMetadata) -> torch.Tensor:
+                               toolbox: TrainerToolbox, metadata: SWMetadata,
+                               image: torch.Tensor, label: torch.Tensor) -> tuple[float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
-        return model(windowed_images)
+        windowed_masks = model(windowed_images)
+        mask = self.revert_sliding_window(windowed_masks, metadata, clamp_min=1e-8)
+        loss, metrics = toolbox.criterion(mask, label)
+        return -loss.item(), metrics, mask
 
     @override
     def get_window_shape(self):
