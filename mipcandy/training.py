@@ -22,7 +22,7 @@ from mipcandy.common import Pad2d, Pad3d
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
-from mipcandy.sanity_check import sanity_check
+from mipcandy.sanity_check import sanity_check, SanityCheckResult
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params, Setting
 
@@ -180,6 +180,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         raise NotImplementedError
+    
+    def _sanity_check(self, model: nn.Module, input_shape: Sequence[int], *, 
+                      device: torch.device | str | None = None) -> SanityCheckResult:
+        return sanity_check(model, input_shape, device=device)
 
     def train_batch(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
@@ -299,7 +303,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self.log(f"Example input shape: {example_shape}")
         model = self.build_network(example_shape).to(self._device)
         model_name = model.__class__.__name__
-        sanity_check_result = sanity_check(model, example_shape, device=self._device)
+        sanity_check_result = self._sanity_check(model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
