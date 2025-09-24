@@ -6,9 +6,9 @@ from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay
+from mipcandy.sliding_window import SWMetadata
 from mipcandy.training import Trainer, TrainerToolbox, SlidingTrainer
 from mipcandy.types import Params
-from mipcandy.sliding_window import SWMetadata
 
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
@@ -62,24 +62,21 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         loss, metrics = toolbox.criterion(mask, label)
         return -loss.item(), metrics, mask.squeeze(0)
 
+
 class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=ABCMeta):
-    num_classes: int = 1
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
     @override
-    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor,
-                          toolbox: TrainerToolbox, metadata: SWMetadata) -> tuple[float, dict[str, float]]:
+    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+                          metadata: SWMetadata) -> tuple[float, dict[str, float]]:
         return SegmentationTrainer.backward(self, images, labels, toolbox)
 
     @override
-    def validate_case_windowed(self, windowed_images: torch.Tensor, windowed_labels: torch.Tensor,
-                               toolbox: TrainerToolbox, metadata: SWMetadata,
-                               image: torch.Tensor, label: torch.Tensor) -> tuple[float, dict[str, float], torch.Tensor]:
-        model = toolbox.ema if toolbox.ema else toolbox.model
-        windowed_masks = model(windowed_images)
-        mask = self.revert_sliding_window(windowed_masks, metadata, clamp_min=1e-8)
-        loss, metrics = toolbox.criterion(mask, label)
-        return -loss.item(), metrics, mask
+    def validate_case_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+                               metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
+        masks = (toolbox.ema if toolbox.ema else toolbox.model)(images)
+        loss, metrics = toolbox.criterion(masks, labels)
+        return -loss.item(), metrics, masks
 
     @override
     def get_window_shape(self):
