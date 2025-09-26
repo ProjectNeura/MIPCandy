@@ -337,7 +337,9 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     msg += f" ({score - self._metrics["val score"][-2]:+.4f})"
                 self.log(msg)
                 if val_score_prediction and epoch > val_score_prediction_degree:
-                    target_epoch, max_score = self.predict_maximum_validation_score(degree=val_score_prediction_degree)
+                    target_epoch, max_score = self.predict_maximum_validation_score(
+                        num_epochs, degree=val_score_prediction_degree
+                    )
                     self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch:.1f}")
                 for metric, values in metrics.items():
                     a, b, c = min(values), sum(values) / len(values), max(values)
