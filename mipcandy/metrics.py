@@ -2,6 +2,8 @@ from typing import Protocol, Literal
 
 import torch
 
+from mipcandy.types import Device
+
 try:
     from cupy import from_dlpack as _dlpack2np
     from cupyx.scipy.ndimage import distance_transform_edt as _distance_transform_edt
@@ -11,7 +13,7 @@ except ImportError:
 
 
 def _args_check(mask: torch.Tensor, label: torch.Tensor, *, dtype: torch.dtype | None = None,
-                device: torch.device | None = None) -> tuple[torch.dtype, torch.device]:
+                device: Device | None = None) -> tuple[torch.dtype, Device]:
     if mask.shape != label.shape:
         raise ValueError(f"Mask ({mask.shape}) and label ({label.shape}) must have the same shape")
     if (mask_dtype := mask.dtype) != label.dtype or dtype and mask_dtype != dtype:
