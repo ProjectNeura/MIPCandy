@@ -31,8 +31,7 @@ class SanityCheckResult(object):
         return f"MACs: {self.num_macs / 1e9:.1f} G / Params: {self.num_params / 1e6:.1f} M"
 
 
-def sanity_check(model: nn.Module, input_shape: Sequence[int], *,
-                 device: Device | None = None) -> SanityCheckResult:
+def sanity_check(model: nn.Module, input_shape: Sequence[int], *, device: Device | None = None) -> SanityCheckResult:
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     num_macs, num_params, layer_stats = model_complexity_info(model, input_shape)
