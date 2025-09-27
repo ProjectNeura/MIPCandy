@@ -3,6 +3,8 @@ from typing import Any, Generator
 import torch
 from torch import nn
 
+from mipcandy.types import Device
+
 
 def batch_int_multiply(f: float, *n: int) -> Generator[int, None, None]:
     for i in n:
@@ -30,12 +32,12 @@ class LayerT(object):
 
 
 class HasDevice(object):
-    def __init__(self, device: torch.device | str) -> None:
-        self._device: torch.device = device
+    def __init__(self, device: Device) -> None:
+        self._device: Device = device
 
 
 class WithPaddingModule(HasDevice):
-    def __init__(self, device: torch.device | str) -> None:
+    def __init__(self, device: Device) -> None:
         super().__init__(device)
         self._padding_module: nn.Module | None = None
         self._restoring_module: nn.Module | None = None

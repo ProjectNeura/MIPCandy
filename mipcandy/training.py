@@ -24,7 +24,7 @@ from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
-from mipcandy.types import Params, Setting
+from mipcandy.types import Params, Setting, Device
 
 
 def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
@@ -55,7 +55,7 @@ class TrainerToolbox(object):
 class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *,
-                 device: torch.device | str = "cpu") -> None:
+                 device: Device = "cpu") -> None:
         super().__init__(device)
         self._trainer_folder: str = trainer_folder
         self._trainer_variant: str = self.__class__.__name__

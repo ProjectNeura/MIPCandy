@@ -13,4 +13,4 @@ from mipcandy.presets import *
 from mipcandy.run import config
 from mipcandy.sanity_check import num_trainable_params, model_complexity_info, SanityCheckResult, sanity_check
 from mipcandy.training import TrainerToolbox, Trainer, SWMetadata, SlidingTrainer
-from mipcandy.types import Setting, Settings, Params, Transform, SupportedPredictant, Colormap
+from mipcandy.types import Setting, Settings, Params, Transform, SupportedPredictant, Colormap, Device

@@ -6,6 +6,8 @@ import torch
 from ptflops import get_model_complexity_info
 from torch import nn
 
+from mipcandy.types import Device
+
 
 def num_trainable_params(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -30,7 +32,7 @@ class SanityCheckResult(object):
 
 
 def sanity_check(model: nn.Module, input_shape: Sequence[int], *,
-                 device: torch.device | str | None = None) -> SanityCheckResult:
+                 device: Device | None = None) -> SanityCheckResult:
     if device is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
     num_macs, num_params, layer_stats = model_complexity_info(model, input_shape)

@@ -11,7 +11,7 @@ from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
 from mipcandy.data import save_image, Loader, UnsupervisedDataset
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sliding_window import SlidingWindow
-from mipcandy.types import SupportedPredictant
+from mipcandy.types import SupportedPredictant, Device
 
 
 def parse_predictant(x: SupportedPredictant, loader: type[Loader], *, as_label: bool = False) -> tuple[list[
@@ -41,7 +41,7 @@ def parse_predictant(x: SupportedPredictant, loader: type[Loader], *, as_label: 
 
 class Predictor(WithPaddingModule, metaclass=ABCMeta):
     def __init__(self, experiment_folder: str | PathLike[str], *, checkpoint: str = "checkpoint_best.pth",
-                 device: torch.device | str = "cpu") -> None:
+                 device: Device = "cpu") -> None:
         super().__init__(device)
         self._experiment_folder: str = experiment_folder
         self._checkpoint: str = checkpoint
