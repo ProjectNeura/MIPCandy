@@ -24,5 +24,6 @@ def rational_derivative(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.nd
 def rational_bounds(a: np.ndarray, b: np.ndarray, x_lower_bound: float, x_upper_bound: float, *, x_start: float = 0,
                     x_stop: float = 1e4, x_step: float = .01) -> tuple[float, float] | None:
     x = np.arange(x_start, x_stop, x_step)
-    mask = x_lower_bound < (np.polyval(a, x) / np.polyval(b, x)) < x_upper_bound
+    y = np.polyval(a, x) / np.polyval(b, x)
+    mask = (x_lower_bound < y) & (y < x_upper_bound)
     return (float(x[mask][0]), float(x[mask][-1])) if mask.any() else None
