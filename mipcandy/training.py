@@ -244,7 +244,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         val_scores = np.array(self._metrics["val score"])
         a, b = rational_regression(np.arange(len(val_scores)), val_scores, degree, degree)
         da, db = rational_derivative(a, b)
-        epoch, _ = rational_bounds(da, db, float("-inf"), .01, x_start=0, x_stop=num_epochs, x_step=1)
+        epoch, _ = rational_bounds(da, db, float("-inf"), 1e-3, x_start=0, x_stop=num_epochs, x_step=1)
         return round(epoch), float(a[0] / b[0])
 
     def set_seed(self, seed: int) -> None:
