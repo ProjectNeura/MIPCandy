@@ -18,7 +18,7 @@ from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from mipcandy.common import Pad2d, Pad3d, rational_regression, rational_derivative, rational_bounds
+from mipcandy.common import Pad2d, Pad3d, quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
@@ -242,9 +242,9 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
 
     def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
         val_scores = np.array(self._metrics["val score"])
-        a, b = rational_regression(np.arange(len(val_scores)), val_scores, degree, degree)
-        da, db = rational_derivative(a, b)
-        epoch, _ = rational_bounds(da, db, float("-inf"), 1e-4, x_start=0, x_stop=num_epochs, x_step=1)
+        a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
+        da, db = quotient_derivative(a, b)
+        epoch, _ = quotient_bounds(da, db, float("-inf"), 1e-4, x_start=0, x_stop=num_epochs, x_step=1)
         return round(epoch), float(a[0] / b[0])
 
     def set_seed(self, seed: int) -> None:
