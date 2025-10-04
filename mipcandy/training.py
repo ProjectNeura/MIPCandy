@@ -1,4 +1,4 @@
-from random import random_seed, randint
+from random import seed as random_seed, randint
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
