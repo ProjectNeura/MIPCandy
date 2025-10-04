@@ -310,8 +310,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             for epoch in range(1, num_epochs + 1):
                 if early_stop_tolerance == -1:
                     epoch -= 1
-                    self.log(f"Early stopping triggered because the validation score has not improved for {
-                    es_tolerance} epochs")
+                    self.log(f"Early stopping triggered because the validation score has not improved for "
+                             f"{es_tolerance} epochs")
                     break
                 # Training
                 t0 = time()
@@ -342,7 +342,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     target_epoch, max_score = self.predict_maximum_validation_score(
                         num_epochs, degree=val_score_prediction_degree
                     )
-                    self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch:.1f}")
+                    self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch + 1}")
                 for metric, values in metrics.items():
                     a, b, c = min(values), sum(values) / len(values), max(values)
                     self.log(f"Validation {metric}: {b:.4f} @[{a:.4f}, {c:.4f}]")
