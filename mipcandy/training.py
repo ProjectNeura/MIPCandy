@@ -343,8 +343,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                         num_epochs, degree=val_score_prediction_degree
                     )
                     self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch}")
-                    epoch_durations = np.array(self._metrics["epoch duration"])
-                    etc = np.trapz(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
+                    epoch_durations = self._metrics["epoch duration"]
+                    etc = sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds: {datetime.fromtimestamp(
                         time() + etc):%H:%M:%S}")
                 for metric, values in metrics.items():
