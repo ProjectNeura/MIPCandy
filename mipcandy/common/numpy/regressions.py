@@ -25,7 +25,7 @@ def quotient_bounds(a: np.ndarray, b: np.ndarray, lower_bound: float | None, upp
                     x_start: float = 0, x_stop: float = 1e4, x_step: float = .01) -> tuple[float, float] | None:
     x = np.arange(x_start, x_stop, x_step)
     y = np.polyval(a, x) / np.polyval(b, x)
-    mask = True
+    mask = np.array(True, like=y)
     if lower_bound is not None:
         mask = mask & y < upper_bound
     if upper_bound is not None:
