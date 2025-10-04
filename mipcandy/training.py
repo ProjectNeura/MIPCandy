@@ -1,4 +1,4 @@
-import random
+from random import random_seed, randint
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
@@ -256,7 +256,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
-        random.seed(seed)
+        random_seed(seed)
         np.random.seed(seed)
         environ['PYTHONHASHSEED'] = str(seed)
         if self.initialized():
@@ -281,7 +281,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         if note:
             self.log(f"Note: {note}")
         if seed is None:
-            seed = random.randint(0, 100)
+            seed = randint(0, 100)
         self.set_seed(seed)
         example_input = self._dataloader.dataset[0][0].to(self._device).unsqueeze(0)
         padding_module = self.get_padding_module()
