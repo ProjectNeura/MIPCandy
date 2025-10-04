@@ -45,10 +45,9 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
 def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
                               screenshot_as: str | PathLike[str] | None) -> None:
     from pyvista import Plotter
-    p = Plotter(title=title)
+    p = Plotter(title=title, off_screen=bool(screenshot_as))
     p.add_volume(image, cmap=cmap)
     if screenshot_as:
-        p.off_screen = True
         p.screenshot(screenshot_as)
     else:
         p.show()
