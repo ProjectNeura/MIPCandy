@@ -27,9 +27,9 @@ def quotient_bounds(a: np.ndarray, b: np.ndarray, lower_bound: float | None, upp
     y = np.polyval(a, x) / np.polyval(b, x)
     mask = np.array(True, like=y)
     if lower_bound is not None:
-        mask = mask & y < upper_bound
+        mask = mask & (y < upper_bound)
     if upper_bound is not None:
-        mask = mask & y > lower_bound
+        mask = mask & (y > lower_bound)
     if isinstance(mask, bool):
         raise ValueError("Bounds must be specified on at least one side")
     return (float(x[mask][0]), float(x[mask][-1])) if mask.any() else None
