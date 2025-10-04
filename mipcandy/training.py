@@ -18,7 +18,7 @@ from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from mipcandy.common import Pad2d, Pad3d
+from mipcandy.common import Pad2d, Pad3d, quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
@@ -240,22 +240,14 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
         return score / num_cases, metrics
 
-    def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[float, float]:
-        a, b = 0, num_epochs - 1
+    def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
         val_scores = np.array(self._metrics["val score"])
-        coefficients = np.polyfit(np.arange(len(val_scores)), val_scores, degree)
-        p = np.poly1d(coefficients)
-        dp = np.polyder(p)
-        if dp.order < 1:
-            crits = np.array([a, b])
-        else:
-            roots = np.roots(dp)
-            crits = roots[np.isreal(roots)].real
-            crits = crits[(crits > a) & (crits < b)]
-            crits = np.concatenate((crits, (a, b)))
-        values = p(crits)
-        i = np.argmax(values)
-        return float(crits[i]) + 1, float(values[i])
+        a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
+        da, db = quotient_derivative(a, b)
+        max_roc = float(da[0] / db[0])
+        max_val_score = float(a[0] / b[0])
+        _, epoch = quotient_bounds(a, b, None, max_val_score * (1 - max_roc), x_start=0, x_stop=num_epochs, x_step=1)
+        return round(epoch), max_val_score
 
     def set_seed(self, seed: int) -> None:
         np.random.seed(seed)
@@ -318,8 +310,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             for epoch in range(1, num_epochs + 1):
                 if early_stop_tolerance == -1:
                     epoch -= 1
-                    self.log(f"Early stopping triggered because the validation score has not improved for {
-                    es_tolerance} epochs")
+                    self.log(f"Early stopping triggered because the validation score has not improved for "
+                             f"{es_tolerance} epochs")
                     break
                 # Training
                 t0 = time()
@@ -347,9 +339,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     msg += f" ({score - self._metrics["val score"][-2]:+.4f})"
                 self.log(msg)
                 if val_score_prediction and epoch > val_score_prediction_degree:
-                    target_epoch, max_score = self.predict_maximum_validation_score(num_epochs,
-                                                                                    degree=val_score_prediction_degree)
-                    self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch:.1f}")
+                    target_epoch, max_score = self.predict_maximum_validation_score(
+                        num_epochs, degree=val_score_prediction_degree
+                    )
+                    self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch + 1}")
                 for metric, values in metrics.items():
                     a, b, c = min(values), sum(values) / len(values), max(values)
                     self.log(f"Validation {metric}: {b:.4f} @[{a:.4f}, {c:.4f}]")
