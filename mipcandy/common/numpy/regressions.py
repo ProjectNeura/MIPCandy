@@ -21,9 +21,15 @@ def quotient_derivative(a: np.ndarray, b: np.ndarray) -> tuple[np.ndarray, np.nd
     return np.polysub(np.polymul(da, b), np.polymul(a, db)), np.polymul(b, b)
 
 
-def quotient_bounds(a: np.ndarray, b: np.ndarray, x_lower_bound: float, x_upper_bound: float, *, x_start: float = 0,
-                    x_stop: float = 1e4, x_step: float = .01) -> tuple[float, float] | None:
+def quotient_bounds(a: np.ndarray, b: np.ndarray, lower_bound: float | None, upper_bound: float | None, *,
+                    x_start: float = 0, x_stop: float = 1e4, x_step: float = .01) -> tuple[float, float] | None:
     x = np.arange(x_start, x_stop, x_step)
     y = np.polyval(a, x) / np.polyval(b, x)
-    mask = (x_lower_bound < y) & (y < x_upper_bound)
+    mask = True
+    if lower_bound is not None:
+        mask = mask & y < upper_bound
+    if upper_bound is not None:
+        mask = mask & y > lower_bound
+    if isinstance(mask, bool):
+        raise ValueError("Bounds must be specified on at least one side")
     return (float(x[mask][0]), float(x[mask][-1])) if mask.any() else None

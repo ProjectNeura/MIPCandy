@@ -245,8 +245,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
         da, db = quotient_derivative(a, b)
         max_val_score = float(a[0] / b[0])
-        epoch, _ = quotient_bounds(da, db, float("-inf"), 1e-3 * max_val_score, x_start=0, x_stop=num_epochs, x_step=1)
-        # epoch, _ = quotient_bounds(a, b, float("-inf"), .999 * max_val_score, x_start=0, x_stop=num_epochs, x_step=1)
+        _, epoch = quotient_bounds(da, db, None, 1e-3 * max_val_score, x_start=0, x_stop=num_epochs, x_step=1)
+        # _, epoch = quotient_bounds(a, b, None, .999 * max_val_score, x_start=0, x_stop=num_epochs, x_step=1)
         return round(epoch), max_val_score
 
     def set_seed(self, seed: int) -> None:
