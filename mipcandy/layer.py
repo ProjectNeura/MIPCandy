@@ -1,6 +1,5 @@
-from typing import Any, Generator
+from typing import Any, Generator, Self
 
-import torch
 from torch import nn
 
 from mipcandy.types import Device
@@ -22,6 +21,12 @@ class LayerT(object):
     def __init__(self, m: type[nn.Module], **kwargs) -> None:
         self.m: type[nn.Module] = m
         self.kwargs: dict[str, Any] = kwargs
+
+    def update(self, *, must_exist: bool = True, **kwargs) -> Self:
+        for k, v in kwargs.items():
+            if not must_exist or k in self.kwargs:
+                self.kwargs[k] = v
+        return self
 
     def assemble(self, *args, **kwargs) -> nn.Module:
         self_kwargs = self.kwargs.copy()
