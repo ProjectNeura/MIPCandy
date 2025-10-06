@@ -272,11 +272,12 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         settings.update(kwargs)
         self.train(num_epochs, **settings)
 
-    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "Training ",
+    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
                      epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
         if not metrics:
             metrics = self._metrics
-        table = Table(title=f"Epoch {epoch}")
+        prefix = prefix.capitalize()
+        table = Table(title=f"Epoch {epoch} {prefix}")
         table.add_column("Metric")
         table.add_column("Value")
         table.add_column("Span")
@@ -284,7 +285,6 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         for metric, values in metrics.items():
             if skip and skip(metric, values):
                 continue
-            metric = f"{prefix}{metric}"
             span = f"[{min(values):.4f}, {max(values):.4f}]"
             if epochwise:
                 value = f"{values[-1]:.4f}"
@@ -293,8 +293,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 mean = sum(values) / len(values)
                 value = f"{mean:.4f}"
                 diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
-            table.add_row(metric, value, diff, span)
-            self.log(f"{metric}: {value} @{span} ({diff})")
+            table.add_row(metric, value, span, diff)
+            self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
         console = Console()
         console.print(table)
 
@@ -365,7 +365,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     etc = sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds: {datetime.fromtimestamp(
                         time() + etc):%H:%M:%S}")
-                self.show_metrics(epoch, metrics=metrics, prefix="Validation ", epochwise=False)
+                self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
                 if score > self._best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
                     self.log(f"======== Best checkpoint updated ({self._best_score:.4f} -> {score:.4f}) ========")
