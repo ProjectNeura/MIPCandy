@@ -1,20 +1,22 @@
-from random import seed as random_seed, randint
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import md5
 from os import PathLike, urandom, makedirs, environ
 from os.path import exists
+from random import seed as random_seed, randint
 from shutil import copy
 from threading import Lock
 from time import time
-from typing import Sequence, override
+from typing import Sequence, override, Callable
 
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from pandas import DataFrame
+from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
+from rich.table import Table
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
@@ -37,10 +39,6 @@ def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
 def try_append_all(new: dict[str, float], to: dict[str, list[float]]) -> None:
     for key, value in new.items():
         try_append(value, to, key)
-
-
-def _is_reserved(metric: str) -> bool:
-    return metric == "learning rate" or metric == "epoch duration" or metric.startswith("val")
 
 
 @dataclass
@@ -274,6 +272,32 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         settings.update(kwargs)
         self.train(num_epochs, **settings)
 
+    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "Training ",
+                     epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
+        if not metrics:
+            metrics = self._metrics
+        table = Table(title=f"Epoch {epoch}")
+        table.add_column("Metric")
+        table.add_column("Value")
+        table.add_column("Span")
+        table.add_column("Diff")
+        for metric, values in metrics.items():
+            if skip and skip(metric, values):
+                continue
+            metric = f"{prefix}{metric}"
+            span = f"[{min(values):.4f}, {max(values):.4f}]"
+            if epochwise:
+                value = f"{values[-1]:.4f}"
+                diff = f"{values[-1] - values[-2]:+.4f}" if epoch > 1 else "N/A"
+            else:
+                mean = sum(values) / len(values)
+                value = f"{mean:.4f}"
+                diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
+            table.add_row(metric, value, diff, span)
+            self.log(f"{metric}: {value} @{span} ({diff})")
+        console = Console()
+        console.print(table)
+
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
               val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
@@ -319,13 +343,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 lr = scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
                 self.log(f"Learning rate: {lr}")
-                for metric, values in self._metrics.items():
-                    if _is_reserved(metric):
-                        continue
-                    msg = f"Training {metric}: {values[-1]:.4f}"
-                    if epoch > 1:
-                        msg += f" ({values[-1] - values[-2]:+.4f})"
-                    self.log(msg)
+                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val "))
                 torch.save(model.state_dict(), checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
@@ -347,9 +365,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     etc = sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds: {datetime.fromtimestamp(
                         time() + etc):%H:%M:%S}")
-                for metric, values in metrics.items():
-                    a, b, c = min(values), sum(values) / len(values), max(values)
-                    self.log(f"Validation {metric}: {b:.4f} @[{a:.4f}, {c:.4f}]")
+                self.show_metrics(epoch, metrics=metrics, prefix="Validation ", epochwise=False)
                 if score > self._best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
                     self.log(f"======== Best checkpoint updated ({self._best_score:.4f} -> {score:.4f}) ========")
