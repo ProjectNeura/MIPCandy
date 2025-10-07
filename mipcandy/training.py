@@ -281,7 +281,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         table.add_column("Metric")
         table.add_column("Mean Value", style="green")
         table.add_column("Span", style="cyan")
-        table.add_column("Diff", style="purple")
+        table.add_column("Diff", style="magenta")
         for metric, values in metrics.items():
             if skip and skip(metric, values):
                 continue
