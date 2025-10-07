@@ -22,16 +22,16 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             visualize3d(x, title=title, max_volume=int(quality * 1e6), blocking=True, screenshot_as=path)
 
     @override
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
-        mask = mask.sigmoid()
+        output = output.sigmoid()
         self._save_preview(image, "input", quality)
         self._save_preview(label, "label", quality)
-        self._save_preview(mask, "prediction", quality)
-        if image.ndim == label.ndim == mask.ndim == 3:
+        self._save_preview(output, "prediction", quality)
+        if image.ndim == label.ndim == output.ndim == 3:
             visualize2d(overlay(image, label), title="expected", blocking=True,
                         screenshot_as=f"{self.experiment_folder()}/expected (preview).png")
-            visualize2d(overlay(image, mask), title="actual", blocking=True,
+            visualize2d(overlay(image, output), title="actual", blocking=True,
                         screenshot_as=f"{self.experiment_folder()}/actual (preview).png")
 
     @override

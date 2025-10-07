@@ -65,11 +65,11 @@ class Predictor(WithPaddingModule, metaclass=ABCMeta):
         padding_module = self.get_padding_module()
         if padding_module:
             image = padding_module(image)
-        mask = self._model(image)
+        output = self._model(image)
         restoring_module = self.get_restoring_module()
         if restoring_module:
-            mask = restoring_module(mask)
-        return mask if batch else mask.squeeze(0)
+            output = restoring_module(output)
+        return output if batch else output.squeeze(0)
 
     def _predict(self, x: SupportedPredictant | UnsupervisedDataset) -> tuple[list[torch.Tensor], list[str] | None]:
         if isinstance(x, UnsupervisedDataset):
@@ -81,21 +81,21 @@ class Predictor(WithPaddingModule, metaclass=ABCMeta):
         return self._predict(x)[0]
 
     @staticmethod
-    def save_prediction(mask: torch.Tensor, path: str | PathLike[str]) -> None:
-        save_image(mask, path)
+    def save_prediction(output: torch.Tensor, path: str | PathLike[str]) -> None:
+        save_image(output, path)
 
-    def save_predictions(self, masks: Sequence[torch.Tensor], folder: str | PathLike[str], *,
+    def save_predictions(self, outputs: Sequence[torch.Tensor], folder: str | PathLike[str], *,
                          filenames: Sequence[str | PathLike[str]] | None = None) -> None:
         if not filenames:
-            num_cases = len(masks)
+            num_cases = len(outputs)
             num_digits = ceil(log(num_cases))
             filenames = [f"prediction_{str(i).zfill(num_digits)}" for i in range(num_cases)]
-        for i, prediction in enumerate(masks):
+        for i, prediction in enumerate(outputs):
             self.save_prediction(prediction, f"{folder}/{filenames[i]}")
 
     def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset, folder: str | PathLike[str]) -> None:
-        masks, filenames = self._predict(x)
-        self.save_predictions(masks, folder, filenames=filenames)
+        outputs, filenames = self._predict(x)
+        self.save_predictions(outputs, folder, filenames=filenames)
 
     def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
         return self.predict(x)
@@ -119,6 +119,6 @@ class SlidingPredictor(Predictor, SlidingWindow, metaclass=ABCMeta):
         if not batch:
             image = image.unsqueeze(0)
         images, metadata = self.do_sliding_window(image)
-        masks = super().predict_image(images, batch=True)
-        masks = self.revert_sliding_window(masks, metadata)
-        return masks if batch else masks.squeeze(0)
+        outputs = super().predict_image(images, batch=True)
+        outputs = self.revert_sliding_window(outputs, metadata)
+        return outputs if batch else outputs.squeeze(0)
