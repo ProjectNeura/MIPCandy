@@ -154,7 +154,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def save_progress(self, *, names: Sequence[str] = ("combined loss", "val score")) -> None:
         self.save_metric_curve_combo({name: self._metrics[name] for name in names}, title="Progress")
 
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
         ...
 
@@ -231,10 +231,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
                 progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
-                case_score, case_metrics, mask = self.validate_case(image, label, toolbox)
+                case_score, case_metrics, output = self.validate_case(image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
-                    self._worst_case = (image, label, mask)
+                    self._worst_case = (image, label, output)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
@@ -414,9 +414,9 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         images, metadata = self.do_sliding_window(image)
         labels, _ = self.do_sliding_window(label)
-        loss, metrics, masks = self.validate_case_windowed(images, labels, toolbox, metadata)
-        mask = self.revert_sliding_window(masks, metadata)
-        return loss, metrics, mask.squeeze(0)
+        loss, metrics, outputs = self.validate_case_windowed(images, labels, toolbox, metadata)
+        output = self.revert_sliding_window(outputs, metadata)
+        return loss, metrics, output.squeeze(0)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
