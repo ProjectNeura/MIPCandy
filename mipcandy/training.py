@@ -200,10 +200,11 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
+                progress.update(epoch_prog, description=f"Training epoch {epoch} {tuple(images.shape)}")
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
-                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} {tuple(images.shape)}")
+                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
         self._bump_metrics()
 
     @abstractmethod
@@ -229,13 +230,14 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
+                progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
                 case_score, case_metrics, mask = self.validate_case(image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
                     self._worst_case = (image, label, mask)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
-                progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
+                progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
         return score / num_cases, metrics
 
     def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
