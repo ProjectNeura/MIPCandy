@@ -342,8 +342,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.train_epoch(epoch, toolbox)
                 lr = scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
-                self.log(f"Learning rate: {lr}")
-                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val "))
+                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
                 torch.save(model.state_dict(), checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
