@@ -28,7 +28,7 @@ class SanityCheckResult(object):
 
     @override
     def __str__(self) -> str:
-        return f"MACs: {self.num_macs / 1e9:.1f} G / Params: {self.num_params / 1e6:.1f} M"
+        return f"MACs: {self.num_macs * 1e-9:.1f} G / Params: {self.num_params * 1e-6:.1f} M"
 
 
 def sanity_check(model: nn.Module, input_shape: Sequence[int], *, device: Device | None = None) -> SanityCheckResult:
