@@ -279,9 +279,9 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         prefix = prefix.capitalize()
         table = Table(title=f"Epoch {epoch} {prefix}")
         table.add_column("Metric")
-        table.add_column("Value")
-        table.add_column("Span")
-        table.add_column("Diff")
+        table.add_column("Mean Value", style="green")
+        table.add_column("Span", style="cyan")
+        table.add_column("Diff", style="purple")
         for metric, values in metrics.items():
             if skip and skip(metric, values):
                 continue
