@@ -203,7 +203,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
-                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({"x".join(images.shape)})")
+                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} {tuple(image.shape)}")
         self._bump_metrics()
 
     @abstractmethod
@@ -235,7 +235,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     self._worst_case = (image, label, mask)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
-                progress.update(val_prog, advance=1, description=f"Validating ({"x".join(image.shape)})")
+                progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
         return score / num_cases, metrics
 
     def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
