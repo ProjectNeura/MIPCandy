@@ -288,7 +288,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             span = f"[{min(values):.4f}, {max(values):.4f}]"
             if epochwise:
                 value = f"{values[-1]:.4f}"
-                diff = f"{values[-1] - values[-2]:+.4f}" if epoch > 1 else "N/A"
+                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
             else:
                 mean = sum(values) / len(values)
                 value = f"{mean:.4f}"
