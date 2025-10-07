@@ -203,7 +203,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
-                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} {tuple(image.shape)}")
+                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} {tuple(images.shape)}")
         self._bump_metrics()
 
     @abstractmethod
