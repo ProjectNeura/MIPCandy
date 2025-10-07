@@ -245,7 +245,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         max_roc = float(da[0] / db[0])
         max_val_score = float(a[0] / b[0])
         bounds = quotient_bounds(a, b, None, max_val_score * (1 - max_roc), x_start=0, x_stop=num_epochs, x_step=1)
-        return round(bounds[1]) + 1, max_val_score if bounds else (0, 0)
+        return (round(bounds[1]) + 1, max_val_score) if bounds else (0, 0)
 
     def set_seed(self, seed: int) -> None:
         np.random.seed(seed)
