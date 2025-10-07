@@ -200,6 +200,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
+                progress.update(epoch_prog, description=f"Training epoch {epoch} {tuple(images.shape)}")
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
@@ -229,6 +230,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
+                progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
                 case_score, case_metrics, mask = self.validate_case(image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
@@ -342,8 +344,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.train_epoch(epoch, toolbox)
                 lr = scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
-                self.log(f"Learning rate: {lr}")
-                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val "))
+                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
                 torch.save(model.state_dict(), checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
