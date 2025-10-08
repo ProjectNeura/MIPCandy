@@ -1,5 +1,5 @@
-from zipfile import ZipFile
 from os import PathLike
+from zipfile import ZipFile
 
 from requests import get
 from rich.progress import track
@@ -16,4 +16,4 @@ def download_dataset(name: str, to: str | PathLike[str], *, endpoint: str = "cds
     print("Unzipping...")
     with ZipFile(to_zip, "r") as zip_ref:
         zip_ref.extractall(to)
-    print(f"Dataset extracted successfully to {to}")
+    print(f"Dataset extracted successfully to {to_zip}")
