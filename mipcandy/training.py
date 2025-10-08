@@ -364,8 +364,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch}")
                     epoch_durations = self._metrics["epoch duration"]
                     etc = sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
-                    self.log(f"Estimated time of completion in {etc:.1f} seconds: {datetime.fromtimestamp(
-                        time() + etc):%H:%M:%S}")
+                    self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
+                        time() + etc):%m-%d %H:%M:%S}")
                 self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
                 if score > self._best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
