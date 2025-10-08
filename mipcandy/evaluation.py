@@ -11,31 +11,31 @@ from mipcandy.types import SupportedPredictant
 @dataclass
 class EvalCase(object):
     metrics: dict[str, float]
-    mask: torch.Tensor
+    output: torch.Tensor
     label: torch.Tensor
     image: torch.Tensor | None = None
     filename: str | None = None
 
 
 class EvalResult(Sequence[EvalCase]):
-    def __init__(self, metrics: dict[str, list[float]], masks: list[torch.Tensor], labels: list[torch.Tensor], *,
+    def __init__(self, metrics: dict[str, list[float]], outputs: list[torch.Tensor], labels: list[torch.Tensor], *,
                  images: list[torch.Tensor] | None = None, filenames: list[str] | None = None) -> None:
-        if len(masks) != len(labels):
-            raise ValueError(f"Unmatched number of masks ({len(masks)}) and labels ({len(labels)})")
+        if len(outputs) != len(labels):
+            raise ValueError(f"Unmatched number of outputs ({len(outputs)}) and labels ({len(labels)})")
         self.metrics: dict[str, list[float]] = metrics
         self.mean_metrics: dict[str, float] = {name: sum(values) / len(values) for name, values in metrics.items()}
         self.images: list[torch.Tensor] | None = images
-        self.masks: list[torch.Tensor] = masks
+        self.outputs: list[torch.Tensor] = outputs
         self.labels: list[torch.Tensor] = labels
         self.filenames: list[str] | None = filenames
 
     @override
     def __len__(self) -> int:
-        return len(self.masks)
+        return len(self.outputs)
 
     @override
     def __getitem__(self, item: int) -> EvalCase:
-        return EvalCase({name: values[item] for name, values in self.metrics.items()}, self.masks[item],
+        return EvalCase({name: values[item] for name, values in self.metrics.items()}, self.outputs[item],
                         self.labels[item], self.images[item] if self.images else None,
                         self.filenames[item] if self.filenames else None)
 
@@ -63,38 +63,38 @@ class Evaluator(object):
     def __init__(self, *metrics: Callable[[torch.Tensor, torch.Tensor], torch.Tensor]) -> None:
         self._metrics: tuple[Callable[[torch.Tensor, torch.Tensor], torch.Tensor], ...] = metrics
 
-    def _evaluate_dataset(self, x: SupervisedDataset, *, prefilled_masks: list[torch.Tensor] | None = None,
+    def _evaluate_dataset(self, x: SupervisedDataset, *, prefilled_outputs: list[torch.Tensor] | None = None,
                           prefilled_labels: list[torch.Tensor] | None = None) -> EvalResult:
         metrics = {}
-        masks = prefilled_masks if prefilled_masks else []
+        outputs = prefilled_outputs if prefilled_outputs else []
         labels = prefilled_labels if prefilled_labels else []
-        for mask, label in x:
-            if not prefilled_masks:
-                masks.append(mask)
+        for output, label in x:
+            if not prefilled_outputs:
+                outputs.append(output)
             if not prefilled_labels:
                 labels.append(label)
             for m in self._metrics:
                 if m.__name__ not in metrics:
                     metrics[m.__name__] = []
-                metrics[m.__name__].append(m(mask, label).item())
-        return EvalResult(metrics, masks, labels)
+                metrics[m.__name__].append(m(output, label).item())
+        return EvalResult(metrics, outputs, labels)
 
     def evaluate_dataset(self, x: SupervisedDataset) -> EvalResult:
         return self._evaluate_dataset(x)
 
-    def evaluate(self, masks: SupportedPredictant, labels: SupportedPredictant) -> EvalResult:
-        masks, filenames = parse_predictant(masks, Loader)
+    def evaluate(self, outputs: SupportedPredictant, labels: SupportedPredictant) -> EvalResult:
+        outputs, filenames = parse_predictant(outputs, Loader)
         labels, _ = parse_predictant(labels, Loader, as_label=True)
-        r = self._evaluate_dataset(MergedDataset(DatasetFromMemory(masks), DatasetFromMemory(labels)),
-                                   prefilled_masks=masks, prefilled_labels=labels)
+        r = self._evaluate_dataset(MergedDataset(DatasetFromMemory(outputs), DatasetFromMemory(labels)),
+                                   prefilled_outputs=outputs, prefilled_labels=labels)
         r.filenames = filenames
         return r
 
     def predict_and_evaluate(self, x: SupportedPredictant, labels: SupportedPredictant,
                              predictor: Predictor) -> EvalResult:
         x, filenames = parse_predictant(x, Loader)
-        masks = [e.cpu() for e in predictor.predict(x)]
-        r = self.evaluate(masks, labels)
+        outputs = [e.cpu() for e in predictor.predict(x)]
+        r = self.evaluate(outputs, labels)
         r.images = x
         r.filenames = filenames
         return r

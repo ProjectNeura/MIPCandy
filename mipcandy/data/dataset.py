@@ -12,7 +12,7 @@ from torch.utils.data import Dataset
 
 from mipcandy.data.io import load_image
 from mipcandy.layer import HasDevice
-from mipcandy.types import Transform
+from mipcandy.types import Transform, Device
 
 
 class KFPicker(object, metaclass=ABCMeta):
@@ -41,8 +41,7 @@ class RandomKFPicker(OrderedKFPicker):
 
 class Loader(object):
     @staticmethod
-    def do_load(path: str | PathLike[str], *, is_label: bool = False, device: torch.device | str = "cpu",
-                **kwargs) -> torch.Tensor:
+    def do_load(path: str | PathLike[str], *, is_label: bool = False, device: Device = "cpu", **kwargs) -> torch.Tensor:
         return load_image(path, is_label=is_label, device=device, **kwargs)
 
 
@@ -67,7 +66,7 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     Do not use this as a generic class. Only parameterize it if you are inheriting from it.
     """
 
-    def __init__(self, images: D, *, device: torch.device | str = "cpu") -> None:
+    def __init__(self, images: D, *, device: Device = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
 
@@ -81,7 +80,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     Do not use this as a generic class. Only parameterize it if you are inheriting from it.
     """
 
-    def __init__(self, images: D, labels: D, *, device: torch.device | str = "cpu") -> None:
+    def __init__(self, images: D, labels: D, *, device: Device = "cpu") -> None:
         super().__init__(device)
         if len(images) != len(labels):
             raise ValueError(f"Unmatched number of images {len(images)} and labels {len(labels)}")
@@ -114,7 +113,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
 
 class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
-    def __init__(self, images: Sequence[torch.Tensor], device: torch.device | str = "cpu") -> None:
+    def __init__(self, images: Sequence[torch.Tensor], device: Device = "cpu") -> None:
         super().__init__(images, device=device)
 
     @override
@@ -123,8 +122,7 @@ class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
 
 
 class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
-    def __init__(self, images: UnsupervisedDataset, labels: UnsupervisedDataset, *,
-                 device: torch.device | str = "cpu") -> None:
+    def __init__(self, images: UnsupervisedDataset, labels: UnsupervisedDataset, *, device: Device = "cpu") -> None:
         super().__init__(images, labels, device=device)
 
     @override
@@ -139,16 +137,16 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
 class NNUNetDataset(SupervisedDataset[list[str]]):
     def __init__(self, folder: str | PathLike[str], *, split: str | Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
-                 label_transform: Transform | None = None, device: torch.device | str = "cpu") -> None:
+                 label_transform: Transform | None = None, device: Device = "cpu") -> None:
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
         labels.sort()
         self._multimodal_images: list[list[str]] = []
         if len(images) == len(labels):
-            super().__init__(images, labels)
+            super().__init__(images, labels, device=device)
         else:
-            super().__init__([""] * len(labels), labels)
+            super().__init__([""] * len(labels), labels, device=device)
             current_case = ""
             for image in images:
                 case = image[:image.rfind("_")]

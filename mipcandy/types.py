@@ -11,3 +11,4 @@ type Params = Iterable[torch.Tensor] | Iterable[dict[str, Any]]
 type Transform = nn.Module | Compose
 type SupportedPredictant = Sequence[torch.Tensor] | str | PathLike[str] | Sequence[str] | torch.Tensor
 type Colormap = Sequence[int | tuple[int, int, int]]
+type Device = torch.device | str

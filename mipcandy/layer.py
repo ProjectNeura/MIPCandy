@@ -1,7 +1,8 @@
-from typing import Any, Generator
+from typing import Any, Generator, Self
 
-import torch
 from torch import nn
+
+from mipcandy.types import Device
 
 
 def batch_int_multiply(f: float, *n: int) -> Generator[int, None, None]:
@@ -21,6 +22,12 @@ class LayerT(object):
         self.m: type[nn.Module] = m
         self.kwargs: dict[str, Any] = kwargs
 
+    def update(self, *, must_exist: bool = True, **kwargs) -> Self:
+        for k, v in kwargs.items():
+            if not must_exist or k in self.kwargs:
+                self.kwargs[k] = v
+        return self
+
     def assemble(self, *args, **kwargs) -> nn.Module:
         self_kwargs = self.kwargs.copy()
         for k, v in self_kwargs.items():
@@ -30,12 +37,12 @@ class LayerT(object):
 
 
 class HasDevice(object):
-    def __init__(self, device: torch.device | str) -> None:
-        self._device: torch.device = device
+    def __init__(self, device: Device) -> None:
+        self._device: Device = device
 
 
 class WithPaddingModule(HasDevice):
-    def __init__(self, device: torch.device | str) -> None:
+    def __init__(self, device: Device) -> None:
         super().__init__(device)
         self._padding_module: nn.Module | None = None
         self._restoring_module: nn.Module | None = None

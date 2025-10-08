@@ -1,14 +1,14 @@
-import random
 from abc import ABCMeta, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime
 from hashlib import md5
 from os import PathLike, urandom, makedirs, environ
 from os.path import exists
+from random import seed as random_seed, randint
 from shutil import copy
 from threading import Lock
 from time import time
-from typing import Sequence, override
+from typing import Sequence, override, Callable
 
 import numpy as np
 import torch
@@ -16,16 +16,17 @@ from matplotlib import pyplot as plt
 from pandas import DataFrame
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
+from rich.table import Table
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from mipcandy.common import Pad2d, Pad3d
+from mipcandy.common import Pad2d, Pad3d, quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
-from mipcandy.types import Params, Setting
+from mipcandy.types import Params, Setting, Device
 
 
 def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
@@ -38,10 +39,6 @@ def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
 def try_append_all(new: dict[str, float], to: dict[str, list[float]]) -> None:
     for key, value in new.items():
         try_append(value, to, key)
-
-
-def _is_reserved(metric: str) -> bool:
-    return metric == "learning rate" or metric == "epoch duration" or metric.startswith("val")
 
 
 @dataclass
@@ -158,7 +155,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def save_progress(self, *, names: Sequence[str] = ("combined loss", "val score")) -> None:
         self.save_metric_curve_combo({name: self._metrics[name] for name in names}, title="Progress")
 
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, mask: torch.Tensor, *,
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
         ...
 
@@ -204,6 +201,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
+                progress.update(epoch_prog, description=f"Training epoch {epoch} {tuple(images.shape)}")
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
@@ -233,31 +231,24 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
-                case_score, case_metrics, mask = self.validate_case(image, label, toolbox)
+                progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
+                case_score, case_metrics, output = self.validate_case(image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
-                    self._worst_case = (image, label, mask)
+                    self._worst_case = (image, label, output)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
         return score / num_cases, metrics
 
-    def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[float, float]:
-        a, b = 0, num_epochs - 1
+    def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
         val_scores = np.array(self._metrics["val score"])
-        coefficients = np.polyfit(np.arange(len(val_scores)), val_scores, degree)
-        p = np.poly1d(coefficients)
-        dp = np.polyder(p)
-        if dp.order < 1:
-            crits = np.array([a, b])
-        else:
-            roots = np.roots(dp)
-            crits = roots[np.isreal(roots)].real
-            crits = crits[(crits > a) & (crits < b)]
-            crits = np.concatenate((crits, (a, b)))
-        values = p(crits)
-        i = np.argmax(values)
-        return float(crits[i]) + 1, float(values[i])
+        a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
+        da, db = quotient_derivative(a, b)
+        max_roc = float(da[0] / db[0])
+        max_val_score = float(a[0] / b[0])
+        bounds = quotient_bounds(a, b, None, max_val_score * (1 - max_roc), x_start=0, x_stop=num_epochs, x_step=1)
+        return (round(bounds[1]) + 1, max_val_score) if bounds else (0, 0)
 
     def set_seed(self, seed: int) -> None:
         np.random.seed(seed)
@@ -266,7 +257,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         torch.cuda.manual_seed_all(seed)
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
-        random.seed(seed)
+        random_seed(seed)
         np.random.seed(seed)
         environ['PYTHONHASHSEED'] = str(seed)
         if self.initialized():
@@ -284,6 +275,32 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         settings.update(kwargs)
         self.train(num_epochs, **settings)
 
+    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
+                     epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
+        if not metrics:
+            metrics = self._metrics
+        prefix = prefix.capitalize()
+        table = Table(title=f"Epoch {epoch} {prefix}")
+        table.add_column("Metric")
+        table.add_column("Mean Value", style="green")
+        table.add_column("Span", style="cyan")
+        table.add_column("Diff", style="magenta")
+        for metric, values in metrics.items():
+            if skip and skip(metric, values):
+                continue
+            span = f"[{min(values):.4f}, {max(values):.4f}]"
+            if epochwise:
+                value = f"{values[-1]:.4f}"
+                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
+            else:
+                mean = sum(values) / len(values)
+                value = f"{mean:.4f}"
+                diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
+            table.add_row(metric, value, span, diff)
+            self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
+        console = Console()
+        console.print(table)
+
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
               val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
@@ -291,7 +308,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         if note:
             self.log(f"Note: {note}")
         if seed is None:
-            seed = random.randint(0, 100)
+            seed = randint(0, 100)
         self.set_seed(seed)
         example_input = self._dataloader.dataset[0][0].to(self._device).unsqueeze(0)
         padding_module = self.get_padding_module()
@@ -328,14 +345,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.train_epoch(epoch, toolbox)
                 lr = scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
-                self.log(f"Learning rate: {lr}")
-                for metric, values in self._metrics.items():
-                    if _is_reserved(metric):
-                        continue
-                    msg = f"Training {metric}: {values[-1]:.4f}"
-                    if epoch > 1:
-                        msg += f" ({values[-1] - values[-2]:+.4f})"
-                    self.log(msg)
+                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
                 torch.save(model.state_dict(), checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
@@ -349,12 +359,15 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     msg += f" ({score - self._metrics["val score"][-2]:+.4f})"
                 self.log(msg)
                 if val_score_prediction and epoch > val_score_prediction_degree:
-                    target_epoch, max_score = self.predict_maximum_validation_score(num_epochs,
-                                                                                    degree=val_score_prediction_degree)
-                    self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch:.1f}")
-                for metric, values in metrics.items():
-                    a, b, c = min(values), sum(values) / len(values), max(values)
-                    self.log(f"Validation {metric}: {b:.4f} @[{a:.4f}, {c:.4f}]")
+                    target_epoch, max_score = self.predict_maximum_validation_score(
+                        num_epochs, degree=val_score_prediction_degree
+                    )
+                    self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch}")
+                    epoch_durations = self._metrics["epoch duration"]
+                    etc = sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
+                    self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
+                        time() + etc):%m-%d %H:%M:%S}")
+                self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
                 if score > self._best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
                     self.log(f"======== Best checkpoint updated ({self._best_score:.4f} -> {score:.4f}) ========")
@@ -402,9 +415,9 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         images, metadata = self.do_sliding_window(image)
         labels, _ = self.do_sliding_window(label)
-        loss, metrics, masks = self.validate_case_windowed(images, labels, toolbox, metadata)
-        mask = self.revert_sliding_window(masks, metadata)
-        return loss, metrics, mask.squeeze(0)
+        loss, metrics, outputs = self.validate_case_windowed(images, labels, toolbox, metadata)
+        output = self.revert_sliding_window(outputs, metadata)
+        return loss, metrics, output.squeeze(0)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,

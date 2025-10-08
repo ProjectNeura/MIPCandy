@@ -97,7 +97,7 @@ class NotionFrontend(Frontend):
                               num_params: float, num_epochs: int, early_stop_tolerance: int) -> None:
         self._num_epochs = num_epochs
         self._early_stop_tolerance = early_stop_tolerance
-        res = self.new_experiment(experiment_id, trainer, model, note, num_macs, num_params)
+        res = self.new_experiment(experiment_id, trainer, model, note, num_macs * 1e-9, num_params * 1e-6)
         if res.status_code != 200:
             raise RuntimeError(f"Failed to create experiment: {res.json()}")
 

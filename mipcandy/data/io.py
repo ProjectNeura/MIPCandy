@@ -5,6 +5,7 @@ import SimpleITK as SpITK
 import torch
 
 from mipcandy.data.geometric import ensure_num_dimensions
+from mipcandy.types import Device
 
 
 def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None,
@@ -24,7 +25,7 @@ def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None
 
 
 def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spacing: bool = False,
-               device: torch.device | str = "cpu") -> torch.Tensor:
+               device: Device = "cpu") -> torch.Tensor:
     file = SpITK.ReadImage(path)
     if align_spacing:
         file = resample_to_isotropic(file, interpolator=SpITK.sitkNearestNeighbor if is_label else SpITK.sitkBSpline)
