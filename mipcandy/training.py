@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from matplotlib import pyplot as plt
 from pandas import DataFrame
+from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 from torch.utils.data import DataLoader
@@ -55,13 +56,14 @@ class TrainerToolbox(object):
 class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *,
-                 device: torch.device | str = "cpu") -> None:
+                 device: torch.device | str = "cpu", console: Console = Console()) -> None:
         super().__init__(device)
         self._trainer_folder: str = trainer_folder
         self._trainer_variant: str = self.__class__.__name__
         self._experiment_id: str = "tbd"
         self._dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = dataloader
         self._validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = validation_dataloader
+        self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
         self._epoch_metrics: dict[str, list[float]] = {}
         self._best_score: float = float("-inf")
@@ -95,14 +97,14 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self.log(f"Experiment (ID {self._experiment_id}) created at {t}")
         self.log(f"Trainer: {self.__class__.__name__}")
 
-    def log(self, msg: str, *, console: bool = True) -> None:
+    def log(self, msg: str, *, on_screen: bool = True) -> None:
         msg = f"[{datetime.now()}] {msg}"
         if self.initialized():
             with open(f"{self.experiment_folder()}/logs.txt", "a") as f:
                 f.write(f"{msg}\n")
-        if console:
+        if on_screen:
             with self._lock:
-                print(msg)
+                self._console.print(msg)
 
     def record(self, metric: str, value: float) -> None:
         try_append(value, self._epoch_metrics, metric)
