@@ -2,6 +2,7 @@ from typing import override
 
 import numpy as np
 import torch
+from torch.utils.data import DataLoader
 from batchgenerators.dataloading.data_loader import DataLoader as BGDataLoader
 from batchgenerators.dataloading.multi_threaded_augmenter import MultiThreadedAugmenter
 
@@ -9,7 +10,7 @@ from mipcandy.data.dataset import RandomPatchDataset
 from mipcandy.data.patch_sampling import sample_random_patch
 
 
-class RandomPatchDataLoader(BGDataLoader):
+class RandomPatchDataLoader(BGDataLoader, DataLoader):
 
     def __init__(self, dataset: RandomPatchDataset, batch_size: int, patch_size: tuple[int, ...], *,
                  oversample_foreground_percent: float = 0.33, num_iterations_per_epoch: int = 250,
