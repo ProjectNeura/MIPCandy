@@ -28,10 +28,17 @@ class RandomPatchDataLoader(BGDataLoader):
         self._augmenter: MultiThreadedAugmenter | None = None
 
         if num_workers > 0:
-            seeds = [seed + i if seed is not None else None for i in range(num_workers)]
-            self._augmenter = MultiThreadedAugmenter(
-                self, None, num_processes=num_workers, num_cached_per_queue=2, seeds=seeds, pin_memory=False
-            )
+            import sys
+            if sys.platform == 'win32':
+                from rich.console import Console
+                console = Console()
+                console.print(f"[yellow]Warning: num_workers={num_workers} is not supported on Windows due to pickle limitations. Setting num_workers=0.[/yellow]")
+                self._num_workers = 0
+            else:
+                seeds = [seed + i if seed is not None else None for i in range(num_workers)]
+                self._augmenter = MultiThreadedAugmenter(
+                    self, None, num_processes=num_workers, num_cached_per_queue=2, seeds=seeds, pin_memory=False
+                )
 
     def __getstate__(self):
         state = self.__dict__.copy()
