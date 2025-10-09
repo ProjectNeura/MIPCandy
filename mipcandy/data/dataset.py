@@ -243,3 +243,95 @@ class BinarizedDataset(NNUNetDataset):
         label[label > 0] = 0
         label[label == -1] = 1
         return image, label
+
+
+class RandomPatchDataset(NNUNetDataset):
+    def __init__(self, folder: str | PathLike[str], *, precompute_foreground: bool = False,
+                 properties_cache_file: str | PathLike[str] | None = None, ignore_label: int = 0, **kwargs) -> None:
+        super().__init__(folder, **kwargs)
+        self._properties: list[dict] | None = None
+        self._ignore_label: int = ignore_label
+
+        if properties_cache_file and exists(f"{properties_cache_file}"):
+            self._load_properties(properties_cache_file)
+        elif precompute_foreground:
+            self._compute_properties_with_progress()
+
+    def _compute_single_property(self, image: torch.Tensor, label: torch.Tensor) -> dict:
+        from mipcandy.data.patch_sampling import compute_foreground_locations
+        return {
+            'shape': image.shape,
+            'foreground_locations': compute_foreground_locations(label, ignore_label=self._ignore_label)
+        }
+
+    def _compute_properties_with_progress(self) -> None:
+        from rich.progress import track
+        self._properties = []
+        for idx in track(range(len(self)), description="Precomputing foreground locations"):
+            image, label = super().load(idx)
+            props = self._compute_single_property(image, label)
+            self._properties.append(props)
+
+    def save_properties(self, filepath: str | PathLike[str]) -> None:
+        from pickle import dump
+        with open(filepath, 'wb') as f:
+            dump(self._properties, f)
+
+    def _load_properties(self, filepath: str | PathLike[str]) -> None:
+        from pickle import load
+        with open(filepath, 'rb') as f:
+            self._properties = load(f)
+
+    def load_with_properties(self, idx: int) -> tuple[torch.Tensor, torch.Tensor, dict]:
+        image, label = super().load(idx)
+
+        if self._properties and idx < len(self._properties):
+            props = self._properties[idx]
+        else:
+            props = self._compute_single_property(image, label)
+
+        return image, label, props
+
+    @override
+    def construct_new(self, images: D, labels: D) -> Self:
+        new = super().construct_new(images, labels)
+        if self._properties:
+            indices = [i for i, img in enumerate(self._images) if img in images]
+            new._properties = [self._properties[i] for i in indices]
+        return new
+
+
+def compute_patch_size(dataset: NNUNetDataset, *, percentile: int = 95) -> tuple[int, ...]:
+    import numpy as np
+    import SimpleITK as sitk
+    from rich.console import Console
+
+    console = Console()
+
+    spacings = []
+    shapes = []
+
+    image_paths = dataset._multimodal_images if dataset._multimodal_images else [[p] for p in dataset._images]
+
+    for img_paths in image_paths:
+        img_path = img_paths[0]
+        img = sitk.ReadImage(f"{dataset._folder}/images{dataset._split}/{img_path}")
+        spacing = np.array(img.GetSpacing()[::-1])
+        shape = np.array(img.GetSize()[::-1])
+
+        spacings.append(spacing)
+        shapes.append(shape)
+
+    spacings = np.array(spacings)
+    shapes = np.array(shapes)
+
+    target_spacing = np.median(spacings, axis=0)
+
+    resampled_shapes = shapes * spacings / target_spacing
+
+    patch_size = np.percentile(resampled_shapes, percentile, axis=0)
+    patch_size_tuple = tuple(int(np.round(s)) for s in patch_size)
+
+    console.print(f"Computed patch size (percentile={percentile}): {patch_size_tuple}")
+
+    return patch_size_tuple
