@@ -310,7 +310,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         if seed is None:
             seed = randint(0, 100)
         self.set_seed(seed)
-        example_input = self._dataloader.dataset[0][0].to(self._device).unsqueeze(0)
+        example_batch = next(iter(self._dataloader))
+        example_input = example_batch[0][0:1].to(self._device)
         padding_module = self.get_padding_module()
         if padding_module:
             example_input = padding_module(example_input)
