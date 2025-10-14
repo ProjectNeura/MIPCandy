@@ -11,9 +11,13 @@ from pandas import DataFrame
 from torch.utils.data import Dataset
 
 from mipcandy.data.io import load_image
+from mipcandy.data.patch_sampling import compute_foreground_locations
 from mipcandy.layer import HasDevice
 from mipcandy.types import Transform, Device
 
+import numpy as np
+import SimpleITK as sitk
+from rich.console import Console
 
 class KFPicker(object, metaclass=ABCMeta):
     @staticmethod
@@ -258,7 +262,6 @@ class RandomPatchDataset(NNUNetDataset):
             self._compute_properties_with_progress()
 
     def _compute_single_property(self, image: torch.Tensor, label: torch.Tensor) -> dict:
-        from mipcandy.data.patch_sampling import compute_foreground_locations
         return {
             'shape': image.shape,
             'foreground_locations': compute_foreground_locations(label, ignore_label=self._ignore_label)
@@ -302,9 +305,6 @@ class RandomPatchDataset(NNUNetDataset):
 
 
 def compute_patch_size(dataset: NNUNetDataset, *, percentile: int = 95) -> tuple[int, ...]:
-    import numpy as np
-    import SimpleITK as sitk
-    from rich.console import Console
 
     console = Console()
 
