@@ -138,9 +138,8 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
     def paths(self) -> list[str]:
         return self._images
 
-    def save_paths(self, to: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        to = f"{to}.{fmt}"
-        match fmt:
+    def save_paths(self, to: str | PathLike[str]) -> None:
+        match (fmt := to.split(".")[-1]):
             case "csv":
                 df = DataFrame([{"image": image_path} for image_path in self.paths()])
                 df.index = range(len(df))
@@ -153,15 +152,16 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
                 with open(to, "w") as f:
                     for image_path in self.paths():
                         f.write(f"{image_path}\n")
+            case _:
+                raise ValueError(f"Unsupported file extension: {fmt}")
 
 
 class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta):
     def paths(self) -> list[tuple[str, str]]:
         return [(self._images[i], self._labels[i]) for i in range(len(self))]
 
-    def save_paths(self, to: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        to = f"{to}.{fmt}"
-        match fmt:
+    def save_paths(self, to: str | PathLike[str]) -> None:
+        match (fmt := to.split(".")[-1]):
             case "csv":
                 df = DataFrame([{"image": image_path, "label": label_path} for image_path, label_path in self.paths()])
                 df.index = range(len(df))
@@ -174,6 +174,8 @@ class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta
                 with open(to, "w") as f:
                     for image_path, label_path in self.paths():
                         f.write(f"{image_path}\t{label_path}\n")
+            case _:
+                raise ValueError(f"Unsupported file extension: {fmt}")
 
 
 class NNUNetDataset(PathBasedSupervisedDataset):
