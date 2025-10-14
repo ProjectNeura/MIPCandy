@@ -139,6 +139,7 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
         return self._images
 
     def save_paths(self, to: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
+        to = f"{to}.{fmt}"
         match fmt:
             case "csv":
                 df = DataFrame([{"image": image_path} for image_path in self.paths()])
@@ -159,6 +160,7 @@ class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta
         return [(self._images[i], self._labels[i]) for i in range(len(self))]
 
     def save_paths(self, to: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
+        to = f"{to}.{fmt}"
         match fmt:
             case "csv":
                 df = DataFrame([{"image": image_path, "label": label_path} for image_path, label_path in self.paths()])
