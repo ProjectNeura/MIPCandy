@@ -130,7 +130,7 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         return self._images[idx].to(self._device), self._labels[idx].to(self._device)
 
     @override
-    def construct_new(self, images: D, labels: D) -> Self:
+    def construct_new(self, images: UnsupervisedDataset, labels: UnsupervisedDataset) -> Self:
         return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), device=self._device)
 
 
@@ -245,7 +245,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._folded = False
 
     @override
-    def construct_new(self, images: D, labels: D) -> Self:
+    def construct_new(self, images: list[str], labels: list[str]) -> Self:
         if self._folded:
             raise ValueError("Cannot construct a new dataset from a fold")
         new = self.__class__(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
@@ -257,13 +257,20 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         return new
 
 
-class BinarizedDataset(NNUNetDataset):
-    positive_ids: tuple[int, ...] = (1, 2)
+class BinarizedDataset(SupervisedDataset[D]):
+    def __init__(self, base: SupervisedDataset[D], positive_ids: tuple[int, ...]) -> None:
+        super().__init__(base._images, base._labels)
+        self._base: SupervisedDataset[D] = base
+        self._positive_ids: tuple[int, ...] = positive_ids
+
+    @override
+    def construct_new(self, images: D, labels: D) -> Self:
+        raise NotImplementedError
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = super().load(idx)
-        for pid in self.positive_ids:
+        image, label = self._base.load(idx)
+        for pid in self._positive_ids:
             label[label == pid] = -1
         label[label > 0] = 0
         label[label == -1] = 1
