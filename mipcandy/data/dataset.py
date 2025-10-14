@@ -134,7 +134,51 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), device=self._device)
 
 
-class NNUNetDataset(SupervisedDataset[list[str]]):
+class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABCMeta):
+    def paths(self) -> list[str]:
+        return self._images
+
+    def save_paths(self, to: str | PathLike[str]) -> None:
+        match (fmt := to.split(".")[-1]):
+            case "csv":
+                df = DataFrame([{"image": image_path} for image_path in self.paths()])
+                df.index = range(len(df))
+                df.index.name = "case"
+                df.to_csv(to)
+            case "json":
+                with open(to, "w") as f:
+                    dump([{"image": image_path} for image_path in self.paths()], f)
+            case "txt":
+                with open(to, "w") as f:
+                    for image_path in self.paths():
+                        f.write(f"{image_path}\n")
+            case _:
+                raise ValueError(f"Unsupported file extension: {fmt}")
+
+
+class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta):
+    def paths(self) -> list[tuple[str, str]]:
+        return [(self._images[i], self._labels[i]) for i in range(len(self))]
+
+    def save_paths(self, to: str | PathLike[str]) -> None:
+        match (fmt := to.split(".")[-1]):
+            case "csv":
+                df = DataFrame([{"image": image_path, "label": label_path} for image_path, label_path in self.paths()])
+                df.index = range(len(df))
+                df.index.name = "case"
+                df.to_csv(to)
+            case "json":
+                with open(to, "w") as f:
+                    dump([{"image": image_path, "label": label_path} for image_path, label_path in self.paths()], f)
+            case "txt":
+                with open(to, "w") as f:
+                    for image_path, label_path in self.paths():
+                        f.write(f"{image_path}\t{label_path}\n")
+            case _:
+                raise ValueError(f"Unsupported file extension: {fmt}")
+
+
+class NNUNetDataset(PathBasedSupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, split: str | Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
                  label_transform: Transform | None = None, device: Device = "cpu") -> None:
@@ -188,36 +232,17 @@ class NNUNetDataset(SupervisedDataset[list[str]]):
             label = self._label_transform(label)
         return image, label
 
-    def iter_paths(self) -> list[tuple[str, str]]:
-        return [(self._images[i], self._labels[i]) for i in range(len(self))]
-
     def save(self, split: str | Literal["Tr", "Ts"], *, target_folder: str | PathLike[str] | None = None) -> None:
         target_base = target_folder if target_folder else self._folder
         images_target = f"{target_base}/images{split}"
         labels_target = f"{target_base}/labels{split}"
         self._create_subset(images_target)
         self._create_subset(labels_target)
-        for image_path, label_path in self.iter_paths():
+        for image_path, label_path in self.paths():
             copy2(f"{self._folder}/images{self._split}/{image_path}", f"{images_target}/{image_path}")
             copy2(f"{self._folder}/labels{self._split}/{label_path}", f"{labels_target}/{label_path}")
         self._split = split
         self._folded = False
-
-    def save_paths(self, path: str | PathLike[str], *, fmt: Literal["csv", "json", "txt"] = "csv") -> None:
-        paths = self.iter_paths()
-        match fmt.lower():
-            case "csv":
-                df = DataFrame([{"image": image_path, "label": label_path} for image_path, label_path in paths])
-                df.index = range(1, len(df) + 1)
-                df.index.name = "case"
-                df.to_csv(path)
-            case "json":
-                with open(path, "w") as f:
-                    dump([{"image": image_path, "label": label_path} for image_path, label_path in paths], f)
-            case "txt":
-                with open(path, "w") as f:
-                    for i, l in paths:
-                        f.write(f"{i}\t{l}\n")
 
     @override
     def construct_new(self, images: D, labels: D) -> Self:
