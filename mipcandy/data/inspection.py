@@ -9,6 +9,8 @@ from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
 from mipcandy.data.geometric import crop
+from mipcandy.layer import HasDevice
+from mipcandy.types import Device
 
 
 def format_bbox(bbox: Sequence[int]) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
@@ -36,8 +38,10 @@ class InspectionAnnotation(object):
         return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
 
-class InspectionAnnotations(Sequence[InspectionAnnotation]):
-    def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation) -> None:
+class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
+    def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation,
+                 device: Device = "cpu") -> None:
+        super().__init__(device)
         self._dataset: SupervisedDataset = dataset
         self._background: int = background
         self._annotations: tuple[InspectionAnnotation, ...] = annotations
@@ -124,7 +128,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             return self._foreground_heatmap
         depths, heights, widths = self.foreground_shapes()
         max_shape = (max(depths), max(heights), max(widths)) if depths else (max(heights), max(widths))
-        accumulated_label = torch.zeros((1, *max_shape))
+        accumulated_label = torch.zeros((1, *max_shape), device=self._device)
         for i, (_, label) in enumerate(self._dataset):
             annotation = self._annotations[i]
             paddings = [0, 0, 0, 0]
