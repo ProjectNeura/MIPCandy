@@ -231,6 +231,10 @@ class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
         self._percentile: float = percentile
 
     @override
+    def __len__(self) -> int:
+        return len(self._annotations)
+
+    @override
     def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
         return ROIDataset(self._annotations)
 
