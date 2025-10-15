@@ -190,9 +190,9 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             roi.append(position + offset + right)
         return tuple(roi)
 
-    def crop_roi(self, i: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def crop_roi(self, i: int, *, percentile: float = .95) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._dataset[i]
-        roi = self.roi(i)
+        roi = self.roi(i, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
