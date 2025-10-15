@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from os import PathLike
-from typing import Sequence, override, Callable
+from typing import Sequence, override, Callable, Self
 
 import numpy as np
 import torch
@@ -222,3 +222,17 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnn
             tuple(label.unique())
         ))
     return InspectionAnnotations(dataset, background, *r)
+
+
+class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
+    def __init__(self, annotations: InspectionAnnotations) -> None:
+        super().__init__([], [])
+        self._annotations: InspectionAnnotations = annotations
+
+    @override
+    def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
+        return ROIDataset(self._annotations)
+
+    @override
+    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self._annotations.crop_roi(idx)
