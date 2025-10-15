@@ -40,7 +40,7 @@ class HasDevice(object):
     def __init__(self, device: Device) -> None:
         self._device: Device = device
 
-    def device(self, device: Device | None) -> None | Device:
+    def device(self, *, device: Device | None = None) -> None | Device:
         if device is None:
             return self._device
         else:
