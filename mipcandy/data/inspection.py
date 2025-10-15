@@ -228,9 +228,10 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnn
 
 
 class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
-    def __init__(self, annotations: InspectionAnnotations) -> None:
+    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
         super().__init__([], [])
         self._annotations: InspectionAnnotations = annotations
+        self._percentile: float = percentile
 
     @override
     def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
@@ -238,4 +239,4 @@ class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._annotations.crop_roi(idx)
+        return self._annotations.crop_roi(idx, percentile=self._percentile)
