@@ -31,7 +31,8 @@ def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spaci
         file = resample_to_isotropic(file, interpolator=SpITK.sitkNearestNeighbor if is_label else SpITK.sitkBSpline)
     img = torch.tensor(SpITK.GetArrayFromImage(file), dtype=torch.float, device=device)
     if path.endswith(".nii.gz") or path.endswith(".nii") or path.endswith(".mha"):
-        return ensure_num_dimensions(img, 4)
+        img = ensure_num_dimensions(img, 4)
+        return img.squeeze(1) if img.shape[1] == 1 else img
     if path.endswith(".png") or path.endswith(".jpg") or path.endswith(".jpeg"):
         return ensure_num_dimensions(img, 3)
     raise NotImplementedError(f"Unsupported file type: {path}")
