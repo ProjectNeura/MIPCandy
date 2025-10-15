@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Sequence
 
 import torch
 
@@ -24,6 +24,6 @@ def aggregate_orthographic_views(d: torch.Tensor, h: torch.Tensor, w: torch.Tens
     return d * h * w
 
 
-def crop(t: torch.Tensor, bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]) -> torch.Tensor:
+def crop(t: torch.Tensor, bbox: Sequence[int]) -> torch.Tensor:
     return t[:, :, bbox[0]:bbox[1], bbox[2]:bbox[3]] if len(bbox) == 4 else t[:, :, bbox[0]:bbox[1], bbox[2]:bbox[3],
     bbox[4]:bbox[5]]
