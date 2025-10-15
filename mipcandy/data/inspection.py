@@ -224,7 +224,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnn
             bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]),
             tuple(label.unique())
         ))
-    return InspectionAnnotations(dataset, background, *r)
+    return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
 
 class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
