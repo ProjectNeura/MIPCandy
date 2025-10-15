@@ -25,5 +25,5 @@ def aggregate_orthographic_views(d: torch.Tensor, h: torch.Tensor, w: torch.Tens
 
 
 def crop(t: torch.Tensor, bbox: tuple[int, ...]) -> torch.Tensor:
-    return t[:, bbox[0]:bbox[2], bbox[1]:bbox[3]] if len(bbox) == 4 else t[:, :, bbox[0]:bbox[3], bbox[1]:bbox[4],
-    bbox[2]:bbox[5]]
+    return t[:, :, bbox[0]:bbox[1], bbox[2]:bbox[3]] if len(bbox) == 4 else t[:, :, bbox[0]:bbox[1], bbox[2]:bbox[3],
+    bbox[4]:bbox[5]]

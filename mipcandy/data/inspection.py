@@ -11,29 +11,29 @@ from mipcandy.data.dataset import SupervisedDataset
 from mipcandy.data.geometric import crop
 
 
+def format_bbox(bbox: Sequence[int]) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
+    if len(bbox) == 4:
+        return bbox[0], bbox[1], bbox[2], bbox[3]
+    elif len(bbox) == 6:
+        return bbox[0], bbox[1], bbox[2], bbox[3], bbox[4], bbox[5]
+    else:
+        raise ValueError(f"Invalid bbox with {len(bbox)} elements")
+
+
 @dataclass
 class InspectionAnnotation(object):
     shape: tuple[int, ...]
-    foreground_bbox: tuple[int, ...]
+    foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     ids: tuple[int, ...]
 
     def foreground_shape(self) -> tuple[int, int] | tuple[int, int, int]:
-        return (
-            self.foreground_bbox[2] - self.foreground_bbox[0], self.shape[3] - self.foreground_bbox[1]
-        ) if len(self.shape) == 2 else (
-            self.foreground_bbox[3] - self.foreground_bbox[0], self.shape[4] - self.foreground_bbox[1],
-            self.foreground_bbox[5] - self.foreground_bbox[2]
-        )
+        r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.shape[3] - self.foreground_bbox[2])
+        return r if len(self.shape) == 2 else r + (self.foreground_bbox[5] - self.foreground_bbox[4],)
 
     def center_of_foreground(self) -> tuple[int, int] | tuple[int, int, int]:
-        return (
-            round((self.foreground_bbox[2] + self.foreground_bbox[0]) * .5),
-            round((self.foreground_bbox[3] + self.foreground_bbox[1]) * .5)
-        ) if len(self.shape) == 2 else (
-            round((self.foreground_bbox[3] + self.foreground_bbox[0]) * .5),
-            round((self.foreground_bbox[4] + self.foreground_bbox[1]) * .5),
-            round((self.foreground_bbox[5] + self.foreground_bbox[2]) * .5)
-        )
+        r = (round((self.foreground_bbox[1] + self.foreground_bbox[0]) * .5),
+             round((self.foreground_bbox[3] + self.foreground_bbox[2]) * .5))
+        return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
 
 class InspectionAnnotations(Sequence[InspectionAnnotation]):
@@ -105,7 +105,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             right = expand_ratio * size - left
             bbox[i] = max(0, bbox[i] - left)
             bbox[i + 2] = min(bbox[i + 2] + right, label.shape[i])
-        return crop(image, bbox), crop(label, bbox)
+        return crop(image.unsqueeze(0), bbox).squeeze(0), crop(label.unsqueeze(0), bbox).squeeze(0)
 
     def foreground_heatmap(self) -> torch.Tensor:
         if self._foreground_heatmap:
@@ -129,11 +129,9 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         if self._center_of_foregrounds:
             return self._center_of_foregrounds
         heatmap = self.foreground_heatmap()
-        self._center_of_foregrounds = (
-            round(heatmap.sum(dim=0).argmax().item()), round(heatmap.sum(dim=1).argmax().item())
-        ) if heatmap.ndim == 2 else (
-            round(heatmap.sum(dim=0).argmax().item()), round(heatmap.sum(dim=1).argmax().item()),
-            round(heatmap.sum(dim=2).argmax().item())
+        center = (round(heatmap.sum(dim=0).argmax().item()), round(heatmap.sum(dim=1).argmax().item()))
+        self._center_of_foregrounds = center if heatmap.ndim == 2 else center + (
+            round(heatmap.sum(dim=2).argmax().item()),
         )
         return self._center_of_foregrounds
 
@@ -143,12 +141,8 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         center = self.center_of_foregrounds()
         depths, heights, widths = self.shapes()
         max_shape = (max(heights), max(widths)) if depths else (max(depths), max(heights), max(widths))
-        self._foreground_offsets = (
-            round(center[0] - max_shape[0] * .5), round(center[1] - max_shape[1] * .5)
-        ) if depths else (
-            round(center[0] - max_shape[0] * .5), round(center[1] - max_shape[1] * .5),
-            round(center[2] - max_shape[2] * .5)
-        )
+        offsets = (round(center[0] - max_shape[0] * .5), round(center[1] - max_shape[1] * .5))
+        self._foreground_offsets = offsets + (round(center[2] - max_shape[2] * .5),) if depths else offsets
         return self._foreground_offsets
 
     def roi(self, i: int) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
@@ -169,23 +163,27 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
 
     def crop_roi(self, i: int) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._dataset[i]
-        return crop(image, self.roi(i)), crop(label, self.roi(i))
+        return crop(image.unsqueeze(0), self.roi(i)).squeeze(0), crop(label.unsqueeze(0), self.roi(i)).squeeze(0)
 
 
 def load_inspection_annotations(path: str | PathLike[str]) -> InspectionAnnotations:
     df = DataFrame.from_csv(path)
     return InspectionAnnotations(*(
         InspectionAnnotation(
-            tuple(row["shape"]), tuple(row["foreground_bbox"]), tuple(row["ids"])
+            tuple(row["shape"]), format_bbox(row["foreground_bbox"]), tuple(row["ids"])
         ) for _, row in df.iterrows()
     ))
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnnotations:
-    return InspectionAnnotations(dataset, background, *(
-        InspectionAnnotation(
+    r = []
+    for _, label in dataset:
+        indices = (label != background).nonzero()
+        mins, maxs = indices.min(dim=0)[0].tolist() + indices.max(dim=0)[0].tolist()
+        bbox = (mins[0], maxs[0], mins[1], maxs[1])
+        r.append(InspectionAnnotation(
             label.shape,
-            tuple((indices := (label != background).nonzero()).min(dim=0)[0].tolist() + indices.max(dim=0)[0].tolist()),
+            bbox if label.ndim == 2 else bbox + (mins[2], maxs[2]),
             tuple(label.unique())
-        ) for _, label in dataset
-    ))
+        ))
+    return InspectionAnnotations(dataset, background, *r)
