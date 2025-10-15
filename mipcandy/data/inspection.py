@@ -166,6 +166,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         self._foreground_offsets = offsets + (round(center[2] - max_shape[2] * .5),) if depths else offsets
         return self._foreground_offsets
 
+    def set_roi_shape(self, roi_shape: tuple[int, int] | tuple[int, int, int]) -> None:
+        self._roi_shape = roi_shape
+
     def roi_shape(self, *, percentile: float = .95) -> tuple[int, int] | tuple[int, int, int]:
         if self._roi_shape:
             return self._roi_shape
