@@ -102,6 +102,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         if self._statistical_foreground_shape:
             return self._statistical_foreground_shape
         depths, heights, widths = self.foreground_shapes()
+        percentile *= 100
         sfs = (round(np.percentile(heights, percentile)), round(np.percentile(widths, percentile)))
         self._statistical_foreground_shape = (round(np.percentile(heights, percentile)),) + sfs if depths else sfs
         return self._statistical_foreground_shape
