@@ -26,7 +26,7 @@ from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
-from mipcandy.types import Params, Setting, Device
+from mipcandy.types import Params, Setting
 
 
 def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
@@ -231,7 +231,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
-                progress.update(val_prog, advance=1, description=f"Validating {tuple(image.shape)}")
+                progress.update(val_prog, description=f"Validating {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
