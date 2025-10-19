@@ -27,6 +27,7 @@ class InspectionAnnotation(object):
     shape: tuple[int, ...]
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     ids: tuple[int, ...]
+    foreground_samples: torch.Tensor | None = None
 
     def foreground_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.foreground_bbox[3] - self.foreground_bbox[2])
@@ -209,10 +210,37 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             roi.append(center + right)
         return tuple(roi)
 
-    def crop_roi(self, i: int, *, percentile: float = .95, random_patch: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
+    def foreground_guided_random_roi(self, i: int, *, percentile: float = .95) -> tuple[int, int, int, int] | tuple[
+        int, int, int, int, int, int]:
+        annotation = self._annotations[i]
+        roi_shape = self.roi_shape(percentile=percentile)
+
+        if annotation.foreground_samples is None or len(annotation.foreground_samples) == 0:
+            return self.random_roi(i, percentile=percentile)
+
+        fg_idx = torch.randint(0, len(annotation.foreground_samples), (1,)).item()
+        fg_position = annotation.foreground_samples[fg_idx]
+
+        roi = []
+        for dim_idx, (fg_pos, dim_size, patch_size) in enumerate(
+            zip(fg_position.tolist(), annotation.shape, roi_shape)
+        ):
+            left = patch_size // 2
+            right = patch_size - left
+            center = max(left, min(fg_pos, dim_size - right))
+            roi.append(center - left)
+            roi.append(center + right)
+
+        return tuple(roi)
+
+    def crop_roi(self, i: int, *, percentile: float = .95, random_patch: bool = False, 
+                 force_foreground: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._dataset[i]
         if random_patch:
-            roi = self.random_roi(i, percentile=percentile)
+            if force_foreground:
+                roi = self.foreground_guided_random_roi(i, percentile=percentile)
+            else:
+                roi = self.random_roi(i, percentile=percentile)
         else:
             roi = self.roi(i, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
@@ -227,27 +255,38 @@ def load_inspection_annotations(path: str | PathLike[str]) -> InspectionAnnotati
     ))
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnnotations:
+def inspect(dataset: SupervisedDataset, *, background: int = 0, num_foreground_samples: int = 1000) -> InspectionAnnotations:
     r = []
     for _, label in dataset:
         indices = (label != background).nonzero()
         mins = indices.min(dim=0)[0].tolist()
         maxs = indices.max(dim=0)[0].tolist()
         bbox = (mins[1], maxs[1], mins[2], maxs[2])
+        if len(indices) > 0:
+            if len(indices) > num_foreground_samples:
+                sampled_idx = torch.randperm(len(indices))[:num_foreground_samples]
+                foreground_samples = indices[sampled_idx]
+            else:
+                foreground_samples = indices
+        else:
+            foreground_samples = None
         r.append(InspectionAnnotation(
             label.shape[1:],
             bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]),
-            tuple(label.unique())
+            tuple(label.unique()),
+            foreground_samples
         ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
 
 class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
-    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95, random_patch: bool = False) -> None:
+    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95, 
+                 random_patch: bool = False, foreground_oversample_percent: float = 0.33) -> None:
         super().__init__([], [])
         self._annotations: InspectionAnnotations = annotations
         self._percentile: float = percentile
         self.random_patch: bool = random_patch
+        self._fg_oversample: float = foreground_oversample_percent
 
     @override
     def __len__(self) -> int:
@@ -259,4 +298,5 @@ class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._annotations.crop_roi(idx, percentile=self._percentile, random_patch=self.random_patch)
+        force_fg = torch.rand(1).item() < self._fg_oversample if self.random_patch else False
+        return self._annotations.crop_roi(idx, percentile=self._percentile, random_patch=self.random_patch, force_foreground=force_fg)
