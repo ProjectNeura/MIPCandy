@@ -194,9 +194,27 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             roi.append(position + offset + right)
         return tuple(roi)
 
-    def crop_roi(self, i: int, *, percentile: float = .95) -> tuple[torch.Tensor, torch.Tensor]:
+    def random_roi(self, i: int, *, percentile: float = .95) -> tuple[int, int, int, int] | tuple[
+        int, int, int, int, int, int]:
+        annotation = self._annotations[i]
+        roi_shape = self.roi_shape(percentile=percentile)
+        roi = []
+        for dim_idx, (dim_size, patch_size) in enumerate(zip(annotation.shape, roi_shape)):
+            left = patch_size // 2
+            right = patch_size - left
+            min_center = left
+            max_center = dim_size - right
+            center = torch.randint(min_center, max_center + 1, (1,)).item()
+            roi.append(center - left)
+            roi.append(center + right)
+        return tuple(roi)
+
+    def crop_roi(self, i: int, *, percentile: float = .95, random_patch: bool = False) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._dataset[i]
-        roi = self.roi(i, percentile=percentile)
+        if random_patch:
+            roi = self.random_roi(i, percentile=percentile)
+        else:
+            roi = self.roi(i, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
@@ -225,10 +243,11 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnn
 
 
 class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
-    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
+    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95, random_patch: bool = False) -> None:
         super().__init__([], [])
         self._annotations: InspectionAnnotations = annotations
         self._percentile: float = percentile
+        self.random_patch: bool = random_patch
 
     @override
     def __len__(self) -> int:
@@ -240,4 +259,4 @@ class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._annotations.crop_roi(idx, percentile=self._percentile)
+        return self._annotations.crop_roi(idx, percentile=self._percentile, random_patch=self.random_patch)
