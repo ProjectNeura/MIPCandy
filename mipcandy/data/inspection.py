@@ -255,7 +255,8 @@ def load_inspection_annotations(path: str | PathLike[str]) -> InspectionAnnotati
     ))
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0, num_foreground_samples: int = 1000) -> InspectionAnnotations:
+def inspect(dataset: SupervisedDataset, *, background: int = 0, num_foreground_samples: int = 10000,
+            min_percent_coverage: float = 0.01) -> InspectionAnnotations:
     r = []
     for _, label in dataset:
         indices = (label != background).nonzero()
@@ -263,11 +264,14 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, num_foreground_s
         maxs = indices.max(dim=0)[0].tolist()
         bbox = (mins[1], maxs[1], mins[2], maxs[2])
         if len(indices) > 0:
-            if len(indices) > num_foreground_samples:
-                sampled_idx = torch.randperm(len(indices))[:num_foreground_samples]
-                foreground_samples = indices[sampled_idx]
-            else:
+            target_samples = min(len(indices),
+                               max(num_foreground_samples,
+                                   int(np.ceil(len(indices) * min_percent_coverage))))
+            if len(indices) <= target_samples:
                 foreground_samples = indices
+            else:
+                sampled_idx = torch.randperm(len(indices))[:target_samples]
+                foreground_samples = indices[sampled_idx]
         else:
             foreground_samples = None
         r.append(InspectionAnnotation(
