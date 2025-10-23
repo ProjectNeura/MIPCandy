@@ -164,6 +164,14 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return self._foreground_offsets
 
     def set_roi_shape(self, roi_shape: tuple[int, int] | tuple[int, int, int] | None) -> None:
+        if roi_shape is not None:
+            depths, heights, widths = self.shapes()
+            if depths:
+                if roi_shape[0] > min(depths) or roi_shape[1] > min(heights) or roi_shape[2] > min(widths):
+                    raise ValueError(f"ROI shape {roi_shape} exceeds minimum image shape ({min(depths)}, {min(heights)}, {min(widths)})")
+            else:
+                if roi_shape[0] > min(heights) or roi_shape[1] > min(widths):
+                    raise ValueError(f"ROI shape {roi_shape} exceeds minimum image shape ({min(heights)}, {min(widths)})")
         self._roi_shape = roi_shape
 
     def roi_shape(self, *, percentile: float = .95) -> tuple[int, int] | tuple[int, int, int]:
