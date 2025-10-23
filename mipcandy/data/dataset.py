@@ -156,6 +156,18 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
                 raise ValueError(f"Unsupported file extension: {fmt}")
 
 
+class SimpleDataset(PathBasedUnsupervisedDataset):
+    def __init__(self, folder: str | PathLike[str], *, device: Device = "cpu") -> None:
+        images = listdir(folder)
+        images.sort()
+        super().__init__(images, device=device)
+        self._folder: str = folder
+
+    @override
+    def load(self, idx: int) -> torch.Tensor:
+        return self.do_load(f"{self._folder}/{self._images[idx]}", device=self._device)
+
+
 class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta):
     def paths(self) -> list[tuple[str, str]]:
         return [(self._images[i], self._labels[i]) for i in range(len(self))]
