@@ -1,3 +1,4 @@
+from ast import literal_eval
 from dataclasses import dataclass, asdict
 from os import PathLike
 from typing import Sequence, override, Callable, Self
@@ -208,9 +209,12 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
-def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
+def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset,
+                                background: int) -> InspectionAnnotations:
     df = read_csv(path)
-    return InspectionAnnotations(dataset, *(InspectionAnnotation(**row.to_dict()) for _, row in df.iterrows()))
+    return InspectionAnnotations(dataset, background, *(InspectionAnnotation(
+        **dict(map(literal_eval, row.to_dict()))
+    ) for _, row in df.iterrows()))
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnnotations:
