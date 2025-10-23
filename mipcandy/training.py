@@ -397,6 +397,10 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def __call__(self, *args, **kwargs) -> None:
         self.train(*args, **kwargs)
 
+    @override
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__} {self._experiment_id}"
+
 
 class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
     @override
