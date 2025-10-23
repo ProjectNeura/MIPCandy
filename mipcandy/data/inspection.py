@@ -213,7 +213,7 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
                                 background: int) -> InspectionAnnotations:
     df = read_csv(path)
     return InspectionAnnotations(dataset, background, *(InspectionAnnotation(
-        **dict(map(literal_eval, row.to_dict()))
+        **{k: literal_eval(v) for k, v in row.to_dict().items()}
     ) for _, row in df.iterrows()))
 
 
