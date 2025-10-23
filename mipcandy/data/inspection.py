@@ -1,10 +1,10 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from os import PathLike
 from typing import Sequence, override, Callable, Self
 
 import numpy as np
 import torch
-from pandas import DataFrame
+from pandas import DataFrame, read_csv
 from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
@@ -37,6 +37,9 @@ class InspectionAnnotation(object):
              round((self.foreground_bbox[3] + self.foreground_bbox[2]) * .5))
         return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
+    def to_dict(self) -> dict[str, tuple[int, ...]]:
+        return asdict(self)
+
 
 class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
     def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation,
@@ -65,10 +68,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return len(self._annotations)
 
     def save(self, path: str | PathLike[str]) -> None:
-        r = []
-        for annotation in self._annotations:
-            r.append({"foreground_bbox": annotation.foreground_bbox, "ids": annotation.ids})
-        DataFrame(r).to_csv(path, index=False)
+        DataFrame(annotation.to_dict() for annotation in self._annotations).to_csv(path, index=False)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], tuple[int, ...]]) -> tuple[
         tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
@@ -208,13 +208,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
-def load_inspection_annotations(path: str | PathLike[str]) -> InspectionAnnotations:
-    df = DataFrame.from_csv(path)
-    return InspectionAnnotations(*(
-        InspectionAnnotation(
-            tuple(row["shape"]), format_bbox(row["foreground_bbox"]), tuple(row["ids"])
-        ) for _, row in df.iterrows()
-    ))
+def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
+    df = read_csv(path)
+    return InspectionAnnotations(dataset, *(InspectionAnnotation(**row.to_dict()) for _, row in df.iterrows()))
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnnotations:
