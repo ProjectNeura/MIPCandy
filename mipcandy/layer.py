@@ -1,5 +1,6 @@
 from typing import Any, Generator, Self
 
+import torch
 from torch import nn
 
 from mipcandy.types import Device
@@ -45,6 +46,15 @@ class HasDevice(object):
             return self._device
         else:
             self._device = device
+
+
+def auto_device() -> Device:
+    if torch.cuda.is_available():
+        return f"cuda:{max(range(torch.cuda.device_count()),
+                           key=lambda i: torch.cuda.memory_reserved(i) - torch.cuda.memory_allocated(i))}"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 class WithPaddingModule(HasDevice):
