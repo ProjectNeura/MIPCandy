@@ -4,13 +4,6 @@ import torch
 
 from mipcandy.types import Device
 
-try:
-    from cupy import from_dlpack as _dlpack2np
-    from cupyx.scipy.ndimage import distance_transform_edt as _distance_transform_edt
-except ImportError:
-    from numpy import from_dlpack as _dlpack2np
-    from scipy.ndimage import distance_transform_edt as _distance_transform_edt
-
 
 def _args_check(output: torch.Tensor, label: torch.Tensor, *, dtype: torch.dtype | None = None,
                 device: Device | None = None) -> tuple[torch.dtype, Device]:
