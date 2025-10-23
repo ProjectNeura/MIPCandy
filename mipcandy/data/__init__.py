@@ -1,6 +1,6 @@
 from mipcandy.data.convertion import convert_ids_to_logits, convert_logits_to_ids
 from mipcandy.data.dataset import Loader, UnsupervisedDataset, SupervisedDataset, DatasetFromMemory, MergedDataset, \
-    NNUNetDataset, BinarizedDataset
+    NNUNetDataset, BinarizedDataset, SimpleDataset
 from mipcandy.data.download import download_dataset
 from mipcandy.data.geometric import ensure_num_dimensions, orthographic_views, aggregate_orthographic_views, crop
 from mipcandy.data.inspection import InspectionAnnotation, InspectionAnnotations, load_inspection_annotations, \
