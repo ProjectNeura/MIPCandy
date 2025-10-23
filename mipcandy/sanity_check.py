@@ -6,6 +6,7 @@ import torch
 from ptflops import get_model_complexity_info
 from torch import nn
 
+from mipcandy.layer import auto_device
 from mipcandy.types import Device
 
 
@@ -33,7 +34,7 @@ class SanityCheckResult(object):
 
 def sanity_check(model: nn.Module, input_shape: Sequence[int], *, device: Device | None = None) -> SanityCheckResult:
     if device is None:
-        device = "cuda" if torch.cuda.is_available() else "cpu"
+        device = auto_device()
     num_macs, num_params, layer_stats = model_complexity_info(model, input_shape)
     if num_macs is None or num_params is None:
         raise RuntimeError("Failed to validate model")
