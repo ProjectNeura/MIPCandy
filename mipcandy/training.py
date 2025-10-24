@@ -67,6 +67,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self._worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
         self._frontend: Frontend = Frontend({})
         self._lock: Lock = Lock()
+        self._epoch: int = 0
 
     def set_frontend(self, frontend: type[Frontend], *, path_to_secrets: str | PathLike[str] | None = None) -> None:
         self._frontend = frontend(load_secrets(path=path_to_secrets) if path_to_secrets else load_secrets())
@@ -190,22 +191,22 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             toolbox.ema.update_parameters(toolbox.model)
         return loss, metrics
 
-    def train_epoch(self, epoch: int, toolbox: TrainerToolbox) -> None:
+    def train_epoch(self, toolbox: TrainerToolbox) -> None:
         toolbox.model.train()
         if toolbox.ema:
             toolbox.ema.train()
         with Progress(*Progress.get_default_columns(), SpinnerColumn()) as progress:
-            epoch_prog = progress.add_task(f"Epoch {epoch}", total=len(self._dataloader))
+            epoch_prog = progress.add_task(f"Epoch {self._epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
                 images, labels = images.to(self._device), labels.to(self._device)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
-                progress.update(epoch_prog, description=f"Training epoch {epoch} {tuple(images.shape)}")
+                progress.update(epoch_prog, description=f"Training epoch {self._epoch} {tuple(images.shape)}")
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
-                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
+                progress.update(epoch_prog, advance=1, description=f"Training epoch {self._epoch} ({loss:.4f})")
         self._bump_metrics()
 
     @abstractmethod
@@ -275,12 +276,12 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         settings.update(kwargs)
         self.train(num_epochs, **settings)
 
-    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
+    def show_metrics(self, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
                      epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
         if not metrics:
             metrics = self._metrics
         prefix = prefix.capitalize()
-        table = Table(title=f"Epoch {epoch} {prefix}")
+        table = Table(title=f"Epoch {self._epoch} {prefix}")
         table.add_column("Metric")
         table.add_column("Mean Value", style="green")
         table.add_column("Span", style="cyan")
@@ -300,6 +301,14 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
         console = Console()
         console.print(table)
+
+    def etc(self, num_epochs: int, *, target_epoch: int | None = None, val_score_prediction_degree: int = 5) -> float:
+        if not target_epoch:
+            target_epoch, _ = self.predict_maximum_validation_score(
+                num_epochs, degree=val_score_prediction_degree
+            )
+        epoch_durations = self._metrics["epoch duration"]
+        return sum(epoch_durations) * (target_epoch - self._epoch) / len(epoch_durations)
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
@@ -334,40 +343,39 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                                              sanity_check_result.num_macs, sanity_check_result.num_params, num_epochs,
                                              early_stop_tolerance)
         try:
-            for epoch in range(1, num_epochs + 1):
+            for self._epoch in range(1, num_epochs + 1):
                 if early_stop_tolerance == -1:
-                    epoch -= 1
+                    self._epoch -= 1
                     self.log(f"Early stopping triggered because the validation score has not improved for {
                     es_tolerance} epochs")
                     break
                 # Training
                 t0 = time()
-                self.train_epoch(epoch, toolbox)
+                self.train_epoch(toolbox)
                 lr = scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
-                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
+                self.show_metrics(skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
                 torch.save(model.state_dict(), checkpoint_path("latest"))
-                if epoch % (num_epochs / num_checkpoints) == 0:
-                    copy(checkpoint_path("latest"), checkpoint_path(epoch))
-                    self.log(f"Epoch {epoch} checkpoint saved")
-                self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
+                if self._epoch % (num_epochs / num_checkpoints) == 0:
+                    copy(checkpoint_path("latest"), checkpoint_path(self._epoch))
+                    self.log(f"Epoch {self._epoch} checkpoint saved")
+                self.log(f"Epoch {self._epoch} training completed in {time() - t0:.1f} seconds")
                 # Validation
                 score, metrics = self.validate(toolbox)
                 self._record("val score", score)
                 msg = f"Validation score: {score:.4f}"
-                if epoch > 1:
+                if self._epoch > 1:
                     msg += f" ({score - self._metrics["val score"][-2]:+.4f})"
                 self.log(msg)
-                if val_score_prediction and epoch > val_score_prediction_degree:
+                if val_score_prediction and self._epoch > val_score_prediction_degree:
                     target_epoch, max_score = self.predict_maximum_validation_score(
                         num_epochs, degree=val_score_prediction_degree
                     )
                     self.log(f"Maximum validation score {max_score:.4f} predicted at epoch {target_epoch}")
-                    epoch_durations = self._metrics["epoch duration"]
-                    etc = sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
+                    etc = self.etc(num_epochs, target_epoch=target_epoch)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
-                self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
+                self.show_metrics(metrics=metrics, prefix="validation", epochwise=False)
                 if score > self._best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
                     self.log(f"======== Best checkpoint updated ({self._best_score:.4f} -> {score:.4f}) ========")
@@ -379,12 +387,13 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
                 self._record("epoch duration", epoch_duration)
-                self.log(f"Epoch {epoch} completed in {epoch_duration:.1f} seconds")
+                self.log(f"Epoch {self._epoch} completed in {epoch_duration:.1f} seconds")
                 self.log(f"=============== Best Validation Score {self._best_score:.4f} ===============")
                 self.save_metrics()
                 self.save_progress()
                 self.save_metric_curves()
-                self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics, early_stop_tolerance)
+                self._frontend.on_experiment_updated(self._experiment_id, self._epoch, self._metrics,
+                                                     early_stop_tolerance)
         except Exception as e:
             self.log("Training interrupted")
             self.log(repr(e))
