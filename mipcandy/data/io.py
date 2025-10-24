@@ -4,6 +4,7 @@ from os import PathLike
 import SimpleITK as SpITK
 import torch
 
+from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
 from mipcandy.types import Device
 
@@ -39,14 +40,4 @@ def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spaci
 
 
 def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
-    image = image.detach().cpu().numpy()
-    match image.dtype:
-        case bool():
-            image = image.astype("uint8")
-        case dtype if dtype in ("float16", "float32", "float64"):
-            image = image.astype("float32")
-        case dtype if dtype in ("uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64"):
-            image = image.astype("uint8")
-        case _:
-            raise ValueError(f"Unsupported dtype: {image.dtype}")
-    SpITK.WriteImage(SpITK.GetImageFromArray(image), path)
+    SpITK.WriteImage(SpITK.GetImageFromArray(auto_convert(image).detach().cpu().numpy()), path)
