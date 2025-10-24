@@ -39,4 +39,14 @@ def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spaci
 
 
 def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
-    SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy()), path)
+    image = image.detach().cpu().numpy()
+    match image.dtype:
+        case bool():
+            image = image.astype("uint8")
+        case dtype if dtype in ("float16", "float32", "float64"):
+            image = image.astype("float32")
+        case dtype if dtype in ("uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64"):
+            image = image.astype("uint8")
+        case _:
+            raise ValueError(f"Unsupported dtype: {image.dtype}")
+    SpITK.WriteImage(SpITK.GetImageFromArray(image), path)
