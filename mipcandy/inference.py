@@ -95,9 +95,11 @@ class Predictor(WithPaddingModule, metaclass=ABCMeta):
         for i, prediction in enumerate(outputs):
             self.save_prediction(prediction, f"{folder}/{filenames[i]}")
 
-    def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset, folder: str | PathLike[str]) -> None:
+    def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset,
+                         folder: str | PathLike[str]) -> list[str] | None:
         outputs, filenames = self._predict(x)
         self.save_predictions(outputs, folder, filenames=filenames)
+        return filenames
 
     def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
         return self.predict(x)
