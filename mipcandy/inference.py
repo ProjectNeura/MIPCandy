@@ -8,7 +8,7 @@ import torch
 from torch import nn
 
 from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
-from mipcandy.data import save_image, Loader, UnsupervisedDataset
+from mipcandy.data import save_image, Loader, UnsupervisedDataset, PathBasedUnsupervisedDataset
 from mipcandy.layer import WithPaddingModule
 from mipcandy.sliding_window import SlidingWindow
 from mipcandy.types import SupportedPredictant, Device
@@ -72,6 +72,8 @@ class Predictor(WithPaddingModule, metaclass=ABCMeta):
         return output if batch else output.squeeze(0)
 
     def _predict(self, x: SupportedPredictant | UnsupervisedDataset) -> tuple[list[torch.Tensor], list[str] | None]:
+        if isinstance(x, PathBasedUnsupervisedDataset):
+            return [self.predict_image(case) for case in x], x.paths()
         if isinstance(x, UnsupervisedDataset):
             return [self.predict_image(case) for case in x], None
         images, filenames = parse_predictant(x, Loader)
@@ -93,9 +95,11 @@ class Predictor(WithPaddingModule, metaclass=ABCMeta):
         for i, prediction in enumerate(outputs):
             self.save_prediction(prediction, f"{folder}/{filenames[i]}")
 
-    def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset, folder: str | PathLike[str]) -> None:
+    def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset,
+                         folder: str | PathLike[str]) -> list[str] | None:
         outputs, filenames = self._predict(x)
         self.save_predictions(outputs, folder, filenames=filenames)
+        return filenames
 
     def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
         return self.predict(x)
