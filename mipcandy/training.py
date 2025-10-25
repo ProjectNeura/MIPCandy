@@ -50,6 +50,13 @@ class TrainerToolbox(object):
     ema: optim.swa_utils.AveragedModel | None = None
 
 
+@dataclass
+class TrainerTracker(object):
+    epoch: int = 0
+    best_score: float = float("-inf")
+    worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
+
+
 class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *,
@@ -63,10 +70,40 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
         self._epoch_metrics: dict[str, list[float]] = {}
-        self._best_score: float = float("-inf")
-        self._worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
         self._frontend: Frontend = Frontend({})
         self._lock: Lock = Lock()
+        self._tracker: TrainerTracker = TrainerTracker()
+
+    # Getters
+
+    def trainer_folder(self) -> str:
+        return self._trainer_folder
+
+    def trainer_variant(self) -> str:
+        return self._trainer_variant
+
+    def experiment_id(self) -> str:
+        return self._experiment_id
+
+    def dataloader(self) -> DataLoader[tuple[torch.Tensor, torch.Tensor]]:
+        return self._dataloader
+
+    def validation_dataloader(self) -> DataLoader[tuple[torch.Tensor, torch.Tensor]]:
+        return self._validation_dataloader
+
+    def console(self) -> Console:
+        return self._console
+
+    def metrics(self) -> dict[str, list[float]]:
+        return self._metrics.copy()
+
+    def frontend(self) -> Frontend:
+        return self._frontend
+
+    def tracker(self) -> TrainerTracker:
+        return self._tracker
+
+    # Setters
 
     def set_frontend(self, frontend: type[Frontend], *, path_to_secrets: str | PathLike[str] | None = None) -> None:
         self._frontend = frontend(load_secrets(path=path_to_secrets) if path_to_secrets else load_secrets())
@@ -235,7 +272,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 case_score, case_metrics, output = self.validate_case(image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
-                    self._worst_case = (image, label, output)
+                    self._tracker.worst_case = (image, label, output)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
@@ -352,6 +389,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     self.log(f"Early stopping triggered because the validation score has not improved for {
                     es_tolerance} epochs")
                     break
+                self._tracker.epoch = epoch
                 # Training
                 t0 = time()
                 self.train_epoch(epoch, toolbox)
@@ -379,19 +417,20 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
                 self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
-                if score > self._best_score:
+                if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
-                    self.log(f"======== Best checkpoint updated ({self._best_score:.4f} -> {score:.4f}) ========")
-                    self._best_score = score
+                    self.log(
+                        f"======== Best checkpoint updated ({self._tracker.best_score:.4f} -> {score:.4f}) ========")
+                    self._tracker.best_score = score
                     early_stop_tolerance = es_tolerance
                     if save_preview:
-                        self.save_preview(*self._worst_case, quality=preview_quality)
+                        self.save_preview(*self._tracker.worst_case, quality=preview_quality)
                 else:
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
                 self._record("epoch duration", epoch_duration)
                 self.log(f"Epoch {epoch} completed in {epoch_duration:.1f} seconds")
-                self.log(f"=============== Best Validation Score {self._best_score:.4f} ===============")
+                self.log(f"=============== Best Validation Score {self._tracker.best_score:.4f} ===============")
                 self.save_metrics()
                 self.save_progress()
                 self.save_metric_curves()
