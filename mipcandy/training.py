@@ -123,9 +123,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def etc(self, epoch: int, num_epochs: int, *, target_epoch: int | None = None,
             val_score_prediction_degree: int = 5) -> float:
         if not target_epoch:
-            target_epoch, _ = self.predict_maximum_validation_score(
-                num_epochs, degree=val_score_prediction_degree
-            )
+            target_epoch, _ = self.predict_maximum_validation_score(num_epochs, degree=val_score_prediction_degree)
         epoch_durations = self._metrics["epoch duration"]
         return sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
 
@@ -392,8 +390,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
                 if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
-                    self.log(
-                        f"======== Best checkpoint updated ({self._tracker.best_score:.4f} -> {score:.4f}) ========")
+                    self.log(f"======== Best checkpoint updated ({self._tracker.best_score:.4f} -> {
+                    score:.4f}) ========")
                     self._tracker.best_score = score
                     early_stop_tolerance = es_tolerance
                     if save_preview:
@@ -407,8 +405,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.save_metrics()
                 self.save_progress()
                 self.save_metric_curves()
-                self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics,
-                                                     early_stop_tolerance)
+                self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics, early_stop_tolerance)
         except Exception as e:
             self.log("Training interrupted")
             self.log(repr(e))
