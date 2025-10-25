@@ -149,10 +149,13 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
 
     # Initialization methods
 
-    def allocate_experiment_folder(self) -> str:
+    def _allocate_experiment_folder(self) -> str:
         self._experiment_id = datetime.now().strftime("%Y%m%d-%H-") + md5(urandom(8)).hexdigest()[:4]
         experiment_folder = self.experiment_folder()
-        return self.allocate_experiment_folder() if exists(experiment_folder) else experiment_folder
+        return self._allocate_experiment_folder() if exists(experiment_folder) else experiment_folder
+
+    def allocate_experiment_folder(self) -> str:
+        return self.experiment_folder() if self.initialized() else self._allocate_experiment_folder()
 
     def init_experiment(self) -> None:
         if self.initialized():
