@@ -40,4 +40,6 @@ def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spaci
 
 
 def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
-    SpITK.WriteImage(SpITK.GetImageFromArray(auto_convert(image).detach().cpu().numpy()), path)
+    if path.endswith(".png"):
+        image = auto_convert(image).to(torch.uint8)
+    SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy()), path)
