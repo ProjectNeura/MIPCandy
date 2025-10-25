@@ -4,6 +4,7 @@ from os import PathLike
 import SimpleITK as SpITK
 import torch
 
+from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
 from mipcandy.types import Device
 
@@ -39,4 +40,6 @@ def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spaci
 
 
 def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
+    if path.endswith(".png"):
+        image = auto_convert(image).to(torch.uint8)
     SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy()), path)

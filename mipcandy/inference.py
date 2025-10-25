@@ -1,7 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from math import log, ceil
 from os import PathLike, listdir
-from os.path import isdir, basename
+from os.path import isdir, basename, exists
 from typing import Sequence, Mapping, Any, override
 
 import torch
@@ -88,10 +88,12 @@ class Predictor(WithPaddingModule, metaclass=ABCMeta):
 
     def save_predictions(self, outputs: Sequence[torch.Tensor], folder: str | PathLike[str], *,
                          filenames: Sequence[str | PathLike[str]] | None = None) -> None:
+        if not exists(folder):
+            raise FileNotFoundError(f"Folder {folder} does not exist")
         if not filenames:
-            num_cases = len(outputs)
-            num_digits = ceil(log(num_cases))
-            filenames = [f"prediction_{str(i).zfill(num_digits)}" for i in range(num_cases)]
+            num_digits = ceil(log(len(outputs)))
+            filenames = [f"prediction_{str(i).zfill(num_digits)}.{
+            "png" if output.ndim == 3 and output.shape[0] in (1, 3) else "mha"}" for i, output in enumerate(outputs)]
         for i, prediction in enumerate(outputs):
             self.save_prediction(prediction, f"{folder}/{filenames[i]}")
 
