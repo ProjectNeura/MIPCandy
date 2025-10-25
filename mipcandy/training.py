@@ -103,16 +103,51 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def tracker(self) -> TrainerTracker:
         return self._tracker
 
-    # Setters
-
-    def set_frontend(self, frontend: type[Frontend], *, path_to_secrets: str | PathLike[str] | None = None) -> None:
-        self._frontend = frontend(load_secrets(path=path_to_secrets) if path_to_secrets else load_secrets())
+    # Enhanced getters
 
     def initialized(self) -> bool:
         return self._experiment_id != "tbd"
 
     def experiment_folder(self) -> str:
         return f"{self._trainer_folder}/{self._trainer_variant}/{self._experiment_id}"
+
+    def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
+        val_scores = np.array(self._metrics["val score"])
+        a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
+        da, db = quotient_derivative(a, b)
+        max_roc = float(da[0] / db[0])
+        max_val_score = float(a[0] / b[0])
+        bounds = quotient_bounds(a, b, None, max_val_score * (1 - max_roc), x_start=0, x_stop=num_epochs, x_step=1)
+        return (round(bounds[1]) + 1, max_val_score) if bounds else (0, 0)
+
+    def etc(self, epoch: int, num_epochs: int, *, target_epoch: int | None = None,
+            val_score_prediction_degree: int = 5) -> float:
+        if not target_epoch:
+            target_epoch, _ = self.predict_maximum_validation_score(
+                num_epochs, degree=val_score_prediction_degree
+            )
+        epoch_durations = self._metrics["epoch duration"]
+        return sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
+
+    # Setters
+
+    def set_frontend(self, frontend: type[Frontend], *, path_to_secrets: str | PathLike[str] | None = None) -> None:
+        self._frontend = frontend(load_secrets(path=path_to_secrets) if path_to_secrets else load_secrets())
+
+    def set_seed(self, seed: int) -> None:
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        random_seed(seed)
+        np.random.seed(seed)
+        environ['PYTHONHASHSEED'] = str(seed)
+        if self.initialized():
+            self.log(f"Set to manual seed {seed}")
+
+    # Initialization methods
 
     def allocate_experiment_folder(self) -> str:
         self._experiment_id = datetime.now().strftime("%Y%m%d-%H-") + md5(urandom(8)).hexdigest()[:4]
@@ -130,6 +165,8 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
             f.write(f"File created by FightTumor, copyright (C) {t.year} Project Neura. All rights reserved\n")
         self.log(f"Experiment (ID {self._experiment_id}) created at {t}")
         self.log(f"Trainer: {self.__class__.__name__}")
+
+    # Logging utilities
 
     def log(self, msg: str, *, on_screen: bool = True) -> None:
         msg = f"[{datetime.now()}] {msg}"
@@ -196,6 +233,34 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                      quality: float = .75) -> None:
         ...
 
+    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
+                     epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
+        if not metrics:
+            metrics = self._metrics
+        prefix = prefix.capitalize()
+        table = Table(title=f"Epoch {epoch} {prefix}")
+        table.add_column("Metric")
+        table.add_column("Mean Value", style="green")
+        table.add_column("Span", style="cyan")
+        table.add_column("Diff", style="magenta")
+        for metric, values in metrics.items():
+            if skip and skip(metric, values):
+                continue
+            span = f"[{min(values):.4f}, {max(values):.4f}]"
+            if epochwise:
+                value = f"{values[-1]:.4f}"
+                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
+            else:
+                mean = sum(values) / len(values)
+                value = f"{mean:.4f}"
+                diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
+            table.add_row(metric, value, span, diff)
+            self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
+        console = Console()
+        console.print(table)
+
+    # Builder interfaces
+
     @abstractmethod
     def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
         raise NotImplementedError
@@ -216,6 +281,20 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         raise NotImplementedError
+
+    @abstractmethod
+    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float], torch.Tensor]:
+        raise NotImplementedError
+
+    def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
+        model = self.build_network(example_shape).to(self._device)
+        optimizer = self.build_optimizer(model.parameters())
+        scheduler = self.build_scheduler(optimizer, num_epochs)
+        criterion = self.build_criterion().to(self._device)
+        return TrainerToolbox(model, optimizer, scheduler, criterion)
+
+    # Training methods
 
     def train_batch(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
@@ -244,115 +323,6 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
                 self.record_all(metrics)
                 progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
         self._bump_metrics()
-
-    @abstractmethod
-    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float], torch.Tensor]:
-        raise NotImplementedError
-
-    def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        if self._validation_dataloader.batch_size != 1:
-            raise RuntimeError("Validation dataloader should have batch size 1")
-        toolbox.model.eval()
-        if toolbox.ema:
-            toolbox.ema.eval()
-        score = 0
-        worst_score = float("+inf")
-        metrics = {}
-        num_cases = len(self._validation_dataloader)
-        with Progress(*Progress.get_default_columns(), SpinnerColumn()) as progress:
-            val_prog = progress.add_task(f"Validating", total=num_cases)
-            for image, label in self._validation_dataloader:
-                image, label = image.to(self._device), label.to(self._device)
-                padding_module = self.get_padding_module()
-                if padding_module:
-                    image, label = padding_module(image), padding_module(label)
-                image, label = image.squeeze(0), label.squeeze(0)
-                progress.update(val_prog, description=f"Validating {tuple(image.shape)}")
-                case_score, case_metrics, output = self.validate_case(image, label, toolbox)
-                score += case_score
-                if case_score < worst_score:
-                    self._tracker.worst_case = (image, label, output)
-                    worst_score = case_score
-                try_append_all(case_metrics, metrics)
-                progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
-        return score / num_cases, metrics
-
-    def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
-        val_scores = np.array(self._metrics["val score"])
-        a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
-        da, db = quotient_derivative(a, b)
-        max_roc = float(da[0] / db[0])
-        max_val_score = float(a[0] / b[0])
-        bounds = quotient_bounds(a, b, None, max_val_score * (1 - max_roc), x_start=0, x_stop=num_epochs, x_step=1)
-        return (round(bounds[1]) + 1, max_val_score) if bounds else (0, 0)
-
-    def set_seed(self, seed: int) -> None:
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
-        random_seed(seed)
-        np.random.seed(seed)
-        environ['PYTHONHASHSEED'] = str(seed)
-        if self.initialized():
-            self.log(f"Set to manual seed {seed}")
-
-    @staticmethod
-    def filter_train_params(**kwargs) -> dict[str, Setting]:
-        return {k: v for k, v in kwargs.items() if k in (
-            "note", "num_checkpoints", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
-            "val_score_prediction_degree", "save_preview", "preview_quality"
-        )}
-
-    def train_with_settings(self, num_epochs: int, **kwargs) -> None:
-        settings = self.filter_train_params(**load_settings())
-        settings.update(kwargs)
-        self.train(num_epochs, **settings)
-
-    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
-                     epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
-        if not metrics:
-            metrics = self._metrics
-        prefix = prefix.capitalize()
-        table = Table(title=f"Epoch {epoch} {prefix}")
-        table.add_column("Metric")
-        table.add_column("Mean Value", style="green")
-        table.add_column("Span", style="cyan")
-        table.add_column("Diff", style="magenta")
-        for metric, values in metrics.items():
-            if skip and skip(metric, values):
-                continue
-            span = f"[{min(values):.4f}, {max(values):.4f}]"
-            if epochwise:
-                value = f"{values[-1]:.4f}"
-                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
-            else:
-                mean = sum(values) / len(values)
-                value = f"{mean:.4f}"
-                diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
-            table.add_row(metric, value, span, diff)
-            self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
-        console = Console()
-        console.print(table)
-
-    def etc(self, epoch: int, num_epochs: int, *, target_epoch: int | None = None,
-            val_score_prediction_degree: int = 5) -> float:
-        if not target_epoch:
-            target_epoch, _ = self.predict_maximum_validation_score(
-                num_epochs, degree=val_score_prediction_degree
-            )
-        epoch_durations = self._metrics["epoch duration"]
-        return sum(epoch_durations) * (target_epoch - epoch) / len(epoch_durations)
-
-    def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
-        model = self.build_network(example_shape).to(self._device)
-        optimizer = self.build_optimizer(model.parameters())
-        scheduler = self.build_scheduler(optimizer, num_epochs)
-        criterion = self.build_criterion().to(self._device)
-        return TrainerToolbox(model, optimizer, scheduler, criterion)
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
@@ -444,6 +414,48 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         else:
             self.log("Training completed")
             self._frontend.on_experiment_completed(self._experiment_id)
+
+    @staticmethod
+    def filter_train_params(**kwargs) -> dict[str, Setting]:
+        return {k: v for k, v in kwargs.items() if k in (
+            "note", "num_checkpoints", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
+            "val_score_prediction_degree", "save_preview", "preview_quality"
+        )}
+
+    def train_with_settings(self, num_epochs: int, **kwargs) -> None:
+        settings = self.filter_train_params(**load_settings())
+        settings.update(kwargs)
+        self.train(num_epochs, **settings)
+
+    # Validation methods
+
+    def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
+        if self._validation_dataloader.batch_size != 1:
+            raise RuntimeError("Validation dataloader should have batch size 1")
+        toolbox.model.eval()
+        if toolbox.ema:
+            toolbox.ema.eval()
+        score = 0
+        worst_score = float("+inf")
+        metrics = {}
+        num_cases = len(self._validation_dataloader)
+        with Progress(*Progress.get_default_columns(), SpinnerColumn()) as progress:
+            val_prog = progress.add_task(f"Validating", total=num_cases)
+            for image, label in self._validation_dataloader:
+                image, label = image.to(self._device), label.to(self._device)
+                padding_module = self.get_padding_module()
+                if padding_module:
+                    image, label = padding_module(image), padding_module(label)
+                image, label = image.squeeze(0), label.squeeze(0)
+                progress.update(val_prog, description=f"Validating {tuple(image.shape)}")
+                case_score, case_metrics, output = self.validate_case(image, label, toolbox)
+                score += case_score
+                if case_score < worst_score:
+                    self._tracker.worst_case = (image, label, output)
+                    worst_score = case_score
+                try_append_all(case_metrics, metrics)
+                progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
+        return score / num_cases, metrics
 
     def __call__(self, *args, **kwargs) -> None:
         self.train(*args, **kwargs)
