@@ -104,7 +104,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         depths, heights, widths = self.foreground_shapes()
         percentile *= 100
         sfs = (round(np.percentile(heights, percentile)), round(np.percentile(widths, percentile)))
-        self._statistical_foreground_shape = (round(np.percentile(heights, percentile)),) + sfs if depths else sfs
+        self._statistical_foreground_shape = (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
         return self._statistical_foreground_shape
 
     def crop_foreground(self, i: int, *, expand_ratio: float = 1) -> tuple[torch.Tensor, torch.Tensor]:
