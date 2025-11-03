@@ -278,16 +278,6 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     def build_criterion(self) -> nn.Module:
         raise NotImplementedError
 
-    @abstractmethod
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float]]:
-        raise NotImplementedError
-
-    @abstractmethod
-    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float], torch.Tensor]:
-        raise NotImplementedError
-
     def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
         model = self.build_network(example_shape).to(self._device)
         optimizer = self.build_optimizer(model.parameters())
@@ -296,6 +286,11 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         return TrainerToolbox(model, optimizer, scheduler, criterion)
 
     # Training methods
+
+    @abstractmethod
+    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float]]:
+        raise NotImplementedError
 
     def train_batch(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
@@ -428,6 +423,11 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self.train(num_epochs, **settings)
 
     # Validation methods
+
+    @abstractmethod
+    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float], torch.Tensor]:
+        raise NotImplementedError
 
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         if self._validation_dataloader.batch_size != 1:
