@@ -23,7 +23,9 @@ class LayerT(object):
         self.m: type[nn.Module] = m
         self.kwargs: dict[str, Any] = kwargs
 
-    def update(self, *, must_exist: bool = True, **kwargs) -> Self:
+    def update(self, *, must_exist: bool = True, inplace: bool = False, **kwargs) -> Self:
+        if not inplace:
+            return self.copy().update(must_exist=must_exist, inplace=True, **kwargs)
         for k, v in kwargs.items():
             if not must_exist or k in self.kwargs:
                 self.kwargs[k] = v
@@ -35,6 +37,9 @@ class LayerT(object):
             if isinstance(v, str) and v in kwargs:
                 self_kwargs[k] = kwargs.pop(v)
         return self.m(*args, **self_kwargs, **kwargs)
+
+    def copy(self) -> Self:
+        return self.__class__(self.m, **self.kwargs)
 
 
 class HasDevice(object):
