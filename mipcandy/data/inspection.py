@@ -71,7 +71,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
 
     def save(self, path: str | PathLike[str]) -> None:
         with open(path, "w") as f:
-            dump(self._annotations, f)
+            dump({"background": self._background, "annotations": self._annotations}, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], tuple[int, ...]]) -> tuple[
         tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
@@ -215,11 +215,12 @@ def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
     return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
 
 
-def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset,
-                                background: int) -> InspectionAnnotations:
+def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
-    return InspectionAnnotations(dataset, background, *(InspectionAnnotation(**row) for row in obj))
+    return InspectionAnnotations(dataset, obj["background"], *(
+        InspectionAnnotation(**row) for row in obj["annotations"]
+    ))
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
