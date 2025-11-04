@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from pandas import DataFrame, read_csv
 from rich.console import Console
-from rich.progress import Progress
+from rich.progress import Progress, SpinnerColumn
 from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
@@ -221,7 +221,7 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
     r = []
-    with Progress(console=console) as progress:
+    with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
         for _, label in dataset:
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
