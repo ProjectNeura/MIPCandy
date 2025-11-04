@@ -1,11 +1,10 @@
-from ast import literal_eval
 from dataclasses import dataclass, asdict
+from json import dump, load
 from os import PathLike
-from typing import Sequence, override, Callable, Self
+from typing import Sequence, override, Callable, Self, Any
 
 import numpy as np
 import torch
-from pandas import DataFrame, read_csv
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
 from torch import nn
@@ -71,7 +70,8 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return len(self._annotations)
 
     def save(self, path: str | PathLike[str]) -> None:
-        DataFrame(annotation.to_dict() for annotation in self._annotations).to_csv(path, index=False)
+        with open(path, "w") as f:
+            dump(self._annotations, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], tuple[int, ...]]) -> tuple[
         tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
@@ -211,12 +211,15 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
+def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
+    return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
+
+
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset,
                                 background: int) -> InspectionAnnotations:
-    df = read_csv(path)
-    return InspectionAnnotations(dataset, background, *(InspectionAnnotation(
-        **{k: literal_eval(v) for k, v in row.to_dict().items()}
-    ) for _, row in df.iterrows()))
+    with open(path) as f:
+        obj = load(f, object_pairs_hook=_lists_to_tuples)
+    return InspectionAnnotations(dataset, background, *(InspectionAnnotation(**row) for row in obj))
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
