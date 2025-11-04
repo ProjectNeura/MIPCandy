@@ -6,6 +6,8 @@ from typing import Sequence, override, Callable, Self
 import numpy as np
 import torch
 from pandas import DataFrame, read_csv
+from rich.console import Console
+from rich.progress import Progress
 from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
@@ -217,18 +219,19 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
     ) for _, row in df.iterrows()))
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnnotations:
+def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
     r = []
-    for _, label in dataset:
-        indices = (label != background).nonzero()
-        mins = indices.min(dim=0)[0].tolist()
-        maxs = indices.max(dim=0)[0].tolist()
-        bbox = (mins[1], maxs[1], mins[2], maxs[2])
-        r.append(InspectionAnnotation(
-            label.shape[1:],
-            bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]),
-            tuple(label.unique())
-        ))
+    with Progress(console=console) as progress:
+        task = progress.add_task("Inspecting dataset...", total=len(dataset))
+        for _, label in dataset:
+            progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
+            indices = (label != background).nonzero()
+            mins = indices.min(dim=0)[0].tolist()
+            maxs = indices.max(dim=0)[0].tolist()
+            bbox = (mins[1], maxs[1], mins[2], maxs[2])
+            r.append(InspectionAnnotation(
+                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]), tuple(label.unique())
+            ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
 
