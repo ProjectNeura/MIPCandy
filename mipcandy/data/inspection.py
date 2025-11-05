@@ -1,10 +1,12 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
+from json import dump, load
 from os import PathLike
-from typing import Sequence, override, Callable, Self
+from typing import Sequence, override, Callable, Self, Any
 
 import numpy as np
 import torch
-from pandas import DataFrame
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn
 from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
@@ -37,6 +39,9 @@ class InspectionAnnotation(object):
              round((self.foreground_bbox[3] + self.foreground_bbox[2]) * .5))
         return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
+    def to_dict(self) -> dict[str, tuple[int, ...]]:
+        return asdict(self)
+
 
 class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
     def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation,
@@ -65,10 +70,8 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return len(self._annotations)
 
     def save(self, path: str | PathLike[str]) -> None:
-        r = []
-        for annotation in self._annotations:
-            r.append({"foreground_bbox": annotation.foreground_bbox, "ids": annotation.ids})
-        DataFrame(r).to_csv(path, index=False)
+        with open(path, "w") as f:
+            dump({"background": self._background, "annotations": self._annotations}, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], tuple[int, ...]]) -> tuple[
         tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
@@ -208,27 +211,31 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
-def load_inspection_annotations(path: str | PathLike[str]) -> InspectionAnnotations:
-    df = DataFrame.from_csv(path)
-    return InspectionAnnotations(*(
-        InspectionAnnotation(
-            tuple(row["shape"]), format_bbox(row["foreground_bbox"]), tuple(row["ids"])
-        ) for _, row in df.iterrows()
+def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
+    return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
+
+
+def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
+    with open(path) as f:
+        obj = load(f, object_pairs_hook=_lists_to_tuples)
+    return InspectionAnnotations(dataset, obj["background"], *(
+        InspectionAnnotation(**row) for row in obj["annotations"]
     ))
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0) -> InspectionAnnotations:
+def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
     r = []
-    for _, label in dataset:
-        indices = (label != background).nonzero()
-        mins = indices.min(dim=0)[0].tolist()
-        maxs = indices.max(dim=0)[0].tolist()
-        bbox = (mins[1], maxs[1], mins[2], maxs[2])
-        r.append(InspectionAnnotation(
-            label.shape[1:],
-            bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]),
-            tuple(label.unique())
-        ))
+    with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
+        task = progress.add_task("Inspecting dataset...", total=len(dataset))
+        for _, label in dataset:
+            progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
+            indices = (label != background).nonzero()
+            mins = indices.min(dim=0)[0].tolist()
+            maxs = indices.max(dim=0)[0].tolist()
+            bbox = (mins[1], maxs[1], mins[2], maxs[2])
+            r.append(InspectionAnnotation(
+                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]), tuple(label.unique())
+            ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
 

@@ -306,7 +306,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         toolbox.model.train()
         if toolbox.ema:
             toolbox.ema.train()
-        with Progress(*Progress.get_default_columns(), SpinnerColumn()) as progress:
+        with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
             epoch_prog = progress.add_task(f"Epoch {epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
                 images, labels = images.to(self._device), labels.to(self._device)
@@ -439,7 +439,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         worst_score = float("+inf")
         metrics = {}
         num_cases = len(self._validation_dataloader)
-        with Progress(*Progress.get_default_columns(), SpinnerColumn()) as progress:
+        with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
             val_prog = progress.add_task(f"Validating", total=num_cases)
             for image, label in self._validation_dataloader:
                 image, label = image.to(self._device), label.to(self._device)
