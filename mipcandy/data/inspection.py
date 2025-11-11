@@ -40,8 +40,11 @@ class InspectionAnnotation(object):
              round((self.foreground_bbox[3] + self.foreground_bbox[2]) * .5))
         return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
-    def to_dict(self) -> dict[str, tuple[int, ...]]:
-        return asdict(self)
+    def to_dict(self) -> dict[str, Any]:
+        d = asdict(self)
+        if self.foreground_samples is not None:
+            d["foreground_samples"] = self.foreground_samples.tolist()
+        return d
 
 
 class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
@@ -72,7 +75,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
 
     def save(self, path: str | PathLike[str]) -> None:
         with open(path, "w") as f:
-            dump({"background": self._background, "annotations": self._annotations}, f)
+            dump({"background": self._background, "annotations": [a.to_dict() for a in self._annotations]}, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], tuple[int, ...]]) -> tuple[
         tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
@@ -258,15 +261,18 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
 
 
 def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
-    return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
+    return {k: tuple(v) if isinstance(v, list) and k != "foreground_samples" else v for k, v in pairs}
 
 
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
-    return InspectionAnnotations(dataset, obj["background"], *(
-        InspectionAnnotation(**row) for row in obj["annotations"]
-    ))
+    annotations = []
+    for row in obj["annotations"]:
+        if row.get("foreground_samples") is not None:
+            row["foreground_samples"] = torch.tensor(row["foreground_samples"])
+        annotations.append(InspectionAnnotation(**row))
+    return InspectionAnnotations(dataset, obj["background"], *annotations)
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0, min_foreground_samples: int = 500,

@@ -1,5 +1,6 @@
 from typing import Any, Generator, Self
 
+import torch
 from torch import nn
 
 from mipcandy.types import Device
@@ -22,7 +23,9 @@ class LayerT(object):
         self.m: type[nn.Module] = m
         self.kwargs: dict[str, Any] = kwargs
 
-    def update(self, *, must_exist: bool = True, **kwargs) -> Self:
+    def update(self, *, must_exist: bool = True, inplace: bool = False, **kwargs) -> Self:
+        if not inplace:
+            return self.copy().update(must_exist=must_exist, inplace=True, **kwargs)
         for k, v in kwargs.items():
             if not must_exist or k in self.kwargs:
                 self.kwargs[k] = v
@@ -35,6 +38,9 @@ class LayerT(object):
                 self_kwargs[k] = kwargs.pop(v)
         return self.m(*args, **self_kwargs, **kwargs)
 
+    def copy(self) -> Self:
+        return self.__class__(self.m, **self.kwargs)
+
 
 class HasDevice(object):
     def __init__(self, device: Device) -> None:
@@ -45,6 +51,15 @@ class HasDevice(object):
             return self._device
         else:
             self._device = device
+
+
+def auto_device() -> Device:
+    if torch.cuda.is_available():
+        return f"cuda:{max(range(torch.cuda.device_count()),
+                           key=lambda i: torch.cuda.memory_reserved(i) - torch.cuda.memory_allocated(i))}"
+    if torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 
 class WithPaddingModule(HasDevice):

@@ -134,6 +134,29 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), device=self._device)
 
 
+class ComposeDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor] | torch.Tensor]):
+    def __init__(self, bases: Sequence[SupervisedDataset] | Sequence[UnsupervisedDataset], *,
+                 device: Device = "cpu") -> None:
+        super().__init__(device)
+        self._bases: dict[tuple[int, int], SupervisedDataset | UnsupervisedDataset] = {}
+        self._len = 0
+        for dataset in bases:
+            end = len(dataset)
+            self._bases[(self._len, self._len + end)] = dataset
+            self._len += end
+
+    @override
+    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor] | torch.Tensor:
+        for (start, end), base in self._bases.items():
+            if start <= idx < end:
+                return base.load(idx - start)
+        raise IndexError(f"Index {idx} out of range [0, {self._len})")
+
+    @override
+    def __len__(self) -> int:
+        return self._len
+
+
 class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABCMeta):
     def paths(self) -> list[str]:
         return self._images
@@ -154,6 +177,18 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
                         f.write(f"{image_path}\n")
             case _:
                 raise ValueError(f"Unsupported file extension: {fmt}")
+
+
+class SimpleDataset(PathBasedUnsupervisedDataset):
+    def __init__(self, folder: str | PathLike[str], *, device: Device = "cpu") -> None:
+        images = listdir(folder)
+        images.sort()
+        super().__init__(images, device=device)
+        self._folder: str = folder
+
+    @override
+    def load(self, idx: int) -> torch.Tensor:
+        return self.do_load(f"{self._folder}/{self._images[idx]}", device=self._device)
 
 
 class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta):

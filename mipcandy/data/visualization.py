@@ -10,12 +10,9 @@ import torch
 from matplotlib import pyplot as plt
 from torch import nn
 
-from mipcandy.common import Normalize, ColorizeLabel
+from mipcandy.common import ColorizeLabel
+from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
-
-
-def auto_convert(image: torch.Tensor) -> torch.Tensor:
-    return (image * 255 if 0 <= image.min() < image.max() <= 1 else Normalize(domain=(0, 255))(image)).int()
 
 
 def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
