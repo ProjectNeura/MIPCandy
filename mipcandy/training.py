@@ -1,7 +1,8 @@
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from hashlib import md5
+from json import load, dump
 from os import PathLike, urandom, makedirs, environ
 from os.path import exists
 from random import seed as random_seed, randint
@@ -13,7 +14,7 @@ from typing import Sequence, override, Callable
 import numpy as np
 import torch
 from matplotlib import pyplot as plt
-from pandas import DataFrame
+from pandas import DataFrame, read_csv
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn
 from rich.table import Table
@@ -23,7 +24,7 @@ from torch.utils.data import DataLoader
 from mipcandy.common import Pad2d, Pad3d, quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
-from mipcandy.layer import WithPaddingModule
+from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params, Setting
@@ -57,11 +58,12 @@ class TrainerTracker(object):
     worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
 
 
-class Trainer(WithPaddingModule, metaclass=ABCMeta):
+class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *,
                  device: torch.device | str = "cpu", console: Console = Console()) -> None:
-        super().__init__(device)
+        WithPaddingModule.__init__(self, device)
+        WithNetwork.__init__(self, device)
         self._trainer_folder: str = trainer_folder
         self._trainer_variant: str = self.__class__.__name__
         self._experiment_id: str = "tbd"
@@ -73,6 +75,30 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         self._frontend: Frontend = Frontend({})
         self._lock: Lock = Lock()
         self._tracker: TrainerTracker = TrainerTracker()
+
+    # Recovery methods (PR #108 at https://github.com/ProjectNeura/MIPCandy/pull/108)
+
+    def save_everything_for_recovery(self, toolbox: TrainerToolbox, tracker: TrainerTracker,
+                                     **training_arguments) -> None:
+        torch.save(toolbox.optimizer, f"{self.experiment_folder()}/optimizer.pth")
+        torch.save(toolbox.scheduler, f"{self.experiment_folder()}/scheduler.pth")
+        torch.save(toolbox.criterion, f"{self.experiment_folder()}/criterion.pth")
+        with open(f"{self.experiment_folder()}/recovery_orbs.json", "w") as f:
+            dump({"arguments": training_arguments, "tracker": asdict(tracker)}, f)
+
+    def load_recovery_orbs(self) -> dict[str, Setting]:
+        with open(f"{self.experiment_folder()}/recovery_orbs.json") as f:
+            return load(f)
+
+    def load_tracker(self) -> TrainerTracker:
+        return TrainerTracker(**self.load_recovery_orbs()["tracker"])
+
+    def load_training_arguments(self) -> dict[str, Setting]:
+        return self.filter_train_params(**self.load_recovery_orbs()["arguments"])
+
+    def load_metrics(self) -> dict[str, list[float]]:
+        df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
+        return {column: df[column].astype(float).tolist() for column in df.columns}
 
     # Getters
 
@@ -263,10 +289,6 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     # Builder interfaces
 
     @abstractmethod
-    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
-        raise NotImplementedError
-
-    @abstractmethod
     def build_optimizer(self, params: Params) -> optim.Optimizer:
         raise NotImplementedError
 
@@ -279,7 +301,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         raise NotImplementedError
 
     def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
-        model = self.build_network(example_shape).to(self._device)
+        model = self.load_model(example_shape)
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)

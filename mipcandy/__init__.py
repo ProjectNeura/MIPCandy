@@ -5,7 +5,8 @@ from mipcandy.data import *
 from mipcandy.evaluation import EvalCase, EvalResult, Evaluator
 from mipcandy.frontend import *
 from mipcandy.inference import parse_predictant, Predictor
-from mipcandy.layer import batch_int_multiply, batch_int_divide, LayerT, HasDevice, WithPaddingModule, auto_device
+from mipcandy.layer import batch_int_multiply, batch_int_divide, LayerT, HasDevice, auto_device, WithPaddingModule, \
+    WithNetwork
 from mipcandy.metrics import do_reduction, dice_similarity_coefficient_binary, \
     dice_similarity_coefficient_multiclass, soft_dice_coefficient, accuracy_binary, accuracy_multiclass, \
     precision_binary, precision_multiclass, recall_binary, recall_multiclass, iou_binary, iou_multiclass
