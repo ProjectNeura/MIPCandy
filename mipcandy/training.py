@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader
 from mipcandy.common import Pad2d, Pad3d, quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
-from mipcandy.layer import WithPaddingModule
+from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params, Setting
@@ -57,11 +57,12 @@ class TrainerTracker(object):
     worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
 
 
-class Trainer(WithPaddingModule, metaclass=ABCMeta):
+class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *,
                  device: torch.device | str = "cpu", console: Console = Console()) -> None:
-        super().__init__(device)
+        WithPaddingModule.__init__(self, device)
+        WithNetwork.__init__(self, device)
         self._trainer_folder: str = trainer_folder
         self._trainer_variant: str = self.__class__.__name__
         self._experiment_id: str = "tbd"
@@ -263,10 +264,6 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
     # Builder interfaces
 
     @abstractmethod
-    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
-        raise NotImplementedError
-
-    @abstractmethod
     def build_optimizer(self, params: Params) -> optim.Optimizer:
         raise NotImplementedError
 
@@ -279,7 +276,7 @@ class Trainer(WithPaddingModule, metaclass=ABCMeta):
         raise NotImplementedError
 
     def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
-        model = self.build_network(example_shape).to(self._device)
+        model = self.load_model(example_shape)
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)

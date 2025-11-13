@@ -1,15 +1,15 @@
-from abc import ABCMeta, abstractmethod
+from abc import ABCMeta
 from math import log, ceil
 from os import PathLike, listdir
 from os.path import isdir, basename, exists
-from typing import Sequence, Mapping, Any, override
+from typing import Sequence, override
 
 import torch
 from torch import nn
 
 from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
 from mipcandy.data import save_image, Loader, UnsupervisedDataset, PathBasedUnsupervisedDataset
-from mipcandy.layer import WithPaddingModule
+from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sliding_window import SlidingWindow
 from mipcandy.types import SupportedPredictant, Device
 
@@ -39,23 +39,22 @@ def parse_predictant(x: SupportedPredictant, loader: type[Loader], *, as_label: 
     return r, filenames
 
 
-class Predictor(WithPaddingModule, metaclass=ABCMeta):
-    def __init__(self, experiment_folder: str | PathLike[str], *, checkpoint: str = "checkpoint_best.pth",
-                 device: Device = "cpu") -> None:
-        super().__init__(device)
+class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
+    def __init__(self, experiment_folder: str | PathLike[str], example_shape: tuple[int, ...], *,
+                 checkpoint: str = "checkpoint_best.pth", device: Device = "cpu") -> None:
+        WithPaddingModule.__init__(self, device)
+        WithNetwork.__init__(self, device)
         self._experiment_folder: str = experiment_folder
+        self._example_shape: tuple[int, ...] = example_shape
         self._checkpoint: str = checkpoint
         self._model: nn.Module | None = None
 
     def lazy_load_model(self) -> None:
         if self._model:
             return
-        self._model = self.build_network(torch.load(f"{self._experiment_folder}/{self._checkpoint}")).to(self._device)
+        self._model = self.load_model(self._example_shape,
+                                      checkpoint=torch.load(f"{self._experiment_folder}/{self._checkpoint}"))
         self._model.eval()
-
-    @abstractmethod
-    def build_network(self, checkpoint: Mapping[str, Any]) -> nn.Module:
-        raise NotImplementedError
 
     def predict_image(self, image: torch.Tensor, *, batch: bool = False) -> torch.Tensor:
         self.lazy_load_model()
