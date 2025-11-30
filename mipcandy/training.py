@@ -9,7 +9,7 @@ from random import seed as random_seed, randint
 from shutil import copy
 from threading import Lock
 from time import time
-from typing import Sequence, override, Callable
+from typing import Sequence, override, Callable, Self
 
 import numpy as np
 import torch
@@ -99,6 +99,15 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def load_metrics(self) -> dict[str, list[float]]:
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
         return {column: df[column].astype(float).tolist() for column in df.columns}
+
+    def recover_from(self, experiment_id: str) -> Self:
+        self._experiment_id = experiment_id
+        self._metrics = self.load_metrics()
+        self._tracker = self.load_tracker()
+        return self
+
+    def continue_training(self, num_epochs: int) -> None:
+        self.train(num_epochs, **self.load_training_arguments())
 
     # Getters
 
@@ -345,6 +354,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
               val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
+        training_arguments = locals()
         self.init_experiment()
         if note:
             self.log(f"Note: {note}")
@@ -371,7 +381,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                                              sanity_check_result.num_macs, sanity_check_result.num_params, num_epochs,
                                              early_stop_tolerance)
         try:
-            for epoch in range(1, num_epochs + 1):
+            for epoch in range(self._tracker.epoch, self._tracker.epoch + num_epochs):
                 if early_stop_tolerance == -1:
                     epoch -= 1
                     self.log(f"Early stopping triggered because the validation score has not improved for {
@@ -422,6 +432,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self.save_metrics()
                 self.save_progress()
                 self.save_metric_curves()
+                self.save_everything_for_recovery(toolbox, self._tracker, **training_arguments)
                 self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics, early_stop_tolerance)
         except Exception as e:
             self.log("Training interrupted")
