@@ -3,6 +3,7 @@ from typing import Literal
 import torch
 from torch import nn
 
+from mipcandy.data import convert_ids_to_logits
 from mipcandy.metrics import do_reduction, soft_dice_coefficient
 
 
@@ -33,6 +34,11 @@ class DiceBCELossWithLogits(nn.Module):
         self.smooth: float = smooth
 
     def forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        if self.num_classes != 1 and labels.shape[1] == 1:
+            d = labels.ndim - 2
+            if d not in (1, 2, 3):
+                raise ValueError(f"Expected labels to be 1D, 2D, or 3D, got {d} spatial dimensions")
+            labels = convert_ids_to_logits(labels.int(), d, self.num_classes)
         labels = labels.float()
         bce = nn.functional.binary_cross_entropy_with_logits(masks, labels)
         masks = masks.sigmoid()
