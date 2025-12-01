@@ -1,4 +1,5 @@
-from typing import Any, Generator, Self
+from abc import ABCMeta, abstractmethod
+from typing import Any, Generator, Self, Mapping
 
 import torch
 from torch import nn
@@ -93,3 +94,22 @@ class WithPaddingModule(HasDevice):
     def get_restoring_module(self) -> nn.Module | None:
         self._lazy_load_padding_module()
         return self._restoring_module
+
+
+class WithNetwork(HasDevice, metaclass=ABCMeta):
+    def __init__(self, device: Device) -> None:
+        super().__init__(device)
+
+    @abstractmethod
+    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
+        raise NotImplementedError
+
+    def build_network_from_checkpoint(self, example_shape: tuple[int, ...], checkpoint: Mapping[str, Any]) -> nn.Module:
+        network = self.build_network(example_shape)
+        network.load_state_dict(checkpoint)
+        return network
+
+    def load_model(self, example_shape: tuple[int, ...], *, checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
+        if checkpoint:
+            return self.build_network_from_checkpoint(example_shape, checkpoint).to(self._device)
+        return self.build_network(example_shape).to(self._device)
