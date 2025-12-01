@@ -354,7 +354,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
               seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
               val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
-        training_arguments = locals()
+        training_arguments = self.filter_train_params(**locals())
         self.init_experiment()
         if note:
             self.log(f"Note: {note}")
