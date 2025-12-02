@@ -29,7 +29,7 @@ class InspectionAnnotation(object):
     shape: tuple[int, ...]
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     ids: tuple[int, ...]
-    foreground_samples: torch.Tensor | None = None
+    foreground_samples: tuple[tuple[int, ...], ...] | None = None
 
     def foreground_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.foreground_bbox[3] - self.foreground_bbox[2])
@@ -40,11 +40,8 @@ class InspectionAnnotation(object):
              round((self.foreground_bbox[3] + self.foreground_bbox[2]) * .5))
         return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
-    def to_dict(self) -> dict[str, Any]:
-        d = asdict(self)
-        if self.foreground_samples is not None:
-            d["foreground_samples"] = self.foreground_samples.tolist()
-        return d
+    def to_dict(self) -> dict[str, tuple[int, ...]]:
+        return asdict(self)
 
 
 class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
@@ -215,19 +212,22 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
+def _list_to_tuple(v: Any) -> Any:
+    if isinstance(v, list):
+        return tuple(_list_to_tuple(item) for item in v)
+    return v
+
+
 def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
-    return {k: tuple(v) if isinstance(v, list) and k != "foreground_samples" else v for k, v in pairs}
+    return {k: _list_to_tuple(v) for k, v in pairs}
 
 
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
-    annotations = []
-    for row in obj["annotations"]:
-        if row.get("foreground_samples") is not None:
-            row["foreground_samples"] = torch.tensor(row["foreground_samples"])
-        annotations.append(InspectionAnnotation(**row))
-    return InspectionAnnotations(dataset, obj["background"], *annotations)
+    return InspectionAnnotations(dataset, obj["background"], *(
+        InspectionAnnotation(**row) for row in obj["annotations"]
+    ))
 
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0, min_foreground_samples: int = 500,
@@ -244,14 +244,15 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, min_foreground_s
             bbox = (mins[1], maxs[1], mins[2], maxs[2])
             if len(indices) > 0:
                 if len(indices) <= min_foreground_samples:
-                    foreground_samples = indices
+                    sampled = indices
                 else:
                     target_samples = min(
                         max_foreground_samples,
                         max(min_foreground_samples, int(np.ceil(len(indices) * min_percent_coverage)))
                     )
                     sampled_idx = torch.randperm(len(indices))[:target_samples]
-                    foreground_samples = indices[sampled_idx]
+                    sampled = indices[sampled_idx]
+                foreground_samples = tuple(tuple(coord.tolist()) for coord in sampled)
             else:
                 foreground_samples = None
             r.append(InspectionAnnotation(
@@ -314,7 +315,7 @@ class RandomROIDataset(ROIDataset):
         fg_position = annotation.foreground_samples[fg_idx]
 
         roi = []
-        for fg_pos, dim_size, patch_size in zip(fg_position.tolist(), annotation.shape, roi_shape):
+        for fg_pos, dim_size, patch_size in zip(fg_position, annotation.shape, roi_shape):
             left = patch_size // 2
             right = patch_size - left
             center = max(left, min(fg_pos, dim_size - right))
