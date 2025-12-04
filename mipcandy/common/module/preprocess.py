@@ -110,7 +110,7 @@ class Restore3d(nn.Module):
         paddings = self.conjugate_padding.paddings()
         if not paddings:
             raise ValueError("Paddings are not set yet, did you forget to pad before restoring?")
-        pad_h0, pad_h1, pad_w0, pad_w1, pad_d0, pad_d1 = paddings
+        pad_d0, pad_d1, pad_h0, pad_h1, pad_w0, pad_w1 = paddings
         if self.conjugate_padding.batch:
             _, _, d, h, w = x.shape
             return x[:, :, pad_d0: d - pad_d1, pad_h0: h - pad_h1, pad_w0: w - pad_w1]
