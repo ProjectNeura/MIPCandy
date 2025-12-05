@@ -88,7 +88,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             dump(training_arguments, f)
 
     def load_tracker(self) -> TrainerTracker:
-        return torch.load(f"{self.experiment_folder()}/tracker.pt")
+        return torch.load(f"{self.experiment_folder()}/tracker.pt", weights_only=False)
 
     def load_training_arguments(self) -> dict[str, Setting]:
         with open(f"{self.experiment_folder()}/training_arguments.json") as f:
