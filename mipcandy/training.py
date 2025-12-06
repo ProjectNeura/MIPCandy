@@ -69,7 +69,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._experiment_id: str = "tbd"
         self._dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = dataloader
         self._validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = validation_dataloader
-        self._unrecoverable: bool = not recoverable  # None if the trainer is recovered
+        self._unrecoverable: bool | None = not recoverable  # None if the trainer is recovered
         self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
         self._epoch_metrics: dict[str, list[float]] = {}
@@ -119,7 +119,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         return self
 
     def continue_training(self, num_epochs: int) -> None:
-        self._unrecoverable = None
+        if not self.recovery():
+            raise RuntimeError("Must call `recover_from()` before continuing training")
         self.train(num_epochs, **self.load_training_arguments())
 
     # Getters
@@ -155,6 +156,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def initialized(self) -> bool:
         return self._experiment_id != "tbd"
+
+    def recovery(self) -> bool:
+        return self._unrecoverable is None
 
     def experiment_folder(self) -> str:
         return f"{self._trainer_folder}/{self._trainer_variant}/{self._experiment_id}"
@@ -204,6 +208,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         return self.experiment_folder() if self.initialized() else self._allocate_experiment_folder()
 
     def init_experiment(self) -> None:
+        if self.recovery():
+            self.log(f"Training progress recovered from {self._experiment_id} from epoch {self._tracker.epoch}")
+            return
         if self.initialized():
             raise RuntimeError("Experiment already initialized")
         makedirs(self._trainer_folder, exist_ok=True)
@@ -380,8 +387,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
-        toolbox = self.load_toolbox(example_shape) if self._unrecoverable is None else self.build_toolbox(num_epochs,
-                                                                                                          example_shape)
+        toolbox = self.load_toolbox(example_shape) if self.recovery() else self.build_toolbox(num_epochs, example_shape)
         model_name = toolbox.model.__class__.__name__
         sanity_check_result = sanity_check(toolbox.model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
