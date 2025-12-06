@@ -29,7 +29,7 @@ class InspectionAnnotation(object):
     shape: tuple[int, ...]
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     ids: tuple[int, ...]
-    foreground_samples: tuple[tuple[int, ...], ...] | None = None
+    foreground_locations: tuple[tuple[int, ...], ...] | None = None
 
     def foreground_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.foreground_bbox[3] - self.foreground_bbox[2])
@@ -255,14 +255,14 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, min_foreground_s
                     )
                     sampled_idx = torch.randperm(len(indices))[:target_samples]
                     sampled = indices[sampled_idx]
-                foreground_samples = tuple(tuple(coord.tolist()) for coord in sampled)
+                foreground_locations = tuple(tuple(coord.tolist()) for coord in sampled)
             else:
-                foreground_samples = None
+                foreground_locations = None
             r.append(InspectionAnnotation(
                 label.shape[1:],
                 bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]),
                 tuple(label.unique()),
-                foreground_samples
+                foreground_locations
             ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
@@ -311,11 +311,11 @@ class RandomROIDataset(ROIDataset):
         annotation = self._annotations[idx]
         roi_shape = self._annotations.roi_shape(percentile=self._percentile)
 
-        if annotation.foreground_samples is None or len(annotation.foreground_samples) == 0:
+        if annotation.foreground_locations is None or len(annotation.foreground_locations) == 0:
             return self._random_roi(idx)
 
-        fg_idx = torch.randint(0, len(annotation.foreground_samples), (1,)).item()
-        fg_position = annotation.foreground_samples[fg_idx]
+        fg_idx = torch.randint(0, len(annotation.foreground_locations), (1,)).item()
+        fg_position = annotation.foreground_locations[fg_idx]
 
         roi = []
         for fg_pos, dim_size, patch_size in zip(fg_position, annotation.shape, roi_shape):
