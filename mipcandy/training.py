@@ -102,10 +102,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         return {column: df[column].astype(float).tolist() for column in df.columns}
 
     def load_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
-        toolbox = self.build_toolbox(num_epochs, example_shape)
-        toolbox.model = self.load_model(
+        toolbox = self._build_toolbox(num_epochs, example_shape, model=self.load_model(
             example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
-        )
+        ))
         toolbox.optimizer.load_state_dict(torch.load(f"{self.experiment_folder()}/optimizer.pth"))
         toolbox.scheduler.load_state_dict(torch.load(f"{self.experiment_folder()}/scheduler.pth"))
         toolbox.criterion.load_state_dict(torch.load(f"{self.experiment_folder()}/criterion.pth"))
@@ -331,12 +330,17 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def build_criterion(self) -> nn.Module:
         raise NotImplementedError
 
-    def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
-        model = self.load_model(example_shape)
+    def _build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...], *,
+                       model: nn.Module | None = None) -> TrainerToolbox:
+        if not model:
+            model = self.load_model(example_shape)
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
         return TrainerToolbox(model, optimizer, scheduler, criterion)
+
+    def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
+        return self._build_toolbox(num_epochs, example_shape)
 
     # Training methods
 
