@@ -59,6 +59,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         self._foreground_offsets: tuple[int, int] | tuple[int, int, int] | None = None
         self._roi_shape: tuple[int, int] | tuple[int, int, int] | None = None
 
+    def dataset(self) -> SupervisedDataset:
+        return self._dataset
+
     def annotations(self) -> tuple[InspectionAnnotation, ...]:
         return self._annotations
 
@@ -330,7 +333,7 @@ class RandomROIDataset(ROIDataset):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._annotations._dataset[idx]
+        image, label = self._annotations.dataset()[idx]
         force_fg = torch.rand(1).item() < self._fg_oversample
         if force_fg:
             roi = self._foreground_guided_random_roi(idx)
