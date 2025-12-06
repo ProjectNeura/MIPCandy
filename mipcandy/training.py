@@ -69,7 +69,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._experiment_id: str = "tbd"
         self._dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = dataloader
         self._validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = validation_dataloader
-        self._recoverable: bool = recoverable
+        self._unrecoverable: bool = not recoverable  # None if the trainer is recovered
         self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
         self._epoch_metrics: dict[str, list[float]] = {}
@@ -81,7 +81,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def save_everything_for_recovery(self, toolbox: TrainerToolbox, tracker: TrainerTracker,
                                      **training_arguments) -> None:
-        if not self._recoverable:
+        if self._unrecoverable:
             return
         torch.save(toolbox.optimizer, f"{self.experiment_folder()}/optimizer.pt")
         torch.save(toolbox.scheduler, f"{self.experiment_folder()}/scheduler.pt")
@@ -101,15 +101,25 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
         return {column: df[column].astype(float).tolist() for column in df.columns}
 
+    def load_toolbox(self, example_shape: tuple[int, ...]) -> TrainerToolbox:
+        return TrainerToolbox(
+            self.build_network_from_checkpoint(
+                example_shape, torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
+            ),
+            torch.load(f"{self.experiment_folder()}/optimizer.pt", weights_only=False),
+            torch.load(f"{self.experiment_folder()}/scheduler.pt", weights_only=False),
+            torch.load(f"{self.experiment_folder()}/criterion.pt", weights_only=False)
+        )
+
     def recover_from(self, experiment_id: str) -> Self:
         self._experiment_id = experiment_id
         self._metrics = self.load_metrics()
         self._tracker = self.load_tracker()
-        self._recoverable = True
+        self._unrecoverable = None
         return self
 
     def continue_training(self, num_epochs: int) -> None:
-        self._recoverable = True
+        self._unrecoverable = None
         self.train(num_epochs, **self.load_training_arguments())
 
     # Getters
@@ -370,7 +380,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
-        toolbox = self.build_toolbox(num_epochs, example_shape)
+        toolbox = self.load_toolbox(example_shape) if self._unrecoverable is None else self.build_toolbox(num_epochs,
+                                                                                                          example_shape)
         model_name = toolbox.model.__class__.__name__
         sanity_check_result = sanity_check(toolbox.model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
