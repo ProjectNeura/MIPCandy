@@ -103,8 +103,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def load_toolbox(self, example_shape: tuple[int, ...]) -> TrainerToolbox:
         return TrainerToolbox(
-            self.build_network_from_checkpoint(
-                example_shape, torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
+            self.load_model(
+                example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
             ),
             torch.load(f"{self.experiment_folder()}/optimizer.pt", weights_only=False),
             torch.load(f"{self.experiment_folder()}/scheduler.pt", weights_only=False),
