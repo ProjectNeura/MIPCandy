@@ -60,7 +60,7 @@ class TrainerTracker(object):
 
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
-                 validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *,
+                 validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *, recoverable: bool = True,
                  device: torch.device | str = "cpu", console: Console = Console()) -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
@@ -69,6 +69,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._experiment_id: str = "tbd"
         self._dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = dataloader
         self._validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = validation_dataloader
+        self._recoverable: bool = recoverable
         self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
         self._epoch_metrics: dict[str, list[float]] = {}
@@ -80,6 +81,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def save_everything_for_recovery(self, toolbox: TrainerToolbox, tracker: TrainerTracker,
                                      **training_arguments) -> None:
+        if not self._recoverable:
+            return
         torch.save(toolbox.optimizer, f"{self.experiment_folder()}/optimizer.pt")
         torch.save(toolbox.scheduler, f"{self.experiment_folder()}/scheduler.pt")
         torch.save(toolbox.criterion, f"{self.experiment_folder()}/criterion.pt")
@@ -102,9 +105,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._experiment_id = experiment_id
         self._metrics = self.load_metrics()
         self._tracker = self.load_tracker()
+        self._recoverable = True
         return self
 
     def continue_training(self, num_epochs: int) -> None:
+        self._recoverable = True
         self.train(num_epochs, **self.load_training_arguments())
 
     # Getters
