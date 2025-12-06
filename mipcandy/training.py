@@ -389,7 +389,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
-        toolbox = self.load_toolbox(example_shape) if self.recovery() else self.build_toolbox(num_epochs, example_shape)
+        toolbox = self.load_toolbox(num_epochs, example_shape) if self.recovery() else self.build_toolbox(
+            num_epochs, example_shape)
         model_name = toolbox.model.__class__.__name__
         sanity_check_result = sanity_check(toolbox.model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
