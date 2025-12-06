@@ -113,6 +113,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def recover_from(self, experiment_id: str) -> Self:
         self._experiment_id = experiment_id
+        if not exists(self.experiment_folder()):
+            raise FileNotFoundError(f"Experiment folder {self.experiment_folder()} not found")
         self._metrics = self.load_metrics()
         self._tracker = self.load_tracker()
         self._unrecoverable = None
