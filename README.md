@@ -1,5 +1,3 @@
-from torch import nn
-
 # MIP Candy: A Candy for Medical Image Processing
 
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ProjectNeura/MIPCandy)
