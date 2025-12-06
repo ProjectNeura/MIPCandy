@@ -83,9 +83,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                                      **training_arguments) -> None:
         if self._unrecoverable:
             return
-        torch.save(toolbox.optimizer, f"{self.experiment_folder()}/optimizer.pt")
-        torch.save(toolbox.scheduler, f"{self.experiment_folder()}/scheduler.pt")
-        torch.save(toolbox.criterion, f"{self.experiment_folder()}/criterion.pt")
+        torch.save(toolbox.optimizer.state_dict(), f"{self.experiment_folder()}/optimizer.pth")
+        torch.save(toolbox.scheduler.state_dict(), f"{self.experiment_folder()}/scheduler.pth")
+        torch.save(toolbox.criterion.state_dict(), f"{self.experiment_folder()}/criterion.pth")
         torch.save(tracker, f"{self.experiment_folder()}/tracker.pt")
         with open(f"{self.experiment_folder()}/training_arguments.json", "w") as f:
             dump(training_arguments, f)
@@ -101,15 +101,15 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
         return {column: df[column].astype(float).tolist() for column in df.columns}
 
-    def load_toolbox(self, example_shape: tuple[int, ...]) -> TrainerToolbox:
-        return TrainerToolbox(
-            self.load_model(
-                example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
-            ),
-            torch.load(f"{self.experiment_folder()}/optimizer.pt", weights_only=False),
-            torch.load(f"{self.experiment_folder()}/scheduler.pt", weights_only=False),
-            torch.load(f"{self.experiment_folder()}/criterion.pt", weights_only=False)
+    def load_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
+        toolbox = self.build_toolbox(num_epochs, example_shape)
+        toolbox.model = self.load_model(
+            example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
         )
+        toolbox.optimizer.load_state_dict(torch.load(f"{self.experiment_folder()}/optimizer.pth"))
+        toolbox.scheduler.load_state_dict(torch.load(f"{self.experiment_folder()}/scheduler.pth"))
+        toolbox.criterion.load_state_dict(torch.load(f"{self.experiment_folder()}/criterion.pth"))
+        return toolbox
 
     def recover_from(self, experiment_id: str) -> Self:
         self._experiment_id = experiment_id
