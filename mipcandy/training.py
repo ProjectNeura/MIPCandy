@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from datetime import datetime
 from hashlib import md5
 from json import load, dump
@@ -80,21 +80,19 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def save_everything_for_recovery(self, toolbox: TrainerToolbox, tracker: TrainerTracker,
                                      **training_arguments) -> None:
-        torch.save(toolbox.optimizer, f"{self.experiment_folder()}/optimizer.pth")
-        torch.save(toolbox.scheduler, f"{self.experiment_folder()}/scheduler.pth")
-        torch.save(toolbox.criterion, f"{self.experiment_folder()}/criterion.pth")
-        with open(f"{self.experiment_folder()}/recovery_orbs.json", "w") as f:
-            dump({"arguments": training_arguments, "tracker": asdict(tracker)}, f)
-
-    def load_recovery_orbs(self) -> dict[str, Setting]:
-        with open(f"{self.experiment_folder()}/recovery_orbs.json") as f:
-            return load(f)
+        torch.save(toolbox.optimizer, f"{self.experiment_folder()}/optimizer.pt")
+        torch.save(toolbox.scheduler, f"{self.experiment_folder()}/scheduler.pt")
+        torch.save(toolbox.criterion, f"{self.experiment_folder()}/criterion.pt")
+        torch.save(tracker, f"{self.experiment_folder()}/tracker.pt")
+        with open(f"{self.experiment_folder()}/training_arguments.json", "w") as f:
+            dump(training_arguments, f)
 
     def load_tracker(self) -> TrainerTracker:
-        return TrainerTracker(**self.load_recovery_orbs()["tracker"])
+        return torch.load(f"{self.experiment_folder()}/tracker.pt", weights_only=False)
 
     def load_training_arguments(self) -> dict[str, Setting]:
-        return self.filter_train_params(**self.load_recovery_orbs()["arguments"])
+        with open(f"{self.experiment_folder()}/training_arguments.json") as f:
+            return load(f)
 
     def load_metrics(self) -> dict[str, list[float]]:
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
