@@ -105,6 +105,9 @@ class WithNetwork(HasDevice, metaclass=ABCMeta):
         raise NotImplementedError
 
     def build_network_from_checkpoint(self, example_shape: tuple[int, ...], checkpoint: Mapping[str, Any]) -> nn.Module:
+        """
+        Internally exposed interface for overriding. Use `load_model()` instead.
+        """
         network = self.build_network(example_shape)
         network.load_state_dict(checkpoint)
         return network
