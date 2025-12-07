@@ -18,30 +18,23 @@ Notion, WandB, and TensorBoard.
 
 <details>
 <summary>Easily adapt to your network architecture</summary>
-All it takes to train, infer with, or evaluate your PyTorch model is overriding one method.
+We provide tons of easy-to-use techniques for training.
 
-```python
-from typing import override
-
-from torch import nn
-from mipcandy import SegmentationTrainer
-
-
-class MyTrainer(SegmentationTrainer):
-    @override
-    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
-        ...
-```
-
+- Sliding window
+- ROI inspection
+- ROI cropping to align dataset shape (100% or 33% foreground)
+- Automatic padding
+- ...
 </details>
 
 <details>
 <summary>Satisfying command-line UI design</summary>
-<img src="home/assets/cmd-ui.png" alt="cmd-ui"/>
+<img src="home/assets/cli-ui.png" alt="cmd-ui"/>
 </details>
 
 <details>
 <summary>Built-in 2D and 3D visualization for intuitive understanding</summary>
+<img src="home/assets/visualization.png" alt="visualization"/>
 </details>
 
 <details>
