@@ -26,13 +26,13 @@ class FocalBCEWithLogits(nn.Module):
 
 class DiceBCELossWithLogits(nn.Module):
     def __init__(self, num_classes: int, *, lambda_bce: float = .5, lambda_soft_dice: float = 1,
-                 smooth: float = 1e-5, do_bg: bool = True) -> None:
+                 smooth: float = 1e-5, include_bg: bool = True) -> None:
         super().__init__()
         self.num_classes: int = num_classes
         self.lambda_bce: float = lambda_bce
         self.lambda_soft_dice: float = lambda_soft_dice
         self.smooth: float = smooth
-        self.do_bg: bool = do_bg
+        self.include_bg: bool = include_bg
 
     def forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         if self.num_classes != 1 and labels.shape[1] == 1:
@@ -43,6 +43,6 @@ class DiceBCELossWithLogits(nn.Module):
         labels = labels.float()
         bce = nn.functional.binary_cross_entropy_with_logits(masks, labels)
         masks = masks.sigmoid()
-        soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth, do_bg=self.do_bg)
+        soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth, include_bg=self.include_bg)
         c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - soft_dice)
         return c, {"soft dice": soft_dice.item(), "bce loss": bce.item()}
