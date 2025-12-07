@@ -5,7 +5,7 @@ import torch
 from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
-from mipcandy.data import visualize2d, visualize3d, overlay
+from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert
 from mipcandy.sliding_window import SWMetadata
 from mipcandy.training import Trainer, TrainerToolbox, SlidingTrainer
 from mipcandy.types import Params
@@ -17,7 +17,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     def _save_preview(self, x: torch.Tensor, title: str, quality: float) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
         if x.ndim == 3 and x.shape[0] in (1, 3, 4):
-            visualize2d((x * 255 / x.max()).to(torch.uint8), title=title, blocking=True, screenshot_as=path)
+            visualize2d(auto_convert(x), title=title, blocking=True, screenshot_as=path)
         elif x.ndim == 4 and x.shape[0] == 1:
             visualize3d(x, title=title, max_volume=int(quality * 1e6), blocking=True, screenshot_as=path)
 
