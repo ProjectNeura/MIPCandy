@@ -44,9 +44,10 @@ We provide tons of easy-to-use techniques for training.
 
 <details>
 <summary>Support various frontend platforms for remote monitoring</summary>
-MIP Candy Supports Notion, WandB, and TensorBoard.
 
-<iframe src="https://mipcandy-projectneura.notion.site" width="100%" height="600" frameborder="0" allowfullscreen></iframe>
+MIP Candy Supports [Notion](https://mipcandy-projectneura.notion.site), WandB, and TensorBoard.
+
+<img src="home/assets/notion.png" alt="notion"/>
 </details>
 
 ## Installation
