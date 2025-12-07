@@ -60,14 +60,15 @@ def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Te
     return apply_multiclass_to_binary(dice_similarity_coefficient_binary, output, label, num_classes, if_empty)
 
 
-def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1e-5) -> torch.Tensor:
+def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *,
+                          smooth: float = 1e-5, do_bg: bool = True) -> torch.Tensor:
     _args_check(output, label)
-    num = label.size(0)
-    output = output.view(num, -1)
-    label = label.view(num, -1)
-    intersection = (output * label)
-    dice = (2 * intersection.sum(1) + smooth) / (output.sum(1) + label.sum(1) + smooth)
-    return dice.sum() / num
+    axes = tuple(range(2, output.ndim))
+    intersection = (output * label).sum(dim=axes)
+    dice = (2 * intersection + smooth) / (output.sum(dim=axes) + label.sum(dim=axes) + smooth)
+    if not do_bg:
+        dice = dice[:, 1:]
+    return dice.mean()
 
 
 def accuracy_binary(output: torch.Tensor, label: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
