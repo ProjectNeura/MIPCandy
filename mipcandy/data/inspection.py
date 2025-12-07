@@ -229,8 +229,7 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
     ))
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0,
-            console: Console = Console()) -> InspectionAnnotations:
+def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
     r = []
     with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
