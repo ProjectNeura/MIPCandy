@@ -29,7 +29,6 @@ class InspectionAnnotation(object):
     shape: tuple[int, ...]
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     ids: tuple[int, ...]
-    foreground_locations: tuple[tuple[int, ...], ...] | None = None
 
     def foreground_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.foreground_bbox[3] - self.foreground_bbox[2])
@@ -61,6 +60,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
 
     def dataset(self) -> SupervisedDataset:
         return self._dataset
+
+    def background(self) -> int:
+        return self._background
 
     def annotations(self) -> tuple[InspectionAnnotation, ...]:
         return self._annotations
@@ -215,14 +217,8 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
-def _list_to_tuple(v: Any) -> Any:
-    if isinstance(v, list):
-        return tuple(_list_to_tuple(item) for item in v)
-    return v
-
-
 def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
-    return {k: _list_to_tuple(v) for k, v in pairs}
+    return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
 
 
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
@@ -233,8 +229,7 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
     ))
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0, min_foreground_samples: int = 500,
-            max_foreground_samples: int = 10000, min_percent_coverage: float = 0.01,
+def inspect(dataset: SupervisedDataset, *, background: int = 0,
             console: Console = Console()) -> InspectionAnnotations:
     r = []
     with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
@@ -245,24 +240,8 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, min_foreground_s
             mins = indices.min(dim=0)[0].tolist()
             maxs = indices.max(dim=0)[0].tolist()
             bbox = (mins[1], maxs[1], mins[2], maxs[2])
-            if len(indices) > 0:
-                if len(indices) <= min_foreground_samples:
-                    sampled = indices
-                else:
-                    target_samples = min(
-                        max_foreground_samples,
-                        max(min_foreground_samples, int(np.ceil(len(indices) * min_percent_coverage)))
-                    )
-                    sampled_idx = torch.randperm(len(indices))[:target_samples]
-                    sampled = indices[sampled_idx]
-                foreground_locations = tuple(tuple(coord.tolist()) for coord in sampled)
-            else:
-                foreground_locations = None
             r.append(InspectionAnnotation(
-                label.shape[1:],
-                bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]),
-                tuple(label.unique()),
-                foreground_locations
+                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]), tuple(label.unique())
             ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
@@ -288,9 +267,32 @@ class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
 
 class RandomROIDataset(ROIDataset):
     def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95,
-                 foreground_oversample_percentage: float = .33) -> None:
+                 foreground_oversample_percentage: float = .33, min_foreground_samples: int = 500,
+                 max_foreground_samples: int = 10000, min_percent_coverage: float = .01) -> None:
         super().__init__(annotations, percentile=percentile)
         self._fg_oversample: float = foreground_oversample_percentage
+        self._min_fg_samples: int = min_foreground_samples
+        self._max_fg_samples: int = max_foreground_samples
+        self._min_coverage: float = min_percent_coverage
+        self._fg_locations_cache: dict[int, tuple[tuple[int, ...], ...] | None] = {}
+
+    def _get_foreground_locations(self, idx: int) -> tuple[tuple[int, ...], ...] | None:
+        if idx not in self._fg_locations_cache:
+            _, label = self._annotations.dataset()[idx]
+            indices = (label != self._annotations.background()).nonzero()
+            if len(indices) == 0:
+                self._fg_locations_cache[idx] = None
+            elif len(indices) <= self._min_fg_samples:
+                self._fg_locations_cache[idx] = tuple(tuple(coord.tolist()) for coord in indices)
+            else:
+                target_samples = min(
+                    self._max_fg_samples,
+                    max(self._min_fg_samples, int(np.ceil(len(indices) * self._min_coverage)))
+                )
+                sampled_idx = torch.randperm(len(indices))[:target_samples]
+                sampled = indices[sampled_idx]
+                self._fg_locations_cache[idx] = tuple(tuple(coord.tolist()) for coord in sampled)
+        return self._fg_locations_cache[idx]
 
     def _random_roi(self, idx: int) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
         annotation = self._annotations[idx]
@@ -310,12 +312,13 @@ class RandomROIDataset(ROIDataset):
         int, int, int, int, int, int]:
         annotation = self._annotations[idx]
         roi_shape = self._annotations.roi_shape(percentile=self._percentile)
+        foreground_locations = self._get_foreground_locations(idx)
 
-        if annotation.foreground_locations is None or len(annotation.foreground_locations) == 0:
+        if foreground_locations is None or len(foreground_locations) == 0:
             return self._random_roi(idx)
 
-        fg_idx = torch.randint(0, len(annotation.foreground_locations), (1,)).item()
-        fg_position = annotation.foreground_locations[fg_idx]
+        fg_idx = torch.randint(0, len(foreground_locations), (1,)).item()
+        fg_position = foreground_locations[fg_idx]
 
         roi = []
         for fg_pos, dim_size, patch_size in zip(fg_position, annotation.shape, roi_shape):
@@ -329,7 +332,10 @@ class RandomROIDataset(ROIDataset):
     @override
     def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
         return self.__class__(self._annotations, percentile=self._percentile,
-                              foreground_oversample_percentage=self._fg_oversample)
+                              foreground_oversample_percentage=self._fg_oversample,
+                              min_foreground_samples=self._min_fg_samples,
+                              max_foreground_samples=self._max_fg_samples,
+                              min_percent_coverage=self._min_coverage)
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
