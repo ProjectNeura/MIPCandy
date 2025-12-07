@@ -39,6 +39,7 @@ We provide tons of easy-to-use techniques for training.
 
 <details>
 <summary>Continue training after interruption</summary>
+<img src="home/assets/recovery.png" alt="recovery"/>
 </details>
 
 ## Installation
