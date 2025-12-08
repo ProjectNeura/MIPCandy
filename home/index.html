@@ -543,9 +543,70 @@
                 grid-template-columns: minmax(0, 1fr);
             }
         }
+
+        .zoomable {
+            cursor: zoom-in;
+            transition: transform 0.2s ease;
+        }
+
+        .zoomable:hover {
+            transform: scale(1.03);
+        }
+
+        #zoom-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            backdrop-filter: blur(4px);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+            z-index: 999;
+        }
+
+        #zoom-overlay.active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        #zoom-overlay img {
+            max-width: 90vw;
+            max-height: 90vh;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+            cursor: zoom-out;
+            transition: transform 0.25s ease;
+        }
+
+        #zoom-overlay.active img {
+            transform: scale(1);
+        }
     </style>
 </head>
 <body>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const overlay = document.createElement("div");
+        overlay.id = "zoom-overlay";
+        overlay.innerHTML = "<img>";
+        document.body.appendChild(overlay);
+        const overlayImg = overlay.querySelector("img");
+        document.querySelectorAll(".zoomable").forEach(img => {
+            img.addEventListener("click", () => {
+                overlayImg.src = img.src;
+                overlay.classList.add("active");
+            });
+        });
+        overlay.addEventListener("click", () => {
+            overlay.classList.remove("active");
+            overlayImg.src = "";
+        });
+    });
+</script>
 <div class="page">
     <!-- Header -->
     <header class="header">
@@ -597,7 +658,7 @@
         </div>
 
         <div class="hero-visual">
-            <img alt="MIP Candy overview poster" src="assets/poster.png">
+            <img alt="MIP Candy overview poster" class="zoomable" src="assets/poster.png">
         </div>
     </section>
 
@@ -677,7 +738,7 @@
                     digging through scripts.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="CLI UI" src="assets/cli-ui.png">
+                    <img alt="CLI UI" class="zoomable" src="assets/cli-ui.png">
                 </div>
             </article>
 
@@ -689,7 +750,7 @@
                     data and predictions.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="2D and 3D visualization" src="assets/visualization.png">
+                    <img alt="2D and 3D visualization" class="zoomable" src="assets/visualization.png">
                 </div>
             </article>
 
@@ -701,7 +762,7 @@
                     don’t cost you progress.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="Recovery screenshots" src="assets/recovery.png">
+                    <img alt="Recovery screenshots" class="zoomable" src="assets/recovery.png">
                 </div>
             </article>
 
@@ -713,7 +774,7 @@
                     with your team.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="Notion dashboard" src="assets/notion.png">
+                    <img alt="Notion dashboard" class="zoomable" src="assets/notion.png">
                 </div>
             </article>
 
@@ -766,7 +827,9 @@ class MyTrainer(SegmentationTrainer):
         <div class="notion-demo-card">
             <iframe allowfullscreen
                     class="notion-embed"
-                    height="600" src="https://mipcandy-projectneura.notion.site/ebd//25182340f41480909d54c6e3861d10e3?v=25182340f41480ecae18000cbd6db0be" width="100%">
+                    height="600"
+                    src="https://mipcandy-projectneura.notion.site/ebd//25182340f41480909d54c6e3861d10e3?v=25182340f41480ecae18000cbd6db0be"
+                    width="100%">
             </iframe>
         </div>
     </section>
