@@ -308,6 +308,26 @@
             border: 1px solid rgba(0, 0, 0, 0.05);
         }
 
+        .notion-demo-card {
+            border-radius: 24px;
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        .notion-embed {
+            width: 100%;
+            height: 600px;
+            border: 0;
+        }
+
+        @media (max-width: 640px) {
+            .notion-embed {
+                height: 480px;
+            }
+        }
+
         /* Two-column sections */
 
         .split {
@@ -541,6 +561,7 @@
         <nav class="nav">
             <a href="#features">Features</a>
             <a href="#install">Installation</a>
+            <a href="#frontend-demo">Frontend Demo</a>
             <a href="#quickstart">Quick&nbsp;Start</a>
             <a href="#links">Links</a>
         </nav>
@@ -731,6 +752,22 @@ class MyTrainer(SegmentationTrainer):
             <div class="code-caption">
                 Provide your architecture once. MIP Candy takes care of the entire training pipeline.
             </div>
+        </div>
+    </section>
+
+    <!-- Notion Frontend Demo -->
+    <section class="section" id="frontend-demo">
+        <div class="section-header">
+            <h2 class="section-title">Live Notion dashboard</h2>
+            <p class="section-subtitle">
+                Explore an interactive MIP Candy frontend demo directly in Notion.
+            </p>
+        </div>
+        <div class="notion-demo-card">
+            <iframe allowfullscreen
+                    class="notion-embed"
+                    height="600" src="https://mipcandy-projectneura.notion.site/ebd//25182340f41480909d54c6e3861d10e3?v=25182340f41480ecae18000cbd6db0be" width="100%">
+            </iframe>
         </div>
     </section>
 
