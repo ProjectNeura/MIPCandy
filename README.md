@@ -12,6 +12,9 @@ of common network architectures with their corresponding training, inference, an
 out-of-the-box ready to use. Additionally, it also provides integrations with popular frontend dashboards such as
 Notion, WandB, and TensorBoard.
 
+We provide a flexible and extensible framework for medical image processing researchers to quickly prototype their
+ideas. MIP Candy takes care of all the rest, so you can focus on only the key experiment designs.
+
 :link: [Home](https://mipcandy.projectneura.org)
 
 :link: [Docs](https://mipcandy-docs.projectneura.org)
