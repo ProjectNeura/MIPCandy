@@ -1,8 +1,887 @@
+<!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="UTF-8">
     <title>MIP Candy</title>
+    <meta content="width=device-width, initial-scale=1" name="viewport">
+    <link href="assets/logo.png" rel="icon" type="image/x-icon">
+    <style>
+        :root {
+            --bg: #f5f5f7;
+            --card: #ffffff;
+            --accent: #0071e3;
+            --accent-soft: #e5f1ff;
+            --text-main: #111111;
+            --text-muted: #6e6e73;
+            --border-subtle: #d2d2d7;
+            --code-bg: #0b0b0f;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+            background: radial-gradient(circle at top, #ffffff 0, #f5f5f7 45%, #ebedf0 100%);
+            color: var(--text-main);
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        img {
+            max-width: 100%;
+            display: block;
+        }
+
+        .page {
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 24px 20px 64px;
+        }
+
+        /* Header */
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-logo {
+            width: 30px;
+            height: 30px;
+            border-radius: 9px;
+            overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+            background: #fff;
+        }
+
+        .brand-text-top {
+            font-size: 12px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+        }
+
+        .brand-text-main {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .nav {
+            display: flex;
+            gap: 18px;
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        .nav a {
+            padding: 4px 0;
+            border-bottom: 1px solid transparent;
+        }
+
+        .nav a:hover {
+            border-bottom-color: rgba(0, 0, 0, 0.25);
+        }
+
+        /* Hero */
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+            gap: 40px;
+            padding: 48px 0 32px;
+            align-items: center;
+        }
+
+        .hero-kicker {
+            font-size: 13px;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 8px;
+        }
+
+        .hero-title {
+            font-size: clamp(32px, 5vw, 44px);
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            margin-bottom: 10px;
+        }
+
+        .hero-subtitle {
+            font-size: 16px;
+            line-height: 1.5;
+            color: var(--text-muted);
+            max-width: 420px;
+            margin-bottom: 22px;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .btn {
+            border-radius: 999px;
+            padding: 9px 18px;
+            font-size: 14px;
+            border: 1px solid transparent;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease, border-color 0.16s ease;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 8px 20px rgba(0, 113, 227, 0.35);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 12px 26px rgba(0, 113, 227, 0.45);
+        }
+
+        .btn-ghost {
+            background: rgba(255, 255, 255, 0.7);
+            border-color: var(--border-subtle);
+            color: var(--text-main);
+        }
+
+        .btn-ghost:hover {
+            background: #ffffff;
+        }
+
+        .hero-badges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .hero-badges img {
+            height: 20px;
+        }
+
+        .hero-visual {
+            border-radius: 24px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08),
+            0 0 1px rgba(0, 0, 0, 0.2);
+            background: #050608;
+        }
+
+        /* Sections */
+
+        .section {
+            padding: 32px 0;
+            border-top: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .section-title {
+            font-size: 22px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+        }
+
+        .section-subtitle {
+            font-size: 14px;
+            color: var(--text-muted);
+        }
+
+        /* Trusted By */
+
+        .trusted-logos {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 48px;
+            padding: 20px 0 10px;
+            flex-wrap: wrap;
+        }
+
+        .trusted-item {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .trusted-item img {
+            height: 52px;
+            width: auto;
+            object-fit: contain;
+            opacity: 0.82;
+            filter: grayscale(100%);
+            transition: opacity 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+        }
+
+        .trusted-item img:hover {
+            opacity: 1;
+            filter: grayscale(0%);
+            transform: translateY(-2px);
+        }
+
+        .trusted-caption {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+            letter-spacing: 0.01em;
+        }
+
+        /* Features */
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 20px;
+            padding: 16px 16px 14px;
+            border: 1px solid rgba(0, 0, 0, 0.04);
+            box-shadow: 0 10px 26px rgba(0, 0, 0, 0.06);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .feature-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: #074a99;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+        }
+
+        .feature-title {
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        .feature-desc {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        .feature-thumb {
+            margin-top: 8px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .notion-demo-card {
+            border-radius: 24px;
+            overflow: hidden;
+            background: #ffffff;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.08);
+        }
+
+        .notion-embed {
+            width: 100%;
+            height: 600px;
+            border: 0;
+        }
+
+        @media (max-width: 640px) {
+            .notion-embed {
+                height: 480px;
+            }
+        }
+
+        /* Two-column sections */
+
+        .split {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.15fr);
+            gap: 24px;
+            align-items: flex-start;
+        }
+
+        .pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            margin-bottom: 10px;
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .text-block-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .text-block-body {
+            font-size: 14px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .inline-list {
+            margin: 8px 0 0;
+            padding-left: 18px;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .inline-list li + li {
+            margin-top: 3px;
+        }
+
+        /* Code blocks */
+
+        pre {
+            margin: 0;
+            border-radius: 18px;
+            overflow: auto;
+            background: var(--code-bg);
+            color: #f5f5f7;
+            padding: 16px 18px;
+            font-size: 12px;
+            line-height: 1.6;
+            font-family: "SF Mono", Menlo, Monaco, Consolas, "Courier New", monospace;
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.7),
+            0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+
+        code {
+            font-family: inherit;
+        }
+
+        .code-card {
+            background: radial-gradient(circle at top left, #2c3b7d 0, #04040b 50%);
+            border-radius: 22px;
+            padding: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .code-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: #a0a8d2;
+            margin-bottom: 6px;
+        }
+
+        .code-caption {
+            margin-top: 10px;
+            font-size: 11px;
+            color: #c3c7e4;
+        }
+
+        .install-box {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 22px;
+            padding: 18px 18px 16px;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.08);
+        }
+
+        .install-note {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-bottom: 10px;
+        }
+
+        .inline-code {
+            font-family: "SF Mono", Menlo, monospace;
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 6px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+
+        .shell {
+            background: #111217;
+            border-radius: 14px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #f5f5f7;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-family: "SF Mono", Menlo, monospace;
+        }
+
+        .dot-row {
+            display: inline-flex;
+            gap: 4px;
+            margin-right: 6px;
+        }
+
+        .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #ff5f57;
+        }
+
+        .dot:nth-child(2) {
+            background: #febc2e;
+        }
+
+        .dot:nth-child(3) {
+            background: #28c840;
+        }
+
+        /* Links footer */
+
+        .links-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .chip-link {
+            padding: 7px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--border-subtle);
+            background: rgba(255, 255, 255, 0.85);
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-main);
+        }
+
+        .chip-link span {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+        }
+
+        .footer {
+            padding-top: 26px;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Responsive */
+
+        @media (max-width: 880px) {
+            .hero {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .hero-visual {
+                max-width: 420px;
+                margin: 0 auto;
+            }
+
+            .features-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .split {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        @media (max-width: 640px) {
+            .page {
+                padding: 18px 16px 48px;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .nav {
+                font-size: 13px;
+            }
+
+            .features-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+    </style>
 </head>
 <body>
-<h1>MIP Candy</h1>
+<div class="page">
+    <!-- Header -->
+    <header class="header">
+        <div class="brand">
+            <div class="brand-logo">
+                <img alt="MIP Candy logo" src="assets/logo.png">
+            </div>
+            <div>
+                <div class="brand-text-top">Project Neura</div>
+                <div class="brand-text-main">MIP Candy</div>
+            </div>
+        </div>
+        <nav class="nav">
+            <a href="#features">Features</a>
+            <a href="#install">Installation</a>
+            <a href="#frontend-demo">Frontend Demo</a>
+            <a href="#quickstart">Quick&nbsp;Start</a>
+            <a href="#links">Links</a>
+        </nav>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+        <div>
+            <div class="hero-kicker">A candy for medical image processing</div>
+            <h1 class="hero-title">Next-generation infrastructure for fast prototyping in machine learning.</h1>
+            <p class="hero-subtitle">
+                MIP Candy brings ready-to-use training, inference, and evaluation pipelines together with modern
+                dashboards, so you can focus on your experiments, not boilerplate.
+            </p>
+
+            <div class="hero-actions">
+                <a class="btn btn-primary" href="#quickstart">
+                    Get started
+                    <span style="font-size: 16px; line-height: 1;">⌘</span>
+                </a>
+                <a class="btn btn-ghost" href="https://mipcandy-docs.projectneura.org" rel="noreferrer" target="_blank">
+                    View docs
+                    <span style="font-size: 14px; opacity: 0.7;">↗</span>
+                </a>
+            </div>
+
+            <div class="hero-badges">
+                <img alt="Code size" src="https://img.shields.io/github/languages/code-size/ProjectNeura/MIPCandy">
+                <img alt="PyPI" src="https://img.shields.io/pypi/v/mipcandy">
+                <img alt="GitHub release" src="https://img.shields.io/github/v/release/ProjectNeura/MIPCandy">
+                <img alt="Release date" src="https://img.shields.io/github/release-date/ProjectNeura/MIPCandy">
+            </div>
+        </div>
+
+        <div class="hero-visual">
+            <img alt="MIP Candy overview poster" src="assets/poster.png">
+        </div>
+    </section>
+
+    <!-- Trusted By -->
+    <section class="section" id="trusted">
+        <div class="section-header">
+            <h2 class="section-title">Trusted by</h2>
+            <p class="section-subtitle">MIP Candy powers research across top institutions.</p>
+        </div>
+
+        <div class="trusted-logos">
+            <a href="https://projectneura.org">
+                <div class="trusted-item">
+                    <img alt="Project Neura" src="https://projectneura.org/img/logo.png">
+                    <div class="trusted-caption">Project Neura</div>
+                </div>
+            </a>
+            <a href="https://www.utoronto.ca">
+                <div class="trusted-item">
+                    <img alt="University of Toronto" src="assets/logos/uoft.png">
+                    <div class="trusted-caption">University of Toronto</div>
+                </div>
+            </a>
+            <a href="https://vectorinstitute.ai">
+                <div class="trusted-item">
+                    <img alt="Vector Institute" src="assets/logos/vector.png">
+                    <div class="trusted-caption">Vector Institute</div>
+                </div>
+            </a>
+            <a href="https://skule.ca">
+                <div class="trusted-item">
+                    <img alt="Skule" src="assets/logos/skule.png">
+                    <div class="trusted-caption">Skule</div>
+                </div>
+            </a>
+            <a href="https://www.uoft.ai">
+                <div class="trusted-item">
+                    <img alt="UofT AI" src="assets/logos/uoftai.png">
+                    <div class="trusted-caption">UofT AI</div>
+                </div>
+            </a>
+            <a href="https://www.utmist.ca">
+                <div class="trusted-item">
+                    <img alt="UTMIST" src="assets/logos/utmist.png">
+                    <div class="trusted-caption">UTMIST</div>
+                </div>
+            </a>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section class="section" id="features">
+        <div class="section-header">
+            <h2 class="section-title">Key features</h2>
+            <p class="section-subtitle">Designed for modern medical image research pipelines.</p>
+        </div>
+
+        <div class="features-grid">
+            <article class="feature-card">
+                <div class="feature-tag">Training</div>
+                <div class="feature-title">Easy adaptation to your networks</div>
+                <p class="feature-desc">
+                    Override a single method to plug in your own network architecture.
+                </p>
+                <ul class="inline-list">
+                    <li>Sliding window</li>
+                    <li>ROI inspection &amp; cropping</li>
+                    <li>Automatic padding &amp; shape alignment</li>
+                </ul>
+            </article>
+
+            <article class="feature-card">
+                <div class="feature-tag">Interface</div>
+                <div class="feature-title">Thoughtful command-line UX</div>
+                <p class="feature-desc">
+                    A clean CLI layout makes it easy to configure experiments, track progress, and resume work without
+                    digging through scripts.
+                </p>
+                <div class="feature-thumb">
+                    <img alt="CLI UI" src="assets/cli-ui.png">
+                </div>
+            </article>
+
+            <article class="feature-card">
+                <div class="feature-tag">Visualization</div>
+                <div class="feature-title">Built-in 2D &amp; 3D views</div>
+                <p class="feature-desc">
+                    Inspect slices or volumes directly from the training pipeline for intuitive understanding of your
+                    data and predictions.
+                </p>
+                <div class="feature-thumb">
+                    <img alt="2D and 3D visualization" src="assets/visualization.png">
+                </div>
+            </article>
+
+            <article class="feature-card">
+                <div class="feature-tag">Reliability</div>
+                <div class="feature-title">Interruption-tolerant runs</div>
+                <p class="feature-desc">
+                    Experiments can be safely paused and resumed with built-in recovery mechanisms, so cluster hiccups
+                    don’t cost you progress.
+                </p>
+                <div class="feature-thumb">
+                    <img alt="Recovery screenshots" src="assets/recovery.png">
+                </div>
+            </article>
+
+            <article class="feature-card">
+                <div class="feature-tag">Dashboards</div>
+                <div class="feature-title">Remote monitoring ready</div>
+                <p class="feature-desc">
+                    Connect to Notion, Weights &amp; Biases, and TensorBoard for rich experiment tracking and sharing
+                    with your team.
+                </p>
+                <div class="feature-thumb">
+                    <img alt="Notion dashboard" src="assets/notion.png">
+                </div>
+            </article>
+
+            <article class="feature-card">
+                <div class="feature-tag">Python&nbsp;3.12+</div>
+                <div class="feature-title">Modern Python, modern stack</div>
+                <p class="feature-desc">
+                    Built for Python&nbsp;3.12 and above, MIP Candy takes advantage of modern typing and ecosystem
+                    improvements out of the box.
+                </p>
+            </article>
+        </div>
+    </section>
+
+    <!-- Trainer example -->
+    <section class="section" id="custom-trainer">
+        <div class="pill">Custom trainers</div>
+        <h3 class="text-block-title">Adapt a new network in one method.</h3>
+        <p class="text-block-body" style="max-width: 700px;">
+            Start from <span class="inline-code">SegmentationTrainer</span> and only implement the network construction.
+            MIP Candy handles data flow, loss computation, augmentation, checkpointing, and evaluation out of the box.
+        </p>
+
+        <div class="code-card" style="margin-top: 20px;">
+            <div class="code-label">Example — Custom model integration</div>
+            <pre><code>from typing import override
+from torch import nn
+from mipcandy import SegmentationTrainer
+
+
+class MyTrainer(SegmentationTrainer):
+    @override
+    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
+        ...
+</code></pre>
+            <div class="code-caption">
+                Provide your architecture once. MIP Candy takes care of the entire training pipeline.
+            </div>
+        </div>
+    </section>
+
+    <!-- Notion Frontend Demo -->
+    <section class="section" id="frontend-demo">
+        <div class="section-header">
+            <h2 class="section-title">Live Notion dashboard</h2>
+            <p class="section-subtitle">
+                Explore an interactive MIP Candy frontend demo directly in Notion.
+            </p>
+        </div>
+        <div class="notion-demo-card">
+            <iframe allowfullscreen
+                    class="notion-embed"
+                    height="600" src="https://mipcandy-projectneura.notion.site/ebd//25182340f41480909d54c6e3861d10e3?v=25182340f41480ecae18000cbd6db0be" width="100%">
+            </iframe>
+        </div>
+    </section>
+
+    <!-- Quick start -->
+    <section class="section" id="quickstart">
+        <div class="split">
+            <div>
+                <div class="pill">Quick start</div>
+                <h3 class="text-block-title">Train a like <b>PRO</b> in a few lines.</h3>
+                <p class="text-block-body">
+                    Download a dataset, create a dataset wrapper, and hand it to a bundled trainer. Below is an example
+                    using a PH2-style dataset with batch size 1 for varying shapes.
+                </p>
+            </div>
+            <div class="code-card">
+                <div class="code-label">Example — nnU-Net style training</div>
+                <pre><code>from typing import override
+
+import torch
+from mipcandy_bundles.unet import UNetTrainer
+from torch.utils.data import DataLoader
+
+from mipcandy import download_dataset, NNUNetDataset
+
+
+class PH2(NNUNetDataset):
+    @override
+    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        image, label = super().load(idx)
+        return image.squeeze(0).permute(2, 0, 1), label
+
+
+download_dataset("nnunet_datasets/PH2", "tutorial/datasets/PH2")
+dataset, val_dataset = PH2("tutorial/datasets/PH2", device="cuda").fold()
+dataloader = DataLoader(dataset, 1, shuffle=True)
+val_dataloader = DataLoader(val_dataset, 1, shuffle=False)
+trainer = UNetTrainer("tutorial", dataloader, val_dataloader, device="cuda")
+trainer.train(1000, note="a nnU-Net style example")
+</code></pre>
+            </div>
+        </div>
+    </section>
+
+    <section class="section" id="install">
+        <div class="split">
+            <div>
+                <div class="pill">Installation</div>
+                <h3 class="text-block-title">Install MIP Candy</h3>
+                <p class="install-note" style="max-width: 700px;">
+                    MIP Candy requires <strong>Python ≥ 3.12</strong>.
+                    Install the standard bundle from PyPI:
+                </p>
+
+                <div class="install-box" style="margin-top: 14px;">
+                    <div class="shell">
+                        <div class="dot-row">
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                        </div>
+                        <span style="opacity: 0.8;">$</span>
+                        <span>pip install "mipcandy[standard]"</span>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <div class="pill">3D Rendering Backend</div>
+                <h3 class="text-block-title">Optional Dependencies</h3>
+                <p class="install-note" style="max-width: 700px;">
+                    MIP Candy preferably uses <strong>PyVista</strong> for 3D rendering.
+                    It can be installed along with MIP Candy.
+                </p>
+
+                <div class="install-box" style="margin-top: 14px;">
+                    <div class="shell">
+                        <div class="dot-row">
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                            <span class="dot"></span>
+                        </div>
+                        <span style="opacity: 0.8;">$</span>
+                        <span>pip install "mipcandy[all]"</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Links -->
+    <section class="section" id="links">
+        <div class="section-header">
+            <h2 class="section-title">Explore more</h2>
+            <p class="section-subtitle">Jump into the ecosystem around MIP Candy.</p>
+        </div>
+
+        <div class="links-row">
+            <a class="chip-link" rel="noreferrer" target="_blank">
+                <span>Home</span> mipcandy.projectneura.org
+            </a>
+            <a class="chip-link" href="https://mipcandy-docs.projectneura.org" rel="noreferrer" target="_blank">
+                <span>Docs</span> mipcandy-docs.projectneura.org
+            </a>
+            <a class="chip-link" href="https://pypi.org/project/mipcandy/" rel="noreferrer" target="_blank">
+                <span>PyPI</span> mipcandy
+            </a>
+            <a class="chip-link" href="https://github.com/ProjectNeura/MIPCandy" rel="noreferrer" target="_blank">
+                <span>Source</span> GitHub repository
+            </a>
+        </div>
+
+        <div class="footer">
+            Crafted by <a href="https://projectneura.org"> &copy; Project Neura</a>.
+        </div>
+    </section>
+</div>
 </body>
 </html>
