@@ -1,3 +1,5 @@
+from torch import nn
+
 # MIP Candy: A Candy for Medical Image Processing
 
 ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ProjectNeura/MIPCandy)
@@ -18,13 +20,28 @@ Notion, WandB, and TensorBoard.
 
 <details>
 <summary>Easily adapt to your network architecture</summary>
-We provide tons of easy-to-use techniques for training.
+We provide tons of easy-to-use techniques for training that seamlessly support your customized experiments.
 
 - Sliding window
 - ROI inspection
 - ROI cropping to align dataset shape (100% or 33% foreground)
 - Automatic padding
 - ...
+
+You only need to override one method to create a trainer for your network architecture.
+
+```python
+from typing import override
+
+from torch import nn
+from mipcandy import SegmentationTrainer
+
+
+class MyTrainer(SegmentationTrainer):
+    @override
+    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
+        ...
+```
 </details>
 
 <details>
