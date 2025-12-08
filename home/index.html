@@ -218,6 +218,46 @@
             color: var(--text-muted);
         }
 
+        /* Trusted By */
+
+        .trusted-logos {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            gap: 48px;
+            padding: 20px 0 10px;
+            flex-wrap: wrap;
+        }
+
+        .trusted-item {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .trusted-item img {
+            height: 52px;
+            width: auto;
+            object-fit: contain;
+            opacity: 0.82;
+            filter: grayscale(100%);
+            transition: opacity 0.2s ease, transform 0.2s ease, filter 0.2s ease;
+        }
+
+        .trusted-item img:hover {
+            opacity: 1;
+            filter: grayscale(0%);
+            transform: translateY(-2px);
+        }
+
+        .trusted-caption {
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-muted);
+            letter-spacing: 0.01em;
+        }
+
         /* Features */
 
         .features-grid {
@@ -491,7 +531,7 @@
     <header class="header">
         <div class="brand">
             <div class="brand-logo">
-                <img alt="MIP Candy logo" src="https://projectneura.org/img/logo.png">
+                <img alt="MIP Candy logo" src="assets/logo.png">
             </div>
             <div>
                 <div class="brand-text-top">Project Neura</div>
@@ -537,6 +577,37 @@
 
         <div class="hero-visual">
             <img alt="MIP Candy overview poster" src="assets/poster.png">
+        </div>
+    </section>
+
+    <!-- Trusted By -->
+    <section class="section" id="trusted">
+        <div class="section-header">
+            <h2 class="section-title">Trusted by</h2>
+            <p class="section-subtitle">MIP Candy powers research across top institutions.</p>
+        </div>
+
+        <div class="trusted-logos">
+            <div class="trusted-item">
+                <img alt="Project Neura" src="https://projectneura.org/img/logo.png">
+                <div class="trusted-caption">Project Neura</div>
+            </div>
+            <div class="trusted-item">
+                <img alt="University of Toronto" src="assets/logos/uoft.png">
+                <div class="trusted-caption">University of Toronto</div>
+            </div>
+            <div class="trusted-item">
+                <img alt="Vector Institute" src="assets/logos/vector.png">
+                <div class="trusted-caption">Vector Institute</div>
+            </div>
+            <div class="trusted-item">
+                <img alt="Skule" src="assets/logos/skule.png">
+                <div class="trusted-caption">Skule</div>
+            </div>
+            <div class="trusted-item">
+                <img alt="UTMIST" src="assets/logos/utmist.png">
+                <div class="trusted-caption">UTMIST</div>
+            </div>
         </div>
     </section>
 
@@ -755,7 +826,7 @@ trainer.train(1000, note="a nnU-Net style example")
         </div>
 
         <div class="footer">
-            Crafted by Project Neura. MIP Candy is a framework for medical image processing workflows.
+            Crafted by <a href="https://projectneura.org"> &copy; Project Neura</a>.
         </div>
     </section>
 </div>
