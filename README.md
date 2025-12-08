@@ -7,9 +7,9 @@
 
 ![poster](home/assets/poster.png)
 
-MIP Candy is Project Neura's next-generation infrastructure framework for medical image processing. It integrates a
-handful number of common network architectures with their corresponding training, inference, and evaluation pipelines
-that are out-of-the-box ready to use. Additionally, it also provides adapters to popular frontend dashboards such as
+MIP Candy is Project Neura's next-generation infrastructure framework for medical image processing. It defines a handful
+of common network architectures with their corresponding training, inference, and evaluation pipelines that are
+out-of-the-box ready to use. Additionally, it also provides integrations with popular frontend dashboards such as
 Notion, WandB, and TensorBoard.
 
 :link: [Home](https://mipcandy.projectneura.org)
@@ -81,7 +81,7 @@ pip install "mipcandy[standard]"
 ## Quick Start
 
 Below is a simple example of a nnU-Net style training. The batch size is set to 1 due to the varying shape of the
-dataset.
+dataset, although you can use a `ROIDataset` to align the shapes.
 
 ```python
 from typing import override
