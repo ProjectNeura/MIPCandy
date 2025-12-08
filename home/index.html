@@ -471,6 +471,14 @@
             background: #28c840;
         }
 
+        .gradient-text {
+            background: linear-gradient(90deg, #0071e3 0%, #00c6fb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            color: transparent;
+        }
+
         /* Links footer */
 
         .links-row {
@@ -634,8 +642,8 @@
             <div class="hero-kicker">A candy for medical image processing</div>
             <h1 class="hero-title">Next-generation infrastructure for fast prototyping in machine learning.</h1>
             <p class="hero-subtitle">
-                MIP Candy brings ready-to-use training, inference, and evaluation pipelines together with modern
-                dashboards, so you can focus on your experiments, not boilerplate.
+                MIP Candy brings ready-to-use training, inference, and evaluation pipelines together with
+                <b class="gradient-text">aesthetics</b>, so you can focus on your experiments, not boilerplate.
             </p>
 
             <div class="hero-actions">
@@ -719,9 +727,10 @@
         <div class="features-grid">
             <article class="feature-card">
                 <div class="feature-tag">Training</div>
-                <div class="feature-title">Easy adaptation to your networks</div>
+                <div class="feature-title">Easy adaptation to your workflow</div>
                 <p class="feature-desc">
-                    Override a single method to plug in your own network architecture.
+                    Override a single method to plug in your own network architecture. Grab a tool from the box and
+                    customize your experiments.
                 </p>
                 <ul class="inline-list">
                     <li>Sliding window</li>
@@ -839,10 +848,10 @@ class MyTrainer(SegmentationTrainer):
         <div class="split">
             <div>
                 <div class="pill">Quick start</div>
-                <h3 class="text-block-title">Train a like <b>PRO</b> in a few lines.</h3>
+                <h2 class="text-block-title">Train a like <b class="gradient-text">PRO</b> in a few lines</h2>
                 <p class="text-block-body">
                     Download a dataset, create a dataset wrapper, and hand it to a bundled trainer. Below is an example
-                    using a PH2-style dataset with batch size 1 for varying shapes.
+                    using the PH2 dataset with batch size 1 for varying shapes.
                 </p>
             </div>
             <div class="code-card">
@@ -878,7 +887,7 @@ trainer.train(1000, note="a nnU-Net style example")
         <div class="split">
             <div>
                 <div class="pill">Installation</div>
-                <h3 class="text-block-title">Install MIP Candy</h3>
+                <h2 class="text-block-title">Install MIP Candy</h2>
                 <p class="install-note" style="max-width: 700px;">
                     MIP Candy requires <strong>Python ≥ 3.12</strong>.
                     Install the standard bundle from PyPI:
@@ -898,7 +907,7 @@ trainer.train(1000, note="a nnU-Net style example")
             </div>
             <div>
                 <div class="pill">3D Rendering Backend</div>
-                <h3 class="text-block-title">Optional Dependencies</h3>
+                <h2 class="text-block-title">Optional dependencies</h2>
                 <p class="install-note" style="max-width: 700px;">
                     MIP Candy preferably uses <strong>PyVista</strong> for 3D rendering.
                     It can be installed along with MIP Candy.
