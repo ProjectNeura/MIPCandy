@@ -7,6 +7,8 @@ from torch import nn
 ![GitHub Release](https://img.shields.io/github/v/release/ProjectNeura/MIPCandy)
 ![GitHub Release Date - Published_At](https://img.shields.io/github/release-date/ProjectNeura/MIPCandy)
 
+![poster](home/assets/poster.png)
+
 MIP Candy is Project Neura's next-generation infrastructure framework for medical image processing. It integrates a
 handful number of common network architectures with their corresponding training, inference, and evaluation pipelines
 that are out-of-the-box ready to use. Additionally, it also provides adapters to popular frontend dashboards such as
@@ -18,8 +20,10 @@ Notion, WandB, and TensorBoard.
 
 ## Key Features
 
+Why MIP Candy? :thinking:
+
 <details>
-<summary>Easily adapt to your network architecture</summary>
+<summary>Easy adaptation to fit your needs</summary>
 We provide tons of easy-to-use techniques for training that seamlessly support your customized experiments.
 
 - Sliding window
@@ -55,12 +59,13 @@ class MyTrainer(SegmentationTrainer):
 </details>
 
 <details>
-<summary>Continue training after interruption</summary>
+<summary>High availability with interruption tolerance</summary>
+Interrupted experiments can be resumed with ease.
 <img src="home/assets/recovery.png" alt="recovery"/>
 </details>
 
 <details>
-<summary>Support various frontend platforms for remote monitoring</summary>
+<summary>Support of various frontend platforms for remote monitoring</summary>
 
 MIP Candy Supports [Notion](https://mipcandy-projectneura.notion.site), WandB, and TensorBoard.
 
