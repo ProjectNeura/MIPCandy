@@ -84,3 +84,32 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     @override
     def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         return self.sliding_window_shape
+
+
+class PatchTrainingSlidingValidationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=ABCMeta):
+    """Trainer for random patch training with sliding window validation.
+
+    Use this when training data comes from RandomROIDataset (already patches)
+    but validation data is full volumes requiring sliding window inference.
+    """
+    sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
+
+    @override
+    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+                          metadata: SWMetadata) -> tuple[float, dict[str, float]]:
+        raise RuntimeError("backward_windowed should not be called in PatchTrainingSlidingValidationTrainer")
+
+    @override
+    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float]]:
+        return SegmentationTrainer.backward(self, images, labels, toolbox)
+
+    @override
+    def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float]]:
+        loss, metrics = toolbox.criterion(output, label)
+        return -loss.item(), metrics
+
+    @override
+    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
+        return self.sliding_window_shape
