@@ -544,7 +544,16 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
     def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float], torch.Tensor]:
         images, metadata = self.do_sliding_window(image.unsqueeze(0))
-        outputs = self.forward(images, toolbox)
+        batch_size = self.get_batch_size()
+        with torch.no_grad():
+            if batch_size is None or batch_size >= images.shape[0]:
+                outputs = self.forward(images, toolbox)
+            else:
+                output_list: list[torch.Tensor] = []
+                for i in range(0, images.shape[0], batch_size):
+                    batch = images[i:i + batch_size]
+                    output_list.append(self.forward(batch, toolbox))
+                outputs = torch.cat(output_list, dim=0)
         output = self.revert_sliding_window(outputs, metadata)
         score, metrics = self.compute_metrics(output, label.unsqueeze(0), toolbox)
         return score, metrics, output.squeeze(0)
