@@ -531,8 +531,8 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         window_shape = self.get_window_shape()
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
 
-    def predict_windowed(self, images: torch.Tensor, toolbox: TrainerToolbox) -> torch.Tensor:
-        model = toolbox.ema if toolbox.ema else toolbox.model
+    def forward(self, images: torch.Tensor, toolbox: TrainerToolbox, *, use_ema: bool = True) -> torch.Tensor:
+        model = (toolbox.ema if toolbox.ema else toolbox.model) if use_ema else toolbox.model
         return model(images)
 
     @abstractmethod
@@ -543,9 +543,8 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
     @override
     def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float], torch.Tensor]:
-        image = image.unsqueeze(0)
-        images, metadata = self.do_sliding_window(image)
-        outputs = self.predict_windowed(images, toolbox)
+        images, metadata = self.do_sliding_window(image.unsqueeze(0))
+        outputs = self.forward(images, toolbox)
         output = self.revert_sliding_window(outputs, metadata)
         score, metrics = self.compute_metrics(output, label.unsqueeze(0), toolbox)
         return score, metrics, output.squeeze(0)

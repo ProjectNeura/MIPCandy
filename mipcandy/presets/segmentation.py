@@ -70,7 +70,10 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        return SegmentationTrainer.backward(self, images, labels, toolbox)
+        mask = self.forward(images, toolbox, use_ema=False)
+        loss, metrics = toolbox.criterion(mask, labels)
+        loss.backward()
+        return loss.item(), metrics
 
     @override
     def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
