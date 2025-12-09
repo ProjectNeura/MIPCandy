@@ -1,9 +1,9 @@
 # MIP Candy: A Candy for Medical Image Processing
 
-![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/ProjectNeura/MIPCandy)
 ![PyPI](https://img.shields.io/pypi/v/mipcandy)
 ![GitHub Release](https://img.shields.io/github/v/release/ProjectNeura/MIPCandy)
-![GitHub Release Date - Published_At](https://img.shields.io/github/release-date/ProjectNeura/MIPCandy)
+![PyPI Downloads](https://img.shields.io/pypi/dm/mipcandy)
+![GitHub Stars](https://img.shields.io/github/stars/ProjectNeura/MIPCandy)
 
 ![poster](home/assets/poster.png)
 
