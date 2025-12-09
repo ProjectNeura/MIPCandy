@@ -531,20 +531,23 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         window_shape = self.get_window_shape()
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
 
+    def forward(self, images: torch.Tensor, toolbox: TrainerToolbox, *, use_ema: bool = True) -> torch.Tensor:
+        model = (toolbox.ema if toolbox.ema else toolbox.model) if use_ema else toolbox.model
+        return model(images)
+
     @abstractmethod
-    def validate_case_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
-                               metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
+    def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float]]:
         raise NotImplementedError
 
     @override
     def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float], torch.Tensor]:
-        image, label = image.unsqueeze(0), label.unsqueeze(0)
-        images, metadata = self.do_sliding_window(image)
-        labels, _ = self.do_sliding_window(label)
-        loss, metrics, outputs = self.validate_case_windowed(images, labels, toolbox, metadata)
+        images, metadata = self.do_sliding_window(image.unsqueeze(0))
+        outputs = self.forward(images, toolbox)
         output = self.revert_sliding_window(outputs, metadata)
-        return loss, metrics, output.squeeze(0)
+        score, metrics = self.compute_metrics(output, label.unsqueeze(0), toolbox)
+        return score, metrics, output.squeeze(0)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,

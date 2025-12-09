@@ -70,15 +70,17 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        return SegmentationTrainer.backward(self, images, labels, toolbox)
+        mask = self.forward(images, toolbox, use_ema=False)
+        loss, metrics = toolbox.criterion(mask, labels)
+        loss.backward()
+        return loss.item(), metrics
 
     @override
-    def validate_case_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
-                               metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
-        masks = (toolbox.ema if toolbox.ema else toolbox.model)(images)
-        loss, metrics = toolbox.criterion(masks, labels)
-        return -loss.item(), metrics, masks
+    def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float]]:
+        loss, metrics = toolbox.criterion(output, label)
+        return -loss.item(), metrics
 
     @override
-    def get_window_shape(self):
+    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         return self.sliding_window_shape
