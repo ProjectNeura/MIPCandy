@@ -48,9 +48,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return AbsoluteLinearLR(optimizer, -8e-6 / len(self._dataloader), 1e-2)
 
     @override
-    def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        loss, metrics = toolbox.criterion(outputs, labels)
+        mask = toolbox.model(images)
+        loss, metrics = toolbox.criterion(mask, labels)
         loss.backward()
         return loss.item(), metrics
 
@@ -67,9 +68,10 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
     @override
-    def backward_windowed(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        loss, metrics = toolbox.criterion(outputs, labels)
+        mask = toolbox.model(images)
+        loss, metrics = toolbox.criterion(mask, labels)
         loss.backward()
         return loss.item(), metrics
 
@@ -92,14 +94,14 @@ class SlidingValidationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=AB
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
     @override
-    def backward_windowed(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
         raise RuntimeError("`backward_windowed()` should not be called in `SlidingValidationTrainer`")
 
     @override
-    def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        return SegmentationTrainer.backward(self, outputs, labels, toolbox)
+        return SegmentationTrainer.backward(self, images, labels, toolbox)
 
     @override
     def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
