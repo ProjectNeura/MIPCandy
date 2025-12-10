@@ -499,7 +499,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         worst_score = float("+inf")
         metrics = {}
         num_cases = len(self._validation_dataloader)
-        with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
+        with torch.no_grad(), Progress(*Progress.get_default_columns(), SpinnerColumn(),
+                                       console=self._console) as progress:
             val_prog = progress.add_task(f"Validating", total=num_cases)
             for image, label in self._validation_dataloader:
                 image, label = image.to(self._device), label.to(self._device)
@@ -542,15 +543,14 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         images, metadata = self.do_sliding_window(image.unsqueeze(0))
         batch_size = self.get_batch_size()
         model = toolbox.ema if toolbox.ema else toolbox.model
-        with torch.no_grad():
-            if batch_size is None or batch_size >= images.shape[0]:
-                outputs = model(images)
-            else:
-                output_list: list[torch.Tensor] = []
-                for i in range(0, images.shape[0], batch_size):
-                    batch = images[i:i + batch_size]
-                    output_list.append(model(batch))
-                outputs = torch.cat(output_list, dim=0)
+        if batch_size is None or batch_size >= images.shape[0]:
+            outputs = model(images)
+        else:
+            output_list: list[torch.Tensor] = []
+            for i in range(0, images.shape[0], batch_size):
+                batch = images[i:i + batch_size]
+                output_list.append(model(batch))
+            outputs = torch.cat(output_list, dim=0)
         outputs = self.revert_sliding_window(outputs, metadata)
         score, metrics = self.compute_metrics(outputs, label.unsqueeze(0), toolbox)
         return score, metrics, outputs.squeeze(0)
