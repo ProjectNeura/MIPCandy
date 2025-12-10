@@ -50,8 +50,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        mask = toolbox.model(images)
-        loss, metrics = toolbox.criterion(mask, labels)
+        masks = toolbox.model(images)
+        loss, metrics = toolbox.criterion(masks, labels)
         loss.backward()
         return loss.item(), metrics
 
@@ -70,15 +70,53 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
+        masks = toolbox.model(images)
+        loss, metrics = toolbox.criterion(masks, labels)
+        loss.backward()
+        return loss.item(), metrics
+
+    @override
+    def validate_case_windowed(self, images: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
+                               metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
+        batch_size = self.get_batch_size()
+        model = toolbox.ema if toolbox.ema else toolbox.model
+        if batch_size is None or batch_size >= images.shape[0]:
+            outputs = model(images)
+        else:
+            output_list: list[torch.Tensor] = []
+            for i in range(0, images.shape[0], batch_size):
+                batch = images[i:i + batch_size]
+                output_list.append(model(batch))
+            outputs = torch.cat(output_list, dim=0)
+        outputs = self.revert_sliding_window(outputs, metadata)
+        loss, metrics = toolbox.criterion(outputs, label.unsqueeze(0))
+        return -loss.item(), metrics, outputs.squeeze(0)
+
+    @override
+    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
+        return self.sliding_window_shape
+
+
+class SlidingValidationTrainer(SlidingSegmentationTrainer, metaclass=ABCMeta):
+    """
+    Use this when training data comes from RandomROIDataset (already patched), but validation data is full volumes
+    requiring sliding window inference.
+    """
+    @override
+    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+                          metadata: SWMetadata) -> tuple[float, dict[str, float]]:
+        raise RuntimeError("`backward_windowed()` should not be called in `SlidingValidationTrainer`")
+
+    @override
+    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float]]:
         return SegmentationTrainer.backward(self, images, labels, toolbox)
 
     @override
-    def validate_case_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def validate_case_windowed(self, images: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
                                metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
-        masks = (toolbox.ema if toolbox.ema else toolbox.model)(images)
-        loss, metrics = toolbox.criterion(masks, labels)
-        return -loss.item(), metrics, masks
+        return super().validate_case_windowed(images, label, toolbox, metadata)
 
     @override
-    def get_window_shape(self):
+    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
         return self.sliding_window_shape

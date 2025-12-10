@@ -499,7 +499,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         worst_score = float("+inf")
         metrics = {}
         num_cases = len(self._validation_dataloader)
-        with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
+        with torch.no_grad(), Progress(
+                *Progress.get_default_columns(), SpinnerColumn(), console=self._console
+        ) as progress:
             val_prog = progress.add_task(f"Validating", total=num_cases)
             for image, label in self._validation_dataloader:
                 image, label = image.to(self._device), label.to(self._device)
@@ -532,19 +534,15 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
 
     @abstractmethod
-    def validate_case_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def validate_case_windowed(self, images: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
                                metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
         raise NotImplementedError
 
     @override
     def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float], torch.Tensor]:
-        image, label = image.unsqueeze(0), label.unsqueeze(0)
-        images, metadata = self.do_sliding_window(image)
-        labels, _ = self.do_sliding_window(label)
-        loss, metrics, outputs = self.validate_case_windowed(images, labels, toolbox, metadata)
-        output = self.revert_sliding_window(outputs, metadata)
-        return loss, metrics, output.squeeze(0)
+        images, metadata = self.do_sliding_window(image.unsqueeze(0))
+        return self.validate_case_windowed(images, label, toolbox, metadata)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
