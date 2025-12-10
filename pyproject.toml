@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mipcandy"
-version = "1.1.0-beta.0"
+version = "1.1.0-beta.1"
 description = "A Candy for Medical Image Processing"
 license = "Apache-2.0"
 readme = "README.md"
