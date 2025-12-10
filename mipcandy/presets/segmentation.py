@@ -76,9 +76,9 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
         return loss.item(), metrics
 
     @override
-    def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+    def compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float]]:
-        loss, metrics = toolbox.criterion(output, label)
+        loss, metrics = toolbox.criterion(outputs, labels)
         return -loss.item(), metrics
 
     @override
@@ -104,9 +104,9 @@ class SlidingValidationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=AB
         return SegmentationTrainer.backward(self, images, labels, toolbox)
 
     @override
-    def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+    def compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float]]:
-        loss, metrics = toolbox.criterion(output, label)
+        loss, metrics = toolbox.criterion(outputs, labels)
         return -loss.item(), metrics
 
     @override

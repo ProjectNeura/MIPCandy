@@ -532,7 +532,7 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
 
     @abstractmethod
-    def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+    def compute_metrics(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float]]:
         raise NotImplementedError
 
@@ -551,9 +551,9 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
                     batch = images[i:i + batch_size]
                     output_list.append(model(batch))
                 outputs = torch.cat(output_list, dim=0)
-        output = self.revert_sliding_window(outputs, metadata)
-        score, metrics = self.compute_metrics(output, label.unsqueeze(0), toolbox)
-        return score, metrics, output.squeeze(0)
+        outputs = self.revert_sliding_window(outputs, metadata)
+        score, metrics = self.compute_metrics(outputs, label.unsqueeze(0), toolbox)
+        return score, metrics, outputs.squeeze(0)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
