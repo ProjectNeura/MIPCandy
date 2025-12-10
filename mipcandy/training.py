@@ -344,15 +344,18 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     # Training methods
 
+    def forward(self, images: torch.Tensor, toolbox: TrainerToolbox) -> torch.Tensor:
+        return (toolbox.ema if toolbox.ema else toolbox.model)(images)
+
     @abstractmethod
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         raise NotImplementedError
 
     def train_batch(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         toolbox.optimizer.zero_grad()
-        loss, metrics = self.backward(images, labels, toolbox)
+        loss, metrics = self.backward(self.forward(images, toolbox), labels, toolbox)
         toolbox.optimizer.step()
         toolbox.scheduler.step()
         if toolbox.ema:
@@ -531,10 +534,6 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         window_shape = self.get_window_shape()
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
 
-    def forward(self, images: torch.Tensor, toolbox: TrainerToolbox, *, use_ema: bool = True) -> torch.Tensor:
-        model = (toolbox.ema if toolbox.ema else toolbox.model) if use_ema else toolbox.model
-        return model(images)
-
     @abstractmethod
     def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float]]:
@@ -558,14 +557,21 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         score, metrics = self.compute_metrics(output, label.unsqueeze(0), toolbox)
         return score, metrics, output.squeeze(0)
 
+    def forward_windowed(self, images: torch.Tensor, toolbox: TrainerToolbox, metadata: SWMetadata) -> torch.Tensor:
+        return super().forward(images, toolbox)
+
+    @override
+    def forward(self, images: torch.Tensor, toolbox: TrainerToolbox) -> torch.Tensor:
+        images, metadata = self.do_sliding_window(images)
+        return self.forward_windowed(images, toolbox, metadata)
+
     @abstractmethod
-    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def backward_windowed(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
         raise NotImplementedError
 
     @override
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        images, metadata = self.do_sliding_window(images)
-        labels, _ = self.do_sliding_window(labels)
-        return self.backward_windowed(images, labels, toolbox, metadata)
+        labels, metadata = self.do_sliding_window(labels)
+        return self.backward_windowed(outputs, labels, toolbox, metadata)

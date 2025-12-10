@@ -48,10 +48,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return AbsoluteLinearLR(optimizer, -8e-6 / len(self._dataloader), 1e-2)
 
     @override
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        mask = toolbox.model(images)
-        loss, metrics = toolbox.criterion(mask, labels)
+        loss, metrics = toolbox.criterion(outputs, labels)
         loss.backward()
         return loss.item(), metrics
 
@@ -70,7 +69,7 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        mask = self.forward(images, toolbox, use_ema=False)
+        mask = self.forward(images, toolbox)
         loss, metrics = toolbox.criterion(mask, labels)
         loss.backward()
         return loss.item(), metrics
@@ -100,9 +99,9 @@ class PatchTrainingSlidingValidationTrainer(SlidingTrainer, SegmentationTrainer,
         raise RuntimeError("backward_windowed should not be called in PatchTrainingSlidingValidationTrainer")
 
     @override
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        return SegmentationTrainer.backward(self, images, labels, toolbox)
+        return SegmentationTrainer.backward(self, outputs, labels, toolbox)
 
     @override
     def compute_metrics(self, output: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
