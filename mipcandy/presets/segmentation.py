@@ -85,11 +85,10 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
         return self.sliding_window_shape
 
 
-class PatchTrainingSlidingValidationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=ABCMeta):
-    """Trainer for random patch training with sliding window validation.
-
-    Use this when training data comes from RandomROIDataset (already patches)
-    but validation data is full volumes requiring sliding window inference.
+class SlidingValidationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=ABCMeta):
+    """
+    Use this when training data comes from RandomROIDataset (already patched), but validation data is full volumes
+    requiring sliding window inference.
     """
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
