@@ -67,10 +67,9 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
     @override
-    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def backward_windowed(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        mask = self.forward(images, toolbox)
-        loss, metrics = toolbox.criterion(mask, labels)
+        loss, metrics = toolbox.criterion(outputs, labels)
         loss.backward()
         return loss.item(), metrics
 
@@ -93,9 +92,9 @@ class SlidingValidationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=AB
     sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
 
     @override
-    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
+    def backward_windowed(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        raise RuntimeError("backward_windowed should not be called in PatchTrainingSlidingValidationTrainer")
+        raise RuntimeError("`backward_windowed()` should not be called in `SlidingValidationTrainer`")
 
     @override
     def backward(self, outputs: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
