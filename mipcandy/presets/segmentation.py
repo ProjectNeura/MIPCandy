@@ -29,7 +29,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         self._save_preview(image, "input", quality)
         self._save_preview(label, "label", quality)
         self._save_preview(output, "prediction", quality)
-        if image.ndim == label.ndim == output.ndim == 3:
+        if image.ndim == label.ndim == output.ndim == 3 and label.shape[0] == 1:
             visualize2d(overlay(image, label), title="expected", blocking=True,
                         screenshot_as=f"{self.experiment_folder()}/expected (preview).png")
             visualize2d(overlay(image, output), title="actual", blocking=True,
