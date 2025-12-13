@@ -6,15 +6,16 @@ import torch
 from torch import nn
 
 from mipcandy.layer import HasDevice
+from mipcandy.types import Shape
 
 
 @dataclass
 class SWMetadata(object):
-    kernel: tuple[int, int] | tuple[int, int, int]
-    stride: tuple[int, int] | tuple[int, int, int]
+    kernel: Shape
+    stride: Shape
     ndim: Literal[2, 3]
     batch_size: int
-    out_size: tuple[int, int] | tuple[int, int, int]
+    out_size: Shape
     n: int
 
 
@@ -22,7 +23,7 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
     sliding_window_batch_size: int | None = None
 
     @abstractmethod
-    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
+    def get_window_shape(self) -> Shape:
         raise NotImplementedError
 
     def get_batch_size(self) -> int | None:

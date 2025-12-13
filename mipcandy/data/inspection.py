@@ -12,7 +12,7 @@ from torch import nn
 from mipcandy.data.dataset import SupervisedDataset
 from mipcandy.data.geometric import crop
 from mipcandy.layer import HasDevice
-from mipcandy.types import Device
+from mipcandy.types import Device, Shape
 
 
 def format_bbox(bbox: Sequence[int]) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
@@ -30,7 +30,7 @@ class InspectionAnnotation(object):
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     ids: tuple[int, ...]
 
-    def foreground_shape(self) -> tuple[int, int] | tuple[int, int, int]:
+    def foreground_shape(self) -> Shape:
         r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.foreground_bbox[3] - self.foreground_bbox[2])
         return r if len(self.foreground_bbox) == 4 else r + (self.foreground_bbox[5] - self.foreground_bbox[4],)
 
@@ -52,11 +52,11 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         self._annotations: tuple[InspectionAnnotation, ...] = annotations
         self._shapes: tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]] | None = None
         self._foreground_shapes: tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]] | None = None
-        self._statistical_foreground_shape: tuple[int, int] | tuple[int, int, int] | None = None
+        self._statistical_foreground_shape: Shape | None = None
         self._foreground_heatmap: torch.Tensor | None = None
         self._center_of_foregrounds: tuple[int, int] | tuple[int, int, int] | None = None
         self._foreground_offsets: tuple[int, int] | tuple[int, int, int] | None = None
-        self._roi_shape: tuple[int, int] | tuple[int, int, int] | None = None
+        self._roi_shape: Shape | None = None
 
     def dataset(self) -> SupervisedDataset:
         return self._dataset
@@ -107,7 +107,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         self._foreground_shapes = self._get_shapes(lambda annotation: annotation.foreground_shape())
         return self._foreground_shapes
 
-    def statistical_foreground_shape(self, *, percentile: float = .95) -> tuple[int, int] | tuple[int, int, int]:
+    def statistical_foreground_shape(self, *, percentile: float = .95) -> Shape:
         if self._statistical_foreground_shape:
             return self._statistical_foreground_shape
         depths, heights, widths = self.foreground_shapes()
@@ -172,7 +172,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         self._foreground_offsets = offsets + (round(center[2] - max_shape[2] * .5),) if depths else offsets
         return self._foreground_offsets
 
-    def set_roi_shape(self, roi_shape: tuple[int, int] | tuple[int, int, int] | None) -> None:
+    def set_roi_shape(self, roi_shape: Shape | None) -> None:
         if roi_shape is not None:
             depths, heights, widths = self.shapes()
             if depths:
@@ -183,7 +183,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
                     raise ValueError(f"ROI shape {roi_shape} exceeds minimum image shape ({min(heights)}, {min(widths)})")
         self._roi_shape = roi_shape
 
-    def roi_shape(self, *, percentile: float = .95) -> tuple[int, int] | tuple[int, int, int]:
+    def roi_shape(self, *, percentile: float = .95) -> Shape:
         if self._roi_shape:
             return self._roi_shape
         sfs = self.statistical_foreground_shape(percentile=percentile)
