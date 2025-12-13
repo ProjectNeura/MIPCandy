@@ -12,7 +12,7 @@ from mipcandy.types import Shape
 @dataclass
 class SWMetadata(object):
     kernel: Shape
-    stride: Shape
+    stride: tuple[int, int] | tuple[int, int, int]
     ndim: Literal[2, 3]
     batch_size: int
     out_size: Shape

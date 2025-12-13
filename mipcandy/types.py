@@ -15,3 +15,4 @@ type Device = torch.device | str
 type Shape2d = tuple[int, int]
 type Shape3d = tuple[int, int, int]
 type Shape = Shape2d | Shape3d
+type AmbiguousShape = tuple[int, ...]
