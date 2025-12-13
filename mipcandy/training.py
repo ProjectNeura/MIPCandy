@@ -27,7 +27,7 @@ from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sanity_check import sanity_check
 from mipcandy.sliding_window import SWMetadata, SlidingWindow
-from mipcandy.types import Params, Setting
+from mipcandy.types import Params, Setting, AmbiguousShape
 
 
 def try_append(new: float, to: dict[str, list[float]], key: str) -> None:
@@ -101,7 +101,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
         return {column: df[column].astype(float).tolist() for column in df.columns}
 
-    def load_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
+    def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape) -> TrainerToolbox:
         toolbox = self._build_toolbox(num_epochs, example_shape, model=self.load_model(
             example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
         ))
@@ -330,7 +330,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def build_criterion(self) -> nn.Module:
         raise NotImplementedError
 
-    def _build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...], *,
+    def _build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, *,
                        model: nn.Module | None = None) -> TrainerToolbox:
         if not model:
             model = self.load_model(example_shape)
@@ -339,7 +339,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         criterion = self.build_criterion().to(self._device)
         return TrainerToolbox(model, optimizer, scheduler, criterion)
 
-    def build_toolbox(self, num_epochs: int, example_shape: tuple[int, ...]) -> TrainerToolbox:
+    def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape) -> TrainerToolbox:
         return self._build_toolbox(num_epochs, example_shape)
 
     # Training methods

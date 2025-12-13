@@ -8,7 +8,7 @@ from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert
 from mipcandy.sliding_window import SWMetadata
 from mipcandy.training import Trainer, TrainerToolbox, SlidingTrainer
-from mipcandy.types import Params
+from mipcandy.types import Params, Shape
 
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
@@ -65,7 +65,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
 
 class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=ABCMeta):
-    sliding_window_shape: tuple[int, int] | tuple[int, int, int] = (128, 128)
+    sliding_window_shape: Shape = (128, 128)
 
     @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
@@ -93,7 +93,7 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
         return -loss.item(), metrics, outputs.squeeze(0)
 
     @override
-    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
+    def get_window_shape(self) -> Shape:
         return self.sliding_window_shape
 
 
@@ -118,5 +118,5 @@ class SlidingValidationTrainer(SlidingSegmentationTrainer, metaclass=ABCMeta):
         return super().validate_case_windowed(images, label, toolbox, metadata)
 
     @override
-    def get_window_shape(self) -> tuple[int, int] | tuple[int, int, int]:
+    def get_window_shape(self) -> Shape:
         return self.sliding_window_shape
