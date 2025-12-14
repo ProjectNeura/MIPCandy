@@ -121,12 +121,11 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         annotation = self._annotations[i]
         bbox = list(annotation.foreground_bbox)
         shape = annotation.foreground_shape()
-        for i, size in enumerate(shape):
-            left = (expand_ratio - 1) * size // 2
-            right = (expand_ratio - 1) - left
-            bbox[i] = max(0, bbox[i] - left)
-            i += 1
-            bbox[i] = min(bbox[i] + right, label.shape[i])
+        for dim_idx, size in enumerate(shape):
+            left = int((expand_ratio - 1) * size // 2)
+            right = int((expand_ratio - 1) * size - left)
+            bbox[dim_idx * 2] = max(0, bbox[dim_idx * 2] - left)
+            bbox[dim_idx * 2 + 1] = min(bbox[dim_idx * 2 + 1] + right, annotation.shape[dim_idx])
         return crop(image.unsqueeze(0), bbox).squeeze(0), crop(label.unsqueeze(0), bbox).squeeze(0)
 
     def foreground_heatmap(self) -> torch.Tensor:
