@@ -4,7 +4,7 @@ from typing import Any, Generator, Self, Mapping
 import torch
 from torch import nn
 
-from mipcandy.types import Device
+from mipcandy.types import Device, AmbiguousShape
 
 
 def batch_int_multiply(f: float, *n: int) -> Generator[int, None, None]:
@@ -101,10 +101,10 @@ class WithNetwork(HasDevice, metaclass=ABCMeta):
         super().__init__(device)
 
     @abstractmethod
-    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
+    def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
         raise NotImplementedError
 
-    def build_network_from_checkpoint(self, example_shape: tuple[int, ...], checkpoint: Mapping[str, Any]) -> nn.Module:
+    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, checkpoint: Mapping[str, Any]) -> nn.Module:
         """
         Internally exposed interface for overriding. Use `load_model()` instead.
         """
@@ -112,7 +112,7 @@ class WithNetwork(HasDevice, metaclass=ABCMeta):
         network.load_state_dict(checkpoint)
         return network
 
-    def load_model(self, example_shape: tuple[int, ...], *, checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
+    def load_model(self, example_shape: AmbiguousShape, *, checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
         if checkpoint:
             return self.build_network_from_checkpoint(example_shape, checkpoint).to(self._device)
         return self.build_network(example_shape).to(self._device)
