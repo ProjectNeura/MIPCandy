@@ -140,8 +140,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             shape = annotation.foreground_shape()
             for j, size in enumerate(max_shape):
                 left = (size - shape[j]) // 2
+                right = size - shape[j] - left
+                paddings.append(right)
                 paddings.append(left)
-                paddings.append(size - shape[j] - left)
             paddings.reverse()
             accumulated_label += nn.functional.pad(
                 crop((label != self._background).unsqueeze(0), annotation.foreground_bbox), paddings
