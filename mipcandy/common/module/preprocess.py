@@ -77,8 +77,8 @@ class Pad3d(Pad):
         else:
             _, d, h, w = x.shape
             suffix = (0,) * 2
-        self._paddings = self._c_p(d, self._min_factor[2]) + self._c_p(h, self._min_factor[0]) + self._c_p(
-            w, self._min_factor[1])
+        self._paddings = self._c_p(d, self._min_factor[0]) + self._c_p(h, self._min_factor[1]) + self._c_p(
+            w, self._min_factor[2])
         return nn.functional.pad(x, self._paddings[::-1] + suffix, self._mode, self._value)
 
 
