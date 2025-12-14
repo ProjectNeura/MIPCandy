@@ -4,7 +4,7 @@ from typing import Literal
 import torch
 from torch import nn
 
-from mipcandy.types import Colormap
+from mipcandy.types import Colormap, Shape2d, Shape3d
 
 
 class Pad(nn.Module):
@@ -34,10 +34,10 @@ class Pad(nn.Module):
 
 
 class Pad2d(Pad):
-    def __init__(self, min_factor: int | tuple[int, int], *, value: int = 0, mode: str = "constant",
+    def __init__(self, min_factor: int | Shape2d, *, value: int = 0, mode: str = "constant",
                  batch: bool = True) -> None:
         super().__init__(value=value, mode=mode, batch=batch)
-        self._min_factor: tuple[int, int] = (min_factor,) * 2 if isinstance(min_factor, int) else min_factor
+        self._min_factor: Shape2d = (min_factor,) * 2 if isinstance(min_factor, int) else min_factor
 
     def paddings(self) -> tuple[int, int, int, int] | None:
         return self._paddings
@@ -58,10 +58,10 @@ class Pad2d(Pad):
 
 
 class Pad3d(Pad):
-    def __init__(self, min_factor: int | tuple[int, int, int], *, value: int = 0, mode: str = "constant",
+    def __init__(self, min_factor: int | Shape3d, *, value: int = 0, mode: str = "constant",
                  batch: bool = True) -> None:
         super().__init__(value=value, mode=mode, batch=batch)
-        self._min_factor: tuple[int, int, int] = (min_factor,) * 3 if isinstance(min_factor, int) else min_factor
+        self._min_factor: Shape3d = (min_factor,) * 3 if isinstance(min_factor, int) else min_factor
 
     def paddings(self) -> tuple[int, int, int, int, int, int] | None:
         return self._paddings

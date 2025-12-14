@@ -11,7 +11,7 @@ from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
 from mipcandy.data import save_image, Loader, UnsupervisedDataset, PathBasedUnsupervisedDataset
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sliding_window import SlidingWindow
-from mipcandy.types import SupportedPredictant, Device
+from mipcandy.types import SupportedPredictant, Device, AmbiguousShape
 
 
 def parse_predictant(x: SupportedPredictant, loader: type[Loader], *, as_label: bool = False) -> tuple[list[
@@ -40,20 +40,21 @@ def parse_predictant(x: SupportedPredictant, loader: type[Loader], *, as_label: 
 
 
 class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
-    def __init__(self, experiment_folder: str | PathLike[str], example_shape: tuple[int, ...], *,
+    def __init__(self, experiment_folder: str | PathLike[str], example_shape: AmbiguousShape, *,
                  checkpoint: str = "checkpoint_best.pth", device: Device = "cpu") -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
         self._experiment_folder: str = experiment_folder
-        self._example_shape: tuple[int, ...] = example_shape
+        self._example_shape: AmbiguousShape = example_shape
         self._checkpoint: str = checkpoint
         self._model: nn.Module | None = None
 
     def lazy_load_model(self) -> None:
         if self._model:
             return
-        self._model = self.load_model(self._example_shape,
-                                      checkpoint=torch.load(f"{self._experiment_folder}/{self._checkpoint}"))
+        self._model = self.load_model(self._example_shape, checkpoint=torch.load(
+            f"{self._experiment_folder}/{self._checkpoint}"
+        ))
         self._model.eval()
 
     def predict_image(self, image: torch.Tensor, *, batch: bool = False) -> torch.Tensor:
