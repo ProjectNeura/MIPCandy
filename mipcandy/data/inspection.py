@@ -278,7 +278,7 @@ class RandomROIDataset(ROIDataset):
     def _get_foreground_locations(self, idx: int) -> tuple[tuple[int, ...], ...] | None:
         if idx not in self._fg_locations_cache:
             _, label = self._annotations.dataset()[idx]
-            indices = (label != self._annotations.background()).nonzero()
+            indices = (label != self._annotations.background()).nonzero()[:, 1:]
             if len(indices) == 0:
                 self._fg_locations_cache[idx] = None
             elif len(indices) <= self._min_fg_samples:
