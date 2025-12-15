@@ -121,12 +121,11 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         annotation = self._annotations[i]
         bbox = list(annotation.foreground_bbox)
         shape = annotation.foreground_shape()
-        for i, size in enumerate(shape):
-            left = (expand_ratio - 1) * size // 2
-            right = (expand_ratio - 1) - left
-            bbox[i] = max(0, bbox[i] - left)
-            i += 1
-            bbox[i] = min(bbox[i] + right, label.shape[i])
+        for dim_idx, size in enumerate(shape):
+            left = int((expand_ratio - 1) * size // 2)
+            right = int((expand_ratio - 1) * size - left)
+            bbox[dim_idx * 2] = max(0, bbox[dim_idx * 2] - left)
+            bbox[dim_idx * 2 + 1] = min(bbox[dim_idx * 2 + 1] + right, annotation.shape[dim_idx])
         return crop(image.unsqueeze(0), bbox).squeeze(0), crop(label.unsqueeze(0), bbox).squeeze(0)
 
     def foreground_heatmap(self) -> torch.Tensor:
@@ -141,8 +140,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             shape = annotation.foreground_shape()
             for j, size in enumerate(max_shape):
                 left = (size - shape[j]) // 2
+                right = size - shape[j] - left
+                paddings.append(right)
                 paddings.append(left)
-                paddings.append(size - shape[j] - left)
             paddings.reverse()
             accumulated_label += nn.functional.pad(
                 crop((label != self._background).unsqueeze(0), annotation.foreground_bbox), paddings
@@ -238,9 +238,9 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
             indices = (label != background).nonzero()
             mins = indices.min(dim=0)[0].tolist()
             maxs = indices.max(dim=0)[0].tolist()
-            bbox = (mins[1], maxs[1], mins[2], maxs[2])
+            bbox = (mins[1], maxs[1] + 1, mins[2], maxs[2] + 1)
             r.append(InspectionAnnotation(
-                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3]), tuple(label.unique())
+                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3] + 1), tuple(label.unique())
             ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
@@ -278,7 +278,7 @@ class RandomROIDataset(ROIDataset):
     def _get_foreground_locations(self, idx: int) -> tuple[tuple[int, ...], ...] | None:
         if idx not in self._fg_locations_cache:
             _, label = self._annotations.dataset()[idx]
-            indices = (label != self._annotations.background()).nonzero()
+            indices = (label != self._annotations.background()).nonzero()[:, 1:]
             if len(indices) == 0:
                 self._fg_locations_cache[idx] = None
             elif len(indices) <= self._min_fg_samples:
