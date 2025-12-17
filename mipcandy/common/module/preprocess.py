@@ -161,9 +161,9 @@ class Normalize(nn.Module):
                 if self._strict:
                     raise ValueError("Method \"cut\" cannot be strict")
                 if left is not None:
-                    x[x < left] = left
+                    x = x.clamp(min=left)
                 if right is not None:
-                    x[x > right] = right
+                    x = x.clamp(max=right)
                 return x
 
 
