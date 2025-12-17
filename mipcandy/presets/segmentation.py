@@ -4,7 +4,7 @@ from typing import override
 import torch
 from torch import nn, optim
 
-from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits, ColorizeLabel
+from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
 from mipcandy.sliding_window import SWMetadata
 from mipcandy.training import Trainer, TrainerToolbox, SlidingTrainer
@@ -25,13 +25,12 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
-        pred = output = output.sigmoid()
+        output = output.sigmoid()
         if output.shape[0] != 1:
             output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0)
-            pred = ColorizeLabel(batch=False)(output)
         self._save_preview(image, "input", quality)
         self._save_preview(label, "label", quality)
-        self._save_preview(pred, "prediction", quality)
+        self._save_preview(output, "prediction", quality)
         if image.ndim == label.ndim == output.ndim == 3 and label.shape[0] == output.shape[0] == 1:
             visualize2d(overlay(image, label), title="expected", blocking=True,
                         screenshot_as=f"{self.experiment_folder()}/expected (preview).png")
