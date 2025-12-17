@@ -28,7 +28,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         pred = output = output.sigmoid()
         if output.shape[0] != 1:
             output = convert_logits_to_ids(output)
-            pred = ColorizeLabel(batch=False)(pred)
+            pred = ColorizeLabel(batch=False)(output)
         self._save_preview(image, "input", quality)
         self._save_preview(label, "label", quality)
         self._save_preview(pred, "prediction", quality)
