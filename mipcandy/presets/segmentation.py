@@ -5,7 +5,7 @@ import torch
 from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
-from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert
+from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
 from mipcandy.sliding_window import SWMetadata
 from mipcandy.training import Trainer, TrainerToolbox, SlidingTrainer
 from mipcandy.types import Params, Shape
@@ -26,6 +26,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
         output = output.sigmoid()
+        if output.shape[0] != 1:
+            output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0)
         self._save_preview(image, "input", quality)
         self._save_preview(label, "label", quality)
         self._save_preview(output, "prediction", quality)

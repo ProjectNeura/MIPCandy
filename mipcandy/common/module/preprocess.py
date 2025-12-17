@@ -168,7 +168,7 @@ class Normalize(nn.Module):
 
 
 class ColorizeLabel(nn.Module):
-    def __init__(self, *, colormap: Colormap | None = None) -> None:
+    def __init__(self, *, colormap: Colormap | None = None, batch: bool = True) -> None:
         super().__init__()
         if not colormap:
             colormap = []
@@ -177,10 +177,11 @@ class ColorizeLabel(nn.Module):
                     for b in range(32):
                         colormap.append([r * 32, g * 32, 255 - b * 32])
         self._colormap: torch.Tensor = torch.tensor(colormap)
+        self._batch: bool = batch
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if not self._batch:
+            x = x.unsqueeze(0)
         cmap = self._colormap.to(x.device)
-        return (
-            torch.cat([cmap[(x > 0).int()].permute(2, 0, 1), x.unsqueeze(0)]) if 0 <= x.min() < x.max() <= 1
-            else cmap[x.int()].permute(2, 0, 1)
-        )
+        x = cmap[(x > 0).int()] if 0 <= x.min() < x.max() <= 1 else cmap[x.int()].movedim(-1, 1)
+        return x if self._batch else x.squeeze(0)
