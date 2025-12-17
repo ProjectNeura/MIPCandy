@@ -93,7 +93,13 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
 
 
 def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: float = .5,
-            label_colorizer: ColorizeLabel | None = ColorizeLabel()) -> torch.Tensor:
+            label_colorizer: ColorizeLabel | None = ColorizeLabel(batch=False)) -> torch.Tensor:
+    """
+    :param image: base image
+    :param label: label (class ids) to overlay on top of `image`
+    :param max_label_opacity: maximum opacity of the label
+    :param label_colorizer: colorizer for the label, defaults to `ColorizeLabel()`
+    """
     if image.ndim < 2 or label.ndim < 2:
         raise ValueError("Only 2D images can be overlaid")
     image = ensure_num_dimensions(image, 3)
