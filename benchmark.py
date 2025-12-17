@@ -19,6 +19,7 @@ def main(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     train_loader = DataLoader(train, batch_size=2, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
+    trainer.num_dims = 3
     trainer.train(num_epochs, note="MIP Candy Benchmark")
 
 
