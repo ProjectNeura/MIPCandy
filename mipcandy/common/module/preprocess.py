@@ -4,7 +4,13 @@ from typing import Literal
 import torch
 from torch import nn
 
-from mipcandy.types import Colormap, Shape2d, Shape3d
+from mipcandy.types import Colormap, Shape2d, Shape3d, Paddings2d, Paddings3d, Paddings
+
+
+def reverse_paddings(paddings: Paddings) -> Paddings:
+    if len(paddings) == 4:
+        return paddings[2], paddings[3], paddings[0], paddings[1]
+    return paddings[4], paddings[5], paddings[2], paddings[3], paddings[0], paddings[1]
 
 
 class Pad(nn.Module):
@@ -13,7 +19,7 @@ class Pad(nn.Module):
         self._value: int = value
         self._mode: str = mode
         self.batch: bool = batch
-        self._paddings: tuple[int, int, int, int, int, int] | tuple[int, int, int, int] | None = None
+        self._paddings: Paddings | None = None
         self.requires_grad_(False)
 
     @staticmethod
@@ -39,7 +45,7 @@ class Pad2d(Pad):
         super().__init__(value=value, mode=mode, batch=batch)
         self._min_factor: Shape2d = (min_factor,) * 2 if isinstance(min_factor, int) else min_factor
 
-    def paddings(self) -> tuple[int, int, int, int] | None:
+    def paddings(self) -> Paddings2d | None:
         return self._paddings
 
     def padded_shape(self, in_shape: tuple[int, int, ...]) -> tuple[int, int, ...]:
@@ -54,7 +60,7 @@ class Pad2d(Pad):
             _, h, w = x.shape
             suffix = (0,) * 2
         self._paddings = self._c_p(h, self._min_factor[0]) + self._c_p(w, self._min_factor[1])
-        return nn.functional.pad(x, self._paddings[::-1] + suffix, self._mode, self._value)
+        return nn.functional.pad(x, reverse_paddings(self._paddings) + suffix, self._mode, self._value)
 
 
 class Pad3d(Pad):
@@ -63,7 +69,7 @@ class Pad3d(Pad):
         super().__init__(value=value, mode=mode, batch=batch)
         self._min_factor: Shape3d = (min_factor,) * 3 if isinstance(min_factor, int) else min_factor
 
-    def paddings(self) -> tuple[int, int, int, int, int, int] | None:
+    def paddings(self) -> Paddings3d | None:
         return self._paddings
 
     def padded_shape(self, in_shape: tuple[int, int, int, ...]) -> tuple[int, int, int, ...]:
@@ -79,7 +85,7 @@ class Pad3d(Pad):
             suffix = (0,) * 2
         self._paddings = self._c_p(d, self._min_factor[0]) + self._c_p(h, self._min_factor[1]) + self._c_p(
             w, self._min_factor[2])
-        return nn.functional.pad(x, self._paddings[::-1] + suffix, self._mode, self._value)
+        return nn.functional.pad(x, reverse_paddings(self._paddings) + suffix, self._mode, self._value)
 
 
 class Restore2d(nn.Module):

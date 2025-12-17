@@ -16,3 +16,6 @@ type Shape2d = tuple[int, int]
 type Shape3d = tuple[int, int, int]
 type Shape = Shape2d | Shape3d
 type AmbiguousShape = tuple[int, ...]
+type Paddings2d = tuple[int, int, int, int]
+type Paddings3d = tuple[int, int, int, int, int, int]
+type Paddings = Paddings2d | Paddings3d
