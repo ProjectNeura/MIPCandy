@@ -179,6 +179,9 @@ class ColorizeLabel(nn.Module):
         self._colormap: torch.Tensor = torch.tensor(colormap)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """
+        :param x: labels (class ids)
+        """
         cmap = self._colormap.to(x.device)
         return (
             torch.cat([cmap[(x > 0).int()].permute(2, 0, 1), x.unsqueeze(0)]) if 0 <= x.min() < x.max() <= 1
