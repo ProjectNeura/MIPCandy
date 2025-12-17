@@ -12,7 +12,9 @@ requires-python = ">=3.12"
 authors = [
     { name = "Project Neura", email = "central@projectneura.org" }
 ]
-dependencies = ["torch", "ptflops", "numpy", "SimpleITK", "matplotlib", "rich", "pandas", "requests"]
+dependencies = [
+    "pyyaml", "torch", "torchvision", "ptflops", "numpy", "SimpleITK", "matplotlib", "rich", "pandas", "requests"
+]
 
 [project.optional-dependencies]
 standard = ["pyvista"]
