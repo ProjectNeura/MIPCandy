@@ -2,10 +2,10 @@ from argparse import ArgumentParser
 from os import PathLike
 from os.path import exists
 
-from mipcandy_bundles.unet import UNetTrainer
 from torch.utils.data import DataLoader
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset
+from unet import UNetTrainer
 
 
 def main(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
@@ -16,10 +16,9 @@ def main(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
         download_dataset("nnunet_datasets/AbdomenCT-1K-ss1", f"{input_folder}/dataset")
     dataset = NNUNetDataset(f"{input_folder}/dataset")
     train, val = dataset.fold()
-    train_loader = DataLoader(train, batch_size=2, shuffle=True)
+    train_loader = DataLoader(train, batch_size=1, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
-    trainer.num_dims = 3
     trainer.train(num_epochs, note="MIP Candy Benchmark")
 
 
