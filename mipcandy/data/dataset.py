@@ -27,7 +27,7 @@ class OrderedKFPicker(KFPicker):
     @override
     def pick(n: int, fold: Literal[0, 1, 2, 3, 4, "all"]) -> tuple[int, ...]:
         if fold == "all":
-            return tuple(range(0, n, 4))
+            return tuple(range(0, n, 5))
         size = n // 5
         return tuple(range(size * fold, size * (fold + 1)))
 
