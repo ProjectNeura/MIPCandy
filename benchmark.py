@@ -21,7 +21,7 @@ def inspect_dataset(dataset: NNUNetDataset, output_folder: str | PathLike[str]) 
     return annotations
 
 
-def full_volume(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
+def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
          device: Device | None = None) -> None:
     if not device:
         device = auto_device()
