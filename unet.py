@@ -9,6 +9,7 @@ from mipcandy import SlidingSegmentationTrainer, AmbiguousShape
 class UNetTrainer(SlidingSegmentationTrainer):
     sliding_window_shape = (64, 64, 64)
     sliding_window_batch_size = 1
+    num_classes = 4
 
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
