@@ -164,6 +164,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def experiment_folder(self) -> str:
         return f"{self._trainer_folder}/{self._trainer_variant}/{self._experiment_id}"
 
+    def get_example_input(self) -> torch.Tensor:
+        return self._dataloader.dataset[0][0]
+
     def predict_maximum_validation_score(self, num_epochs: int, *, degree: int = 5) -> tuple[int, float]:
         val_scores = np.array(self._metrics["val score"])
         a, b = quotient_regression(np.arange(len(val_scores)), val_scores, degree, degree)
@@ -387,7 +390,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         if seed is None:
             seed = randint(0, 100)
         self.set_seed(seed)
-        example_input = self._dataloader.dataset[0][0].to(self._device).unsqueeze(0)
+        example_input = self.get_example_input().to(self._device).unsqueeze(0)
         padding_module = self.get_padding_module()
         if padding_module:
             example_input = padding_module(example_input)
@@ -528,6 +531,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
 
 class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
+    @override
+    def get_example_input(self) -> torch.Tensor:
+        return torch.ones((super().get_example_input().shape[0], *self.get_window_shape()))
+
     @override
     def build_padding_module(self) -> nn.Module | None:
         window_shape = self.get_window_shape()
