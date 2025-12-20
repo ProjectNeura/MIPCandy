@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from os import PathLike
 from os.path import exists
 
+from monai.transforms import Resize
 from torch.utils.data import DataLoader
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset
@@ -14,7 +15,8 @@ def main(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
         download_dataset("nnunet_datasets/AbdomenCT-1K-ss1", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset")
+    trans = Resize((128, 128, 128))
+    dataset = NNUNetDataset(f"{input_folder}/dataset", image_transform=trans, label_transform=trans)
     train, val = dataset.fold()
     train_loader = DataLoader(train, batch_size=1, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
