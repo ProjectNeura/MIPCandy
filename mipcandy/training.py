@@ -533,7 +533,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
     @override
     def get_example_input(self) -> torch.Tensor:
-        return torch.ones((super().get_example_input().shape[0], *self.get_window_shape()))
+        return torch.ones((super().get_example_input().shape[0], *(s * 2 for s in self.get_window_shape())))
 
     @override
     def build_padding_module(self) -> nn.Module | None:
