@@ -240,7 +240,8 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
             maxs = indices.max(dim=0)[0].tolist()
             bbox = (mins[1], maxs[1] + 1, mins[2], maxs[2] + 1)
             r.append(InspectionAnnotation(
-                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3] + 1), tuple(label.unique())
+                tuple(label.shape[1:]), bbox if label.ndim == 3 else bbox + (mins[3], maxs[3] + 1),
+                tuple(label.unique().tolist())
             ))
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
