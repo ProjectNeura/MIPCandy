@@ -13,7 +13,7 @@ from mipcandy.types import Params, Shape
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     num_classes: int = 1
-    include_bg: bool = True
+    include_background: bool = True
 
     def _save_preview(self, x: torch.Tensor, title: str, quality: float) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
@@ -39,7 +39,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
     @override
     def build_criterion(self) -> nn.Module:
-        return DiceBCELossWithLogits(self.num_classes, include_bg=self.include_bg)
+        return DiceBCELossWithLogits(self.num_classes, include_background=self.include_background)
 
     @override
     def build_optimizer(self, params: Params) -> optim.Optimizer:
