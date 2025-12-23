@@ -46,7 +46,7 @@ def resize(size: int, input_folder: str | PathLike[str], output_folder: str | Pa
         download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
     dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(Compose([
         Resized(("image", "label"), (size, size, size)), build_nnunet_transforms()
-    ])))
+    ])), device=device)
     train, val = dataset.fold()
     train_loader = DataLoader(train, batch_size=2, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
