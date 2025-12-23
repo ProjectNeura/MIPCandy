@@ -245,15 +245,11 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
     return InspectionAnnotations(dataset, background, *r, device=dataset.device())
 
 
-class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
+class ROIDataset(SupervisedDataset[list[int]]):
     def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
-        super().__init__([], [])
+        super().__init__(list(range(len(annotations))), list(range(len(annotations))))
         self._annotations: InspectionAnnotations = annotations
         self._percentile: float = percentile
-
-    @override
-    def __len__(self) -> int:
-        return len(self._annotations)
 
     @override
     def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
@@ -261,7 +257,10 @@ class ROIDataset(SupervisedDataset[list[torch.Tensor]]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._annotations.crop_roi(idx, percentile=self._percentile)
+        i = self._images[idx]
+        if i != self._labels[idx]:
+            raise ValueError(f"Image {i} and label {self._labels[idx]} indices do not match")
+        return self._annotations.crop_roi(i, percentile=self._percentile)
 
 
 class RandomROIDataset(ROIDataset):
