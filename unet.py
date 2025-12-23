@@ -9,7 +9,7 @@ from mipcandy import SegmentationTrainer, SlidingSegmentationTrainer, AmbiguousS
 class UNetTrainer(SegmentationTrainer):
     @override
     def build_criterion(self) -> nn.Module:
-        return DiceBCELossWithLogits(self.num_classes, include_bg=False)
+        return DiceBCELossWithLogits(self.num_classes, include_background=False)
 
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
