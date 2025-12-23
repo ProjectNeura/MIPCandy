@@ -76,6 +76,24 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
         return SegmentationTrainer.backward(self, images, labels, toolbox)
 
     @override
+    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float], torch.Tensor]:
+        images, metadata = self.do_sliding_window(image.unsqueeze(0))
+        batch_size = self.get_batch_size()
+        model = toolbox.ema if toolbox.ema else toolbox.model
+        if not batch_size or batch_size >= images.shape[0]:
+            outputs = model(images)
+        else:
+            output_list: list[torch.Tensor] = []
+            for i in range(0, images.shape[0], batch_size):
+                batch_images = images[i:i + batch_size]
+                output_list.append(model(batch_images))
+            outputs = torch.cat(output_list, dim=0)
+        outputs = self.revert_sliding_window(outputs, metadata)
+        loss, metrics = toolbox.criterion(outputs, label.unsqueeze(0))
+        return -loss.item(), metrics, outputs.squeeze(0)
+
+    @override
     def validate_case_windowed(self, images: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
                                metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
