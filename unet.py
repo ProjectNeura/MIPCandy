@@ -13,7 +13,7 @@ class UNetTrainer(SegmentationTrainer):
 
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
-        return BasicUNet(3, example_shape[0], 5)
+        return BasicUNet(3, example_shape[0], self.num_classes)
 
 
 class UNetSlidingTrainer(SlidingSegmentationTrainer, UNetTrainer):
