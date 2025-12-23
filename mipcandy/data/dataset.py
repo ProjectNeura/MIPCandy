@@ -73,7 +73,7 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     def __init__(self, images: D, *, transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
-        self._transform: Transform | None = transform.to(device)
+        self._transform: Transform | None = transform.to(device) if transform else None
 
     @override
     def __len__(self) -> int:
@@ -97,7 +97,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             raise ValueError(f"Unmatched number of images {len(images)} and labels {len(labels)}")
         self._images: D = images
         self._labels: D = labels
-        self._transform: JointTransform | None = transform.to(device)
+        self._transform: JointTransform | None = transform.to(device) if transform else None
 
     @override
     def __len__(self) -> int:
@@ -261,7 +261,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._folded: bool = False
         self._prefix: str = prefix
         self._align_spacing: bool = align_spacing
-        self._transform: JointTransform | None = transform
 
     @staticmethod
     def _create_subset(folder: str) -> None:
