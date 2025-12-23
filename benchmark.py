@@ -2,11 +2,13 @@ from argparse import ArgumentParser
 from os import PathLike
 from os.path import exists
 
-from monai.transforms import Resize
+from monai.transforms import Resized
 from torch.utils.data import DataLoader
+from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
-    load_inspection_annotations, ROIDataset
+    load_inspection_annotations, ROIDataset, JointTransform
+from transforms import build_nnunet_transforms
 from unet import UNetTrainer, UNetSlidingTrainer
 
 BENCHMARK_DATASET: str = "nnunet_datasets/AbdomenCT-1K-ss1"
@@ -42,8 +44,9 @@ def resize(size: int, input_folder: str | PathLike[str], output_folder: str | Pa
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
         download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    trans = Resize((size, size, size))
-    dataset = NNUNetDataset(f"{input_folder}/dataset", image_transform=trans, label_transform=trans)
+    dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(Compose([
+        Resized(("image", "label"), (size, size, size)), build_nnunet_transforms()
+    ])))
     train, val = dataset.fold()
     train_loader = DataLoader(train, batch_size=2, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
