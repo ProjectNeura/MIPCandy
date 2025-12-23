@@ -264,6 +264,8 @@ class NNUNetDataset(PathBasedSupervisedDataset):
             f"{self._folder}/labels{self._split}/{self._labels[idx]}", is_label=True, align_spacing=self._align_spacing,
             device=self._device
         )
+        if self._joint_transform:
+            image, label = self._joint_transform(image, label)
         if self._image_transform:
             image = self._image_transform(image)
         if self._label_transform:
@@ -288,7 +290,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
             raise ValueError("Cannot construct a new dataset from a fold")
         new = self.__class__(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
                              image_transform=self._image_transform, label_transform=self._label_transform,
-                             device=self._device)
+                             joint_transform=self._joint_transform, device=self._device)
         new._images = images
         new._labels = labels
         new._folded = True
