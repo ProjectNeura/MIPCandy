@@ -11,6 +11,7 @@ from pandas import DataFrame
 from torch.utils.data import Dataset
 
 from mipcandy.data.io import load_image
+from mipcandy.data.transform import JointTransform
 from mipcandy.layer import HasDevice
 from mipcandy.types import Transform, Device
 
@@ -51,6 +52,9 @@ T = TypeVar("T")
 class _AbstractDataset(Dataset, Loader, HasDevice, Generic[T], Sequence[T], metaclass=ABCMeta):
     @abstractmethod
     def load(self, idx: int) -> T:
+        """
+        Do not use this directly.
+        """
         raise NotImplementedError
 
     @override
@@ -66,13 +70,19 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     Do not use this as a generic class. Only parameterize it if you are inheriting from it.
     """
 
-    def __init__(self, images: D, *, device: Device = "cpu") -> None:
+    def __init__(self, images: D, *, transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
+        self._transform: Transform | None = transform.to(device) if transform else None
 
     @override
     def __len__(self) -> int:
         return len(self._images)
+
+    @override
+    def __getitem__(self, idx: int) -> torch.Tensor:
+        item = super().__getitem__(idx).to(self._device)
+        return self._transform(item) if self._transform else item
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
@@ -80,16 +90,24 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     Do not use this as a generic class. Only parameterize it if you are inheriting from it.
     """
 
-    def __init__(self, images: D, labels: D, *, device: Device = "cpu") -> None:
+    def __init__(self, images: D, labels: D, *, transform: JointTransform | None = None,
+                 device: Device = "cpu") -> None:
         super().__init__(device)
         if len(images) != len(labels):
             raise ValueError(f"Unmatched number of images {len(images)} and labels {len(labels)}")
         self._images: D = images
         self._labels: D = labels
+        self._transform: JointTransform | None = transform.to(device) if transform else None
 
     @override
     def __len__(self) -> int:
         return len(self._images)
+
+    @override
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        image, label = super().__getitem__(idx)
+        image, label = image.to(self._device), label.to(self._device)
+        return self._transform(image, label) if self._transform else (image, label)
 
     @abstractmethod
     def construct_new(self, images: D, labels: D) -> Self:
@@ -113,25 +131,28 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
 
 class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
-    def __init__(self, images: Sequence[torch.Tensor], device: Device = "cpu") -> None:
-        super().__init__(images, device=device)
+    def __init__(self, images: Sequence[torch.Tensor], *, transform: Transform | None = None,
+                 device: Device = "cpu") -> None:
+        super().__init__(images, transform=transform, device=device)
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return self._images[idx].to(self._device)
+        return self._images[idx]
 
 
 class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
-    def __init__(self, images: UnsupervisedDataset, labels: UnsupervisedDataset, *, device: Device = "cpu") -> None:
-        super().__init__(images, labels, device=device)
+    def __init__(self, images: UnsupervisedDataset, labels: UnsupervisedDataset, *,
+                 transform: JointTransform | None = None, device: Device = "cpu") -> None:
+        super().__init__(images, labels, transform=transform, device=device)
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._images[idx].to(self._device), self._labels[idx].to(self._device)
+        return self._images[idx], self._labels[idx]
 
     @override
     def construct_new(self, images: UnsupervisedDataset, labels: UnsupervisedDataset) -> Self:
-        return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), device=self._device)
+        return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), transform=self._transform,
+                             device=self._device)
 
 
 class ComposeDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor] | torch.Tensor]):
@@ -180,10 +201,11 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
 
 
 class SimpleDataset(PathBasedUnsupervisedDataset):
-    def __init__(self, folder: str | PathLike[str], *, device: Device = "cpu") -> None:
+    def __init__(self, folder: str | PathLike[str], *, transform: Transform | None = None,
+                 device: Device = "cpu") -> None:
         images = listdir(folder)
         images.sort()
-        super().__init__(images, device=device)
+        super().__init__(images, transform=transform, device=device)
         self._folder: str = folder
 
     @override
@@ -215,17 +237,16 @@ class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta
 
 class NNUNetDataset(PathBasedSupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, split: str | Literal["Tr", "Ts"] = "Tr", prefix: str = "",
-                 align_spacing: bool = False, image_transform: Transform | None = None,
-                 label_transform: Transform | None = None, device: Device = "cpu") -> None:
+                 align_spacing: bool = False, transform: JointTransform | None = None, device: Device = "cpu") -> None:
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
         labels.sort()
         self._multimodal_images: list[list[str]] = []
         if len(images) == len(labels):
-            super().__init__(images, labels, device=device)
+            super().__init__(images, labels, transform=transform, device=device)
         else:
-            super().__init__([""] * len(labels), labels, device=device)
+            super().__init__([""] * len(labels), labels, transform=transform, device=device)
             current_case = ""
             for image in images:
                 case = image[:image.rfind("_")]
@@ -240,8 +261,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._folded: bool = False
         self._prefix: str = prefix
         self._align_spacing: bool = align_spacing
-        self._image_transform: Transform | None = image_transform
-        self._label_transform: Transform | None = label_transform
 
     @staticmethod
     def _create_subset(folder: str) -> None:
@@ -261,10 +280,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
             f"{self._folder}/labels{self._split}/{self._labels[idx]}", is_label=True, align_spacing=self._align_spacing,
             device=self._device
         )
-        if self._image_transform:
-            image = self._image_transform(image)
-        if self._label_transform:
-            label = self._label_transform(label)
         return image, label
 
     def save(self, split: str | Literal["Tr", "Ts"], *, target_folder: str | PathLike[str] | None = None) -> None:
@@ -284,8 +299,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         if self._folded:
             raise ValueError("Cannot construct a new dataset from a fold")
         new = self.__class__(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
-                             image_transform=self._image_transform, label_transform=self._label_transform,
-                             device=self._device)
+                             transform=self._transform, device=self._device)
         new._images = images
         new._labels = labels
         new._folded = True
@@ -293,8 +307,9 @@ class NNUNetDataset(PathBasedSupervisedDataset):
 
 
 class BinarizedDataset(SupervisedDataset[D]):
-    def __init__(self, base: SupervisedDataset[D], positive_ids: tuple[int, ...]) -> None:
-        super().__init__(base._images, base._labels)
+    def __init__(self, base: SupervisedDataset[D], positive_ids: tuple[int, ...], *,
+                 transform: JointTransform | None = None, device: Device = "cpu") -> None:
+        super().__init__(base._images, base._labels, transform=transform, device=device)
         self._base: SupervisedDataset[D] = base
         self._positive_ids: tuple[int, ...] = positive_ids
 
