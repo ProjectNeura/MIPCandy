@@ -11,6 +11,7 @@ from pandas import DataFrame
 from torch.utils.data import Dataset
 
 from mipcandy.data.io import load_image
+from mipcandy.data.transform import JointTransform
 from mipcandy.layer import HasDevice
 from mipcandy.types import Transform, Device
 
@@ -216,7 +217,8 @@ class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta
 class NNUNetDataset(PathBasedSupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, split: str | Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, image_transform: Transform | None = None,
-                 label_transform: Transform | None = None, device: Device = "cpu") -> None:
+                 label_transform: Transform | None = None, joint_transform: JointTransform | None = None,
+                 device: Device = "cpu") -> None:
         images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
         images.sort()
         labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
@@ -242,6 +244,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._align_spacing: bool = align_spacing
         self._image_transform: Transform | None = image_transform
         self._label_transform: Transform | None = label_transform
+        self._joint_transform: JointTransform | None = joint_transform
 
     @staticmethod
     def _create_subset(folder: str) -> None:
