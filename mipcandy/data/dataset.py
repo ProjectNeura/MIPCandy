@@ -73,7 +73,7 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     def __init__(self, images: D, *, transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
-        self._transform: Transform | None = transform
+        self._transform: Transform | None = transform.to(device)
 
     @override
     def __len__(self) -> int:
@@ -81,7 +81,8 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
 
     @override
     def __getitem__(self, idx: int) -> torch.Tensor:
-        return self._transform(super().__getitem__(idx)) if self._transform else super().__getitem__(idx)
+        item = super().__getitem__(idx).to(self._device)
+        return self._transform(item) if self._transform else item
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
@@ -96,7 +97,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             raise ValueError(f"Unmatched number of images {len(images)} and labels {len(labels)}")
         self._images: D = images
         self._labels: D = labels
-        self._transform: JointTransform | None = transform
+        self._transform: JointTransform | None = transform.to(device)
 
     @override
     def __len__(self) -> int:
@@ -104,7 +105,9 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._transform(*super().__getitem__(idx)) if self._transform else super().__getitem__(idx)
+        image, label = super().__getitem__(idx)
+        image, label = image.to(self._device), label.to(self._device)
+        return self._transform(image, label) if self._transform else (image, label)
 
     @abstractmethod
     def construct_new(self, images: D, labels: D) -> Self:
@@ -134,7 +137,7 @@ class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return self._images[idx].to(self._device)
+        return self._images[idx]
 
 
 class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
@@ -144,7 +147,7 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._images[idx].to(self._device), self._labels[idx].to(self._device)
+        return self._images[idx], self._labels[idx]
 
     @override
     def construct_new(self, images: UnsupervisedDataset, labels: UnsupervisedDataset) -> Self:
@@ -318,7 +321,6 @@ class BinarizedDataset(SupervisedDataset[D]):
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._base.load(idx)
-        image, label = image.to(self._device), label.to(self._device)
         for pid in self._positive_ids:
             label[label == pid] = -1
         label[label > 0] = 0
