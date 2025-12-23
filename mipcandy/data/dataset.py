@@ -52,6 +52,9 @@ T = TypeVar("T")
 class _AbstractDataset(Dataset, Loader, HasDevice, Generic[T], Sequence[T], metaclass=ABCMeta):
     @abstractmethod
     def load(self, idx: int) -> T:
+        """
+        Do not use this directly.
+        """
         raise NotImplementedError
 
     @override
@@ -100,7 +103,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
         return len(self._images)
 
     @override
-    def __getitem__(self, idx: int) -> torch.Tensor:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self._transform(*super().__getitem__(idx)) if self._transform else super().__getitem__(idx)
 
     @abstractmethod
@@ -275,8 +278,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
             f"{self._folder}/labels{self._split}/{self._labels[idx]}", is_label=True, align_spacing=self._align_spacing,
             device=self._device
         )
-        if self._transform:
-            image, label = self._transform(image, label)
         return image, label
 
     def save(self, split: str | Literal["Tr", "Ts"], *, target_folder: str | PathLike[str] | None = None) -> None:
