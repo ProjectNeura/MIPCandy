@@ -20,14 +20,13 @@ class SWMetadata(object):
 
 
 class SlidingWindow(HasDevice, metaclass=ABCMeta):
-    sliding_window_batch_size: int | None = None
-
     @abstractmethod
     def get_window_shape(self) -> Shape:
         raise NotImplementedError
 
+    @abstractmethod
     def get_batch_size(self) -> int | None:
-        return self.sliding_window_batch_size
+        raise NotImplementedError
 
     def gaussian_1d(self, k: int, *, sigma_scale: float = 0.5) -> torch.Tensor:
         x = torch.linspace(-1.0, 1.0, steps=k, device=self._device)
