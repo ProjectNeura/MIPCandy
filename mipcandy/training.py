@@ -541,7 +541,7 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
 
     @abstractmethod
-    def validate_case_windowed(self, images: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
+    def validate_case_windowed(self, outputs: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
                                metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
         raise NotImplementedError
 
@@ -550,23 +550,15 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         str, float], torch.Tensor]:
         images, metadata = self.do_sliding_window(image.unsqueeze(0))
         batch_size = self.get_batch_size()
+        model = toolbox.ema if toolbox.ema else toolbox.model
         if not batch_size or batch_size >= images.shape[0]:
-            return self.validate_case_windowed(images, label, toolbox, metadata)
-        output_list = []
-        total_loss = 0
-        total_metrics = {}
-        for i in range(0, images.shape[0], batch_size):
-            batch_images = images[i:i + batch_size]
-            loss, metrics, output = self.validate_case_windowed(batch_images, label, toolbox, metadata)
-            output_list.append(output)
-            total_loss += loss * batch_images.shape[0]
-            for key, value in metrics.items():
-                total_metrics[key] = total_metrics.get(key, 0.0) + value * batch_images.shape[0]
-        combined_output = torch.cat(output_list, dim=0)
-        total_loss /= images.shape[0]
-        for key in total_metrics:
-            total_metrics[key] /= images.shape[0]
-        return total_loss, total_metrics, combined_output
+            outputs = model(images)
+        else:
+            output_list: list[torch.Tensor] = []
+            for i in range(0, images.shape[0], batch_size):
+                output_list.append(model(images[i:i + batch_size]))
+            outputs = torch.cat(output_list, dim=0)
+        return self.validate_case_windowed(outputs, label, toolbox, metadata)
 
     @abstractmethod
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
