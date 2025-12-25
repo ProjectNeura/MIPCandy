@@ -101,9 +101,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
         return {column: df[column].astype(float).tolist() for column in df.columns}
 
-    def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, ema: bool) -> TrainerToolbox:
-        toolbox = self._build_toolbox(num_epochs, example_shape, ema, model=self.load_model(
-            example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
+    def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
+                     ema: bool) -> TrainerToolbox:
+        toolbox = self._build_toolbox(num_epochs, example_shape, compile_model, ema, model=self.load_model(
+            example_shape, compile_model, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
         ))
         toolbox.optimizer.load_state_dict(torch.load(f"{self.experiment_folder()}/optimizer.pth"))
         toolbox.scheduler.load_state_dict(torch.load(f"{self.experiment_folder()}/scheduler.pth"))
@@ -337,17 +338,18 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def build_ema(self, model: nn.Module) -> nn.Module:
         raise NotImplementedError
 
-    def _build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, ema: bool, *,
+    def _build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool, ema: bool, *,
                        model: nn.Module | None = None) -> TrainerToolbox:
         if not model:
-            model = self.load_model(example_shape)
+            model = self.load_model(example_shape, compile_model)
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
         return TrainerToolbox(model, optimizer, scheduler, criterion, self.build_ema(model) if ema else None)
 
-    def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, ema: bool) -> TrainerToolbox:
-        return self._build_toolbox(num_epochs, example_shape, ema)
+    def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
+                      ema: bool) -> TrainerToolbox:
+        return self._build_toolbox(num_epochs, example_shape, compile_model, ema)
 
     # Training methods
 
@@ -384,9 +386,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
         self._bump_metrics()
 
-    def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
-              seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
-              val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75) -> None:
+    def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
+              ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
+              val_score_prediction: bool = True, val_score_prediction_degree: int = 5, save_preview: bool = True,
+              preview_quality: float = .75) -> None:
         training_arguments = self.filter_train_params(**locals())
         self.init_experiment()
         if note:
@@ -400,10 +403,12 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
-        toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(num_epochs, example_shape, ema)
+        toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
+            num_epochs, example_shape, compile_model, ema
+        )
         model_name = toolbox.model.__class__.__name__
-        sanity_check_result = sanity_check(toolbox.model, example_shape, device=self._device)
         self.log(f"Model: {model_name}")
+        sanity_check_result = sanity_check(self.build_network(example_shape), example_shape, device=self._device)
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
@@ -477,7 +482,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     @staticmethod
     def filter_train_params(**kwargs) -> dict[str, Setting]:
         return {k: v for k, v in kwargs.items() if k in (
-            "note", "num_checkpoints", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
+            "note", "num_checkpoints", "compile_model", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
             "val_score_prediction_degree", "save_preview", "preview_quality"
         )}
 
