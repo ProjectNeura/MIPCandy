@@ -3,11 +3,13 @@ from typing import Literal, Sequence
 import torch
 
 
-def ensure_num_dimensions(x: torch.Tensor, num_dimensions: int) -> torch.Tensor:
+def ensure_num_dimensions(x: torch.Tensor, num_dimensions: int, *, append_before: bool = True) -> torch.Tensor:
     d = num_dimensions - x.ndim
     if d == 0:
         return x
-    return x.reshape(*((1,) * d + x.shape)) if d > 0 else x.reshape(x.shape[-num_dimensions:])
+    return (x.reshape(*((1,) * d + x.shape)) if d > 0 else x.reshape(x.shape[-num_dimensions:])) if append_before else (
+        x.reshape(*(x.shape + (1,) * d)) if d > 0 else x.reshape(x.shape[:-num_dimensions])
+    )
 
 
 def orthographic_views(x: torch.Tensor, reduction: Literal["mean", "sum"] = "mean") -> tuple[
