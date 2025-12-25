@@ -19,7 +19,7 @@ def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None
     if target_iso is None:
         target_iso = min(old_spacing)
     new_spacing = (target_iso,) * dim
-    new_size = (max(1, floor(old_spacing[i] * (old_size[i] - 1) / new_spacing[i] + 1)) for i in range(dim))
+    new_size = tuple(max(1, floor(old_spacing[i] * (old_size[i] - 1) / new_spacing[i] + 1)) for i in range(dim))
     return SpITK.Resample(
         image, new_size, SpITK.Transform(), interpolator, origin, new_spacing, direction, 0, image.GetPixelID()
     )
@@ -35,11 +35,13 @@ def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spaci
         img = ensure_num_dimensions(img, 4)
         return img.squeeze(1) if img.shape[1] == 1 else img
     if path.endswith(".png") or path.endswith(".jpg") or path.endswith(".jpeg"):
-        return ensure_num_dimensions(img, 3)
+        return ensure_num_dimensions(img, 3).permute(2, 0, 1)
     raise NotImplementedError(f"Unsupported file type: {path}")
 
 
 def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
-    if path.endswith(".png"):
-        image = auto_convert(image).to(torch.uint8)
-    SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy()), path)
+    vector = False
+    if path.endswith(".png") or path.endswith(".jpg") or path.endswith(".jpeg"):
+        vector = True
+        image = auto_convert(image).to(torch.uint8).permute(1, 2, 0)
+    SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy(), isVector=vector), path)
