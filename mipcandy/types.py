@@ -1,4 +1,3 @@
-from importlib.util import find_spec
 from os import PathLike
 from typing import Any, Iterable, Sequence
 
@@ -9,12 +8,7 @@ from torchvision.transforms import Compose
 type Setting = str | int | float | bool | None | dict[str, Setting] | list[Setting]
 type Settings = dict[str, Setting]
 type Params = Iterable[torch.Tensor] | Iterable[dict[str, Any]]
-if find_spec("monai"):
-    from monai.transforms import Transform as _Transform
-
-    type Transform = nn.Module | Compose | _Transform
-else:
-    type Transform = nn.Module | Compose
+type Transform = nn.Module | Compose
 type SupportedPredictant = Sequence[torch.Tensor] | str | PathLike[str] | Sequence[str] | torch.Tensor
 type Colormap = Sequence[int | tuple[int, int, int]]
 type Device = torch.device | str
