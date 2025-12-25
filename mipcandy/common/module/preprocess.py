@@ -183,5 +183,5 @@ class ColorizeLabel(nn.Module):
         if not self._batch:
             x = x.unsqueeze(0)
         cmap = self._colormap.to(x.device)
-        x = cmap[(x > 0).int()] if 0 <= x.min() < x.max() <= 1 else cmap[x.int()].movedim(-1, 1)
+        x = (cmap[(x > 0).int()] if 0 <= x.min() < x.max() <= 1 else cmap[x.int()]).movedim(-1, 1)
         return x if self._batch else x.squeeze(0)
