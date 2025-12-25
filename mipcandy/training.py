@@ -554,10 +554,16 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         if not batch_size or batch_size >= images.shape[0]:
             outputs = model(images)
         else:
-            output_list: list[torch.Tensor] = []
-            for i in range(0, images.shape[0], batch_size):
-                output_list.append(model(images[i:i + batch_size]))
-            outputs = torch.cat(output_list, dim=0)
+            num_windows = images.shape[0]
+            num_batches = (num_windows + batch_size - 1) // batch_size
+            first_batch = model(images[:batch_size])
+            outputs = torch.empty((num_windows, *first_batch.shape[1:]), dtype=first_batch.dtype,
+                                  device=first_batch.device)
+            outputs[:batch_size] = first_batch
+            for batch_idx in range(1, num_batches):
+                start = batch_idx * batch_size
+                end = min(start + batch_size, num_windows)
+                outputs[start:end] = model(images[start:end])
         return self.validate_case_windowed(outputs, label, toolbox, metadata)
 
     @abstractmethod
@@ -573,16 +579,24 @@ class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
         batch_size = self.get_batch_size()
         if not batch_size or batch_size >= images.shape[0]:
             return self.backward_windowed(images, labels, toolbox, metadata)
+        num_windows = images.shape[0]
+        num_batches = (num_windows + batch_size - 1) // batch_size
         total_loss = 0
         total_metrics = {}
-        for i in range(0, images.shape[0], batch_size):
-            batch_images = images[i:i + batch_size]
-            batch_labels = labels[i:i + batch_size]
+        for batch_idx in range(num_batches):
+            start = batch_idx * batch_size
+            end = min(start + batch_size, num_windows)
+            batch_size_actual = end - start
+            batch_images = images[start:end]
+            batch_labels = labels[start:end]
             loss, metrics = self.backward_windowed(batch_images, batch_labels, toolbox, metadata)
-            total_loss += loss * batch_images.shape[0]
+            total_loss += loss * batch_size_actual
             for key, value in metrics.items():
-                total_metrics[key] = total_metrics.get(key, 0.0) + value * batch_images.shape[0]
-        total_loss /= images.shape[0]
+                if key in total_metrics:
+                    total_metrics[key] += value * batch_size_actual
+                else:
+                    total_metrics[key] = value * batch_size_actual
+        total_loss /= num_windows
         for key in total_metrics:
-            total_metrics[key] /= images.shape[0]
+            total_metrics[key] /= num_windows
         return total_loss, total_metrics
