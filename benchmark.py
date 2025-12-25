@@ -29,7 +29,8 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
         download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset")
+    dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(
+        transform=build_nnunet_transforms()), device="cuda")
     train, val = dataset.fold()
     train_loader = DataLoader(train, batch_size=1, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
@@ -44,7 +45,7 @@ def resize(size: int, input_folder: str | PathLike[str], output_folder: str | Pa
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
         download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(Compose([
+    dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(transform=Compose([
         Resized(("image", "label"), (size, size, size)), build_nnunet_transforms()
     ])), device=device)
     train, val = dataset.fold()
