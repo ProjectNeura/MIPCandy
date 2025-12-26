@@ -50,12 +50,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return AbsoluteLinearLR(optimizer, -8e-6 / len(self._dataloader), 1e-2)
 
     @override
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float]]:
+    def compute_loss(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        torch.Tensor, dict[str, float]]:
         masks = toolbox.model(images)
-        loss, metrics = toolbox.criterion(masks, labels)
-        loss.backward()
-        return loss.item(), metrics
+        return toolbox.criterion(masks, labels)
 
     @override
     def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
@@ -73,7 +71,7 @@ class SlidingSegmentationTrainer(SlidingTrainer, SegmentationTrainer, metaclass=
     @override
     def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
                           metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        return SegmentationTrainer.backward(self, images, labels, toolbox)
+        return Trainer.backward(self, images, labels, toolbox)
 
     @override
     def validate_case_windowed(self, outputs: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
@@ -104,7 +102,7 @@ class SlidingValidationTrainer(SlidingSegmentationTrainer, metaclass=ABCMeta):
     @override
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        return SegmentationTrainer.backward(self, images, labels, toolbox)
+        return Trainer.backward(self, images, labels, toolbox)
 
     @override
     def validate_case_windowed(self, outputs: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
