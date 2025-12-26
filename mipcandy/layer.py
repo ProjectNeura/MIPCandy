@@ -114,6 +114,6 @@ class WithNetwork(HasDevice, metaclass=ABCMeta):
 
     def load_model(self, example_shape: AmbiguousShape, compile_model: bool, *,
                    checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
-        model = self.build_network_from_checkpoint(example_shape, checkpoint) if checkpoint else self.build_network(
-            example_shape).to(self._device)
+        model = (self.build_network_from_checkpoint(example_shape, checkpoint) if checkpoint else self.build_network(
+            example_shape)).to(self._device)
         return torch.compile(model) if compile_model else model

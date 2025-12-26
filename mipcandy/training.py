@@ -403,12 +403,14 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
+        self.log("Building a template model to run sanity check on...")
         template_model = self.build_network(example_shape)
         model_name = template_model.__class__.__name__
         self.log(f"Model: {model_name}")
         sanity_check_result = sanity_check(template_model, example_shape, device=self._device)
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
+        self.log("Building toolbox...")
         toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
             num_epochs, example_shape, compile_model, ema
         )
