@@ -2,6 +2,7 @@ from argparse import ArgumentParser
 from os import PathLike
 from os.path import exists
 
+import torch
 from monai.transforms import Resized
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
@@ -34,6 +35,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     train, val = dataset.fold()
     train_loader = DataLoader(train, batch_size=1, shuffle=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
+    getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
     trainer = UNetSlidingTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
     trainer.train(num_epochs, note="MIP Candy Benchmark - full size")
