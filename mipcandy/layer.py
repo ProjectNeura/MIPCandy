@@ -1,5 +1,4 @@
 from abc import ABCMeta, abstractmethod
-from functools import lru_cache
 from typing import Any, Generator, Self, Mapping
 
 import torch
@@ -63,31 +62,6 @@ def auto_device() -> Device:
         return "mps"
     return "cpu"
 
-@lru_cache(maxsize=1)
-def _min_compile_cc() -> tuple[int, str]:
-    cuda_version = torch.version.cuda or ""
-    if cuda_version:
-        parts = cuda_version.split(".")
-        major, minor = int(parts[0]), int(parts[1]) if len(parts) > 1 else 0
-        min_cc = 75 if major >= 13 or (major == 12 and minor >= 8) else 70
-    else:
-        min_cc = 70
-    return min_cc, cuda_version
-
-
-def supports_compile(device: Device) -> bool:
-    if not torch.cuda.is_available():
-        return False
-    if isinstance(device, str) and device.startswith("cuda"):
-        device_idx = int(device.split(":")[1]) if ":" in device else 0
-    elif isinstance(device, torch.device) and device.type == "cuda":
-        device_idx = device.index or 0
-    else:
-        return False
-    min_cc, _ = _min_compile_cc()
-    props = torch.cuda.get_device_properties(device_idx)
-    return props.major * 10 + props.minor >= min_cc
-
 
 class WithPaddingModule(HasDevice):
     def __init__(self, device: Device) -> None:
@@ -142,10 +116,4 @@ class WithNetwork(HasDevice, metaclass=ABCMeta):
                    checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
         model = (self.build_network_from_checkpoint(example_shape, checkpoint) if checkpoint else self.build_network(
             example_shape)).to(self._device)
-        if compile_model and not supports_compile(self._device):
-            from warnings import warn
-            min_cc, cuda_ver = _min_compile_cc()
-            warn(f"torch.compile requires CUDA compute capability >= {min_cc / 10} (CUDA {cuda_ver or 'N/A'}), "
-                 f"but {self._device} does not meet this requirement. Skipping compilation.")
-            compile_model = False
         return torch.compile(model, dynamic=True) if compile_model else model
