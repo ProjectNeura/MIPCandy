@@ -13,7 +13,7 @@ class JointTransform(nn.Module):
         self._label_only: Transform | None = label_only
         self._keys: tuple[str, str] = keys
 
-    def __call__(self, image: torch.Tensor, label: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, image: torch.Tensor, label: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ik, lk = self._keys
         data = {ik: image, lk: label}
         if self._transform:
@@ -22,7 +22,7 @@ class JointTransform(nn.Module):
             data[ik] = self._image_only(data[ik])
         if self._label_only:
             data[lk] = self._label_only(data[lk])
-        return data[ik], data[lk]
+        return torch.as_tensor(data[ik]), torch.as_tensor(data[lk])
 
 
 class MONAITransform(nn.Module):
