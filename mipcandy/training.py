@@ -403,14 +403,15 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
+        template_model = self.build_network(example_shape)
+        model_name = template_model.__class__.__name__
+        self.log(f"Model: {model_name}")
+        sanity_check_result = sanity_check(template_model, example_shape, device=self._device)
+        self.log(str(sanity_check_result))
+        self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
             num_epochs, example_shape, compile_model, ema
         )
-        model_name = toolbox.model.__class__.__name__
-        self.log(f"Model: {model_name}")
-        sanity_check_result = sanity_check(self.build_network(example_shape), example_shape, device=self._device)
-        self.log(str(sanity_check_result))
-        self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
         es_tolerance = early_stop_tolerance
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
