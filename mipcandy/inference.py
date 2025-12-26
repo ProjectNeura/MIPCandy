@@ -52,7 +52,7 @@ class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def lazy_load_model(self) -> None:
         if self._model:
             return
-        self._model = self.load_model(self._example_shape, checkpoint=torch.load(
+        self._model = self.load_model(self._example_shape, False, checkpoint=torch.load(
             f"{self._experiment_folder}/{self._checkpoint}"
         ))
         self._model.eval()
