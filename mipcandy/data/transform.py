@@ -22,7 +22,7 @@ class JointTransform(nn.Module):
             data[ik] = self._image_only(data[ik])
         if self._label_only:
             data[lk] = self._label_only(data[lk])
-        return torch.as_tensor(data[ik]), torch.as_tensor(data[lk])
+        return data[ik], data[lk]
 
 
 class MONAITransform(nn.Module):
