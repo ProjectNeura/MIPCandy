@@ -50,17 +50,18 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
                     SWMetadata(kernel, stride, 2, b, (h, w), n))
         else:
             b, c, d, h, w = t.shape
-            sd, sh, sw = stride
+            sd, sh, sw = stride = window_shape
             kd, kh, kw = kernel = sd * 2, sh * 2, sw * 2
-            image_windows = []
-            for z in range(0, d - kd + 1, sd):
-                for y in range(0, h - kh + 1, sh):
-                    for x in range(0, w - kw + 1, sw):
-                        image_windows.append(t[:, :, z:z + kd, y:y + kh, x:x + kw])
-            t = torch.stack(image_windows, dim=0)
-            n = t.shape[0]
-            return (t.permute(0, 1, 2, 3, 4, 5).contiguous().view(b * n, c, kd, kh, kw),
-                    SWMetadata(kernel, stride, 3, b, (d, h, w), n))
+            z_starts = torch.arange(0, d - kd + 1, sd, device=self._device)
+            y_starts = torch.arange(0, h - kh + 1, sh, device=self._device)
+            x_starts = torch.arange(0, w - kw + 1, sw, device=self._device)
+            zz, yy, xx = torch.meshgrid(z_starts, y_starts, x_starts, indexing='ij')
+            num_windows = zz.numel()
+            windows = torch.zeros((num_windows, b, c, kd, kh, kw), device=self._device, dtype=t.dtype)
+            for idx, (z, y, x) in enumerate(zip(zz.flatten(), yy.flatten(), xx.flatten())):
+                windows[idx] = t[:, :, z:z + kd, y:y + kh, x:x + kw]
+            windows = windows.view(num_windows * b, c, kd, kh, kw)
+            return windows, SWMetadata(kernel, stride, 3, b, (d, h, w), num_windows)
 
     def revert_sliding_window(self, t: torch.Tensor, metadata: SWMetadata, *, clamp_min: float = 1e-8) -> torch.Tensor:
         kernel = metadata.kernel
