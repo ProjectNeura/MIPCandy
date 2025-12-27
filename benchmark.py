@@ -33,7 +33,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(
         transform=build_nnunet_transforms()), device="cuda")
     train, val = dataset.fold()
-    train_loader = DataLoader(train, batch_size=1, shuffle=True)
+    train_loader = DataLoader(train, batch_size=1, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
     trainer = UNetSlidingTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
@@ -51,7 +51,7 @@ def resize(size: int, input_folder: str | PathLike[str], output_folder: str | Pa
         Resized(("image", "label"), (size, size, size)), build_nnunet_transforms()
     ])), device=device)
     train, val = dataset.fold()
-    train_loader = DataLoader(train, batch_size=2, shuffle=True)
+    train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
@@ -78,7 +78,7 @@ def roi(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *
     annotations = inspect_dataset(dataset, output_folder)
     dataset = ROIDataset(annotations)
     train, val = dataset.fold()
-    train_loader = DataLoader(train, batch_size=2, shuffle=True)
+    train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
