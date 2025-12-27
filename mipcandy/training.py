@@ -354,18 +354,16 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     # Training methods
 
-    def compute_loss(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
-        torch.Tensor, dict[str, float]]:
-        raise NotImplementedError("Override `compute_loss()` to support AMP, or override `backward()` directly")
-
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float]]:
-        loss, metrics = self.compute_loss(images, labels, toolbox)
+    def _do_backward(self, loss: torch.Tensor, toolbox: TrainerToolbox) -> None:
         if toolbox.scaler:
             toolbox.scaler.scale(loss).backward()
         else:
             loss.backward()
-        return loss.item(), metrics
+
+    @abstractmethod
+    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+        str, float]]:
+        raise NotImplementedError
 
     def train_batch(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
