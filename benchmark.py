@@ -33,7 +33,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     dataset = NNUNetDataset(f"{input_folder}/dataset", device="cuda")
     train, val = dataset.fold()
     annotations = inspect(train)
-    annotations.set_roi_shape((32, 128, 128))
+    annotations.set_roi_shape((32, 224, 224))
     train = RandomROIDataset(annotations)
     train._transform = JointTransform(transform=build_nnunet_transforms())
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
