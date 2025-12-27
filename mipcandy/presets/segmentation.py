@@ -58,7 +58,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         str, float]]:
         masks = toolbox.model(images)
         loss, metrics = toolbox.criterion(masks, labels)
-        loss.backward()
+        self._do_backward(loss, toolbox)
         return loss.item(), metrics
 
     @override
