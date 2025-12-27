@@ -55,6 +55,17 @@ class SWMetadata(object):
 
 
 class SlidingWindow(HasDevice, metaclass=ABCMeta):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Try to compile the kernels for better performance
+        try:
+            self._extract_3d_compiled = torch.compile(_extract_3d_windows_kernel, mode="max-autotune")
+            self._reconstruct_3d_compiled = torch.compile(_reconstruct_3d_windows_kernel, mode="max-autotune")
+        except Exception:
+            # Fallback to non-compiled versions if compilation fails
+            self._extract_3d_compiled = _extract_3d_windows_kernel
+            self._reconstruct_3d_compiled = _reconstruct_3d_windows_kernel
+
     @abstractmethod
     def get_window_shape(self) -> Shape:
         raise NotImplementedError
@@ -94,8 +105,8 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
             nx = (w - kw) // sw + 1
             num_windows = nz * ny * nx
 
-            # Use optimized kernel for extraction
-            windows = _extract_3d_windows_kernel(t, sd, sh, sw, kd, kh, kw, num_windows)
+            # Use compiled kernel for extraction
+            windows = self._extract_3d_compiled(t, sd, sh, sw, kd, kh, kw, num_windows)
             windows = windows.view(num_windows * b, c, kd, kh, kw)
             return windows, SWMetadata(kernel, stride, 3, b, (d, h, w), num_windows)
 
@@ -145,8 +156,8 @@ class SlidingWindow(HasDevice, metaclass=ABCMeta):
             # Pre-multiply all windows by weights before loop
             t_weighted = t.view(n, b, c, kd, kh, kw) * w3d
 
-            # Use optimized kernel for reconstruction
-            canvas, acc_w = _reconstruct_3d_windows_kernel(
+            # Use compiled kernel for reconstruction
+            canvas, acc_w = self._reconstruct_3d_compiled(
                 t_weighted, w3d, d, h, w, sd, sh, sw, kd, kh, kw, b, c, dtype, self._device
             )
 
