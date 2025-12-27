@@ -82,7 +82,9 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     @override
     def __getitem__(self, idx: int) -> torch.Tensor:
         item = super().__getitem__(idx).to(self._device)
-        return self._transform(item) if self._transform else item
+        if self._transform:
+            item = self._transform(item)
+        return item.as_tensor() if hasattr(item, "as_tensor") else item
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
@@ -107,7 +109,10 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = super().__getitem__(idx)
         image, label = image.to(self._device), label.to(self._device)
-        return self._transform(image, label) if self._transform else (image, label)
+        if self._transform:
+            image, label = self._transform(image, label)
+        return image.as_tensor() if hasattr(image, "as_tensor") else image, label.as_tensor() if hasattr(
+            label, "as_tensor") else label
 
     @abstractmethod
     def construct_new(self, images: D, labels: D) -> Self:
