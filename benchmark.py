@@ -30,8 +30,11 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
         download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(
-        transform=build_nnunet_transforms()), device="cuda")
+    dataset = NNUNetDataset(f"{input_folder}/dataset", device="cuda")
+    annotations = inspect_dataset(dataset, output_folder)
+    annotations.set_roi_shape((128, 128, 128))
+    dataset = ROIDataset(annotations)
+    dataset._transform = build_nnunet_transforms()
     train, val = dataset.fold()
     train_loader = DataLoader(train, batch_size=1, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)

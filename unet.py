@@ -3,7 +3,7 @@ from typing import override
 from monai.networks.nets import BasicUNet
 from torch import nn
 
-from mipcandy import SegmentationTrainer, SlidingSegmentationTrainer, AmbiguousShape, DiceBCELossWithLogits
+from mipcandy import SegmentationTrainer, SlidingValidationTrainer, AmbiguousShape, DiceBCELossWithLogits
 
 
 class UNetTrainer(SegmentationTrainer):
@@ -16,6 +16,6 @@ class UNetTrainer(SegmentationTrainer):
         return BasicUNet(3, example_shape[0], self.num_classes)
 
 
-class UNetSlidingTrainer(SlidingSegmentationTrainer, UNetTrainer):
-    sliding_window_shape = (16, 64, 64)
+class UNetSlidingTrainer(SlidingValidationTrainer, UNetTrainer):
+    sliding_window_shape = (32, 64, 64)
     sliding_window_batch_size = 8
