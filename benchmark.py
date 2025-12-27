@@ -35,7 +35,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     annotations = inspect(train)
     annotations.set_roi_shape((32, 128, 128))
     train = ROIDataset(annotations)
-    train._transform = build_nnunet_transforms()
+    train._transform = JointTransform(transform=build_nnunet_transforms())
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
