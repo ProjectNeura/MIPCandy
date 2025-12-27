@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
-    load_inspection_annotations, ROIDataset, JointTransform
+    load_inspection_annotations, ROIDataset, JointTransform, RandomROIDataset
 from transforms import build_nnunet_transforms
 from unet import UNetTrainer, UNetSlidingTrainer
 
@@ -34,7 +34,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     train, val = dataset.fold()
     annotations = inspect(train)
     annotations.set_roi_shape((32, 128, 128))
-    train = ROIDataset(annotations)
+    train = RandomROIDataset(annotations)
     train._transform = JointTransform(transform=build_nnunet_transforms())
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
