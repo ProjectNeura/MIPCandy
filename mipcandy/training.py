@@ -48,7 +48,7 @@ class TrainerToolbox(object):
     optimizer: optim.Optimizer
     scheduler: optim.lr_scheduler.LRScheduler
     criterion: nn.Module
-    ema: optim.swa_utils.AveragedModel | None = None
+    ema: nn.Module | None = None
     scaler: torch.amp.GradScaler | None = None
 
 
@@ -104,9 +104,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
         return {column: df[column].astype(float).tolist() for column in df.columns}
 
-    def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape) -> TrainerToolbox:
-        toolbox = self._build_toolbox(num_epochs, example_shape, model=self.load_model(
-            example_shape, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
+    def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
+                     ema: bool) -> TrainerToolbox:
+        toolbox = self._build_toolbox(num_epochs, example_shape, compile_model, ema, model=self.load_model(
+            example_shape, compile_model, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
         ))
         toolbox.optimizer.load_state_dict(torch.load(f"{self.experiment_folder()}/optimizer.pth"))
         toolbox.scheduler.load_state_dict(torch.load(f"{self.experiment_folder()}/scheduler.pth"))
@@ -340,17 +341,22 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def build_criterion(self) -> nn.Module:
         raise NotImplementedError
 
-    def _build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, *,
+    @abstractmethod
+    def build_ema(self, model: nn.Module) -> nn.Module:
+        raise NotImplementedError
+
+    def _build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool, ema: bool, *,
                        model: nn.Module | None = None) -> TrainerToolbox:
         if not model:
-            model = self.load_model(example_shape)
+            model = self.load_model(example_shape, compile_model)
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
-        return TrainerToolbox(model, optimizer, scheduler, criterion)
+        return TrainerToolbox(model, optimizer, scheduler, criterion, self.build_ema(model) if ema else None)
 
-    def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape) -> TrainerToolbox:
-        return self._build_toolbox(num_epochs, example_shape)
+    def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
+                      ema: bool) -> TrainerToolbox:
+        return self._build_toolbox(num_epochs, example_shape, compile_model, ema)
 
     # Training methods
 
@@ -399,10 +405,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
         self._bump_metrics()
 
-    def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, ema: bool = True,
-              seed: int | None = None, early_stop_tolerance: int = 5, val_score_prediction: bool = True,
-              val_score_prediction_degree: int = 5, save_preview: bool = True, preview_quality: float = .75,
-              amp: bool = False) -> None:
+    def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
+              ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
+              val_score_prediction: bool = True, val_score_prediction_degree: int = 5, save_preview: bool = True,
+              preview_quality: float = .75, amp: bool = False) -> None:
         training_arguments = self.filter_train_params(**locals())
         self.init_experiment()
         if note:
@@ -416,18 +422,20 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
-        toolbox = self.load_toolbox(num_epochs, example_shape) if self.recovery() else self.build_toolbox(
-            num_epochs, example_shape)
+        self.log("Building a template model to run sanity check on...")
+        template_model = self.build_network(example_shape)
+        model_name = template_model.__class__.__name__
+        self.log(f"Model: {model_name}")
+        sanity_check_result = sanity_check(template_model, example_shape, device=self._device)
+        self.log(str(sanity_check_result))
+        self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
+        self.log("Building toolbox...")
+        toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
+            num_epochs, example_shape, compile_model, ema
+        )
         if amp:
             toolbox.scaler = torch.amp.GradScaler()
             self.log("Mixed precision training enabled")
-        model_name = toolbox.model.__class__.__name__
-        sanity_check_result = sanity_check(toolbox.model, example_shape, device=self._device)
-        self.log(f"Model: {model_name}")
-        self.log(str(sanity_check_result))
-        self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
-        if ema:
-            toolbox.ema = optim.swa_utils.AveragedModel(toolbox.model)
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
         es_tolerance = early_stop_tolerance
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
@@ -499,7 +507,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     @staticmethod
     def filter_train_params(**kwargs) -> dict[str, Setting]:
         return {k: v for k, v in kwargs.items() if k in (
-            "note", "num_checkpoints", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
+            "note", "num_checkpoints", "compile_model", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
             "val_score_prediction_degree", "save_preview", "preview_quality", "amp"
         )}
 

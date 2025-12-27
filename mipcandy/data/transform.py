@@ -13,7 +13,7 @@ class JointTransform(nn.Module):
         self._label_only: Transform | None = label_only
         self._keys: tuple[str, str] = keys
 
-    def __call__(self, image: torch.Tensor, label: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, image: torch.Tensor, label: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ik, lk = self._keys
         data = {ik: image, lk: label}
         if self._transform:

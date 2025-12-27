@@ -38,6 +38,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
                         screenshot_as=f"{self.experiment_folder()}/actual (preview).png")
 
     @override
+    def build_ema(self, model: nn.Module) -> nn.Module:
+        return optim.swa_utils.AveragedModel(model)
+
+    @override
     def build_criterion(self) -> nn.Module:
         return DiceBCELossWithLogits(self.num_classes, include_background=self.include_background)
 
