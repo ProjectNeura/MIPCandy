@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
-    load_inspection_annotations, ROIDataset, JointTransform, RandomROIDataset
+    load_inspection_annotations, ROIDataset, JointTransform, RandomROIDataset, Frontend
 from transforms import build_nnunet_transforms
 from unet import UNetTrainer, UNetSlidingTrainer
 
@@ -25,7 +25,7 @@ def inspect_dataset(dataset: NNUNetDataset, output_folder: str | PathLike[str]) 
 
 
 def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
-         device: Device | None = None) -> None:
+         device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     if not device:
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
@@ -41,11 +41,12 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
     trainer = UNetSlidingTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
+    trainer.set_frontend(frontend)
     trainer.train(num_epochs, note="MIP Candy Benchmark - full size")
 
 
 def resize(size: int, input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
-           device: Device | None = None) -> None:
+           device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     if not device:
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
@@ -58,21 +59,22 @@ def resize(size: int, input_folder: str | PathLike[str], output_folder: str | Pa
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
+    trainer.set_frontend(frontend)
     trainer.train(num_epochs, note=f"MIP Candy Benchmark - resize{size}")
 
 
 def resize128(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
-              device: Device | None = None) -> None:
+              device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     resize(128, input_folder, output_folder, num_epochs=num_epochs, device=device)
 
 
 def resize256(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
-              device: Device | None = None) -> None:
+              device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     resize(256, input_folder, output_folder, num_epochs=num_epochs, device=device)
 
 
 def roi(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
-        device: Device | None = None) -> None:
+        device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     if not device:
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
@@ -85,6 +87,7 @@ def roi(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
+    trainer.set_frontend(frontend)
     trainer.train(num_epochs, note=f"MIP Candy Benchmark - roi")
 
 
@@ -96,6 +99,8 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output-folder")
     parser.add_argument("--num-epochs", type=int, default=100)
     parser.add_argument("--device", default=None)
+    parser.add_argument("--front-end", choices=(None, "n", "w"), default=None)
     args = parser.parse_args()
     test = locals()[args.test]
-    test(args.input_folder, args.output_folder, num_epochs=args.num_epochs, device=args.device)
+    frontend = args.front_end if args.front_end else Frontend
+    test(args.input_folder, args.output_folder, num_epochs=args.num_epochs, device=args.device, frontend=frontend)
