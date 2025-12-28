@@ -9,6 +9,8 @@ from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
     load_inspection_annotations, ROIDataset, JointTransform, RandomROIDataset, Frontend
+from mipcandy.frontend.notion_fe import NotionFrontend
+from mipcandy.frontend.wandb_fe import WandBFrontend
 from transforms import build_nnunet_transforms
 from unet import UNetTrainer, UNetSlidingTrainer
 
@@ -102,5 +104,5 @@ if __name__ == "__main__":
     parser.add_argument("--front-end", choices=(None, "n", "w"), default=None)
     args = parser.parse_args()
     test = locals()[args.test]
-    frontend = args.front_end if args.front_end else Frontend
+    frontend = {None: Frontend, "n": NotionFrontend, "w": WandBFrontend}[args.front_end]
     test(args.input_folder, args.output_folder, num_epochs=args.num_epochs, device=args.device, frontend=frontend)
