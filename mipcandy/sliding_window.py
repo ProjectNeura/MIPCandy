@@ -17,6 +17,13 @@ def _extract_3d_windows_vectorized(t: torch.Tensor, sd: int, sh: int, sw: int,
     """
     b, c, d, h, w = t.shape
 
+    # Check if volume is smaller than kernel - if so, return single padded window
+    if d < kd or h < kh or w < kw:
+        num_windows = 1
+        result = torch.zeros((num_windows, b, c, kd, kh, kw), device=t.device, dtype=t.dtype)
+        result[0, :, :, :d, :h, :w] = t
+        return result.view(num_windows * b, c, kd, kh, kw)
+
     # Use unfold to extract overlapping windows along each dimension
     # unfold(dimension, size, step) extracts sliding local blocks
     t = t.unfold(2, kd, sd)  # Unfold along depth: (b, c, nz, h, w, kd)
@@ -52,6 +59,17 @@ def _reconstruct_3d_windows_vectorized(t: torch.Tensor, w3d: torch.Tensor, metad
     # Pre-multiply weights
     t = t.view(n, b, c, kd, kh, kw) * w3d
 
+    # Initialize output tensors
+    canvas = torch.zeros((b, c, d, h, w), dtype=dtype, device=device)
+    acc_w = torch.zeros((b, 1, d, h, w), dtype=dtype, device=device)
+
+    # Handle case where volume was smaller than kernel (n=1, padded)
+    if n == 1:
+        # Single window case - just crop back to original size
+        canvas[:, :, :d, :h, :w] = t[0, :, :, :d, :h, :w]
+        acc_w[:, :, :d, :h, :w] = w3d[:, :, :d, :h, :w]
+        return canvas, acc_w
+
     # Calculate grid positions
     nz = (d - kd) // sd + 1
     ny = (h - kh) // sh + 1
@@ -62,11 +80,7 @@ def _reconstruct_3d_windows_vectorized(t: torch.Tensor, w3d: torch.Tensor, metad
     y_pos = torch.arange(ny, device=device) * sh
     x_pos = torch.arange(nx, device=device) * sw
 
-    # Use fold-like reconstruction by accumulating into canvas
-    canvas = torch.zeros((b, c, d, h, w), dtype=dtype, device=device)
-    acc_w = torch.zeros((b, 1, d, h, w), dtype=dtype, device=device)
-
-    # Vectorized accumulation using index_add
+    # Vectorized accumulation
     idx = 0
     for zi in range(nz):
         z = z_pos[zi]
