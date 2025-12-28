@@ -30,7 +30,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
         device = auto_device()
     if not exists(f"{input_folder}/dataset"):
         download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset", device="cuda")
+    dataset = NNUNetDataset(f"{input_folder}/dataset", device=device)
     train, val = dataset.fold()
     annotations = inspect(train)
     annotations.set_roi_shape((32, 224, 224))
