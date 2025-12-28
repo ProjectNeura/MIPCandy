@@ -104,5 +104,6 @@ if __name__ == "__main__":
     parser.add_argument("--front-end", choices=(None, "n", "w"), default=None)
     args = parser.parse_args()
     test = locals()[args.test]
-    frontend = {None: Frontend, "n": NotionFrontend, "w": WandBFrontend}[args.front_end]
-    test(args.input_folder, args.output_folder, num_epochs=args.num_epochs, device=args.device, frontend=frontend)
+    test(args.input_folder, args.output_folder, num_epochs=args.num_epochs, device=args.device, frontend={
+        None: Frontend, "n": NotionFrontend, "w": WandBFrontend
+    }[args.front_end])
