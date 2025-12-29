@@ -12,7 +12,7 @@ from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspe
 from mipcandy.frontend.notion_fe import NotionFrontend
 from mipcandy.frontend.wandb_fe import WandBFrontend
 from transforms import build_nnunet_transforms
-from unet import UNetTrainer, UNetSlidingTrainer
+from unet import UNetTrainer
 
 BENCHMARK_DATASET: str = "AbdomenCT-1K-ss1"
 BENCHMARK_NUM_CLASSES: int = 5
@@ -40,7 +40,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
-    trainer = UNetSlidingTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
+    trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
     trainer.set_frontend(frontend)
     trainer.train(num_epochs, note="MIP Candy Benchmark - full size")
