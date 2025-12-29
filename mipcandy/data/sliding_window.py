@@ -9,7 +9,8 @@ from mipcandy.data.transform import JointTransform
 from mipcandy.types import Shape, Transform, Device
 
 
-def do_sliding_window(x: torch.Tensor, shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
+def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
+    shape = tuple(round(s * (1 + overlap)) for s in window_shape)
     ndim = len(shape)
     if ndim not in (2, 3):
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
