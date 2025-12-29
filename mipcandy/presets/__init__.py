@@ -1,1 +1,1 @@
-from mipcandy.presets.segmentation import SegmentationTrainer
+from mipcandy.presets.segmentation import SegmentationTrainer, SlidingTrainer
