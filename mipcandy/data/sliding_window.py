@@ -140,7 +140,7 @@ class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return torch.load(f"{self._folder}/{self._subfolder}/{self._images[idx]}", device=self._device)
+        return torch.load(f"{self._folder}/{self._subfolder}/{self._images[idx]}")
 
 
 class SupervisedSWDataset(MergedDataset):
