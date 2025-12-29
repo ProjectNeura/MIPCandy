@@ -17,5 +17,5 @@ class UNetTrainer(SegmentationTrainer):
 
 
 class UNetSlidingTrainer(SlidingValidationTrainer, UNetTrainer):
-    sliding_window_shape = (64, 64, 64)
-    sliding_window_batch_size = 4
+    sliding_window_shape = (16, 64, 64)
+    sliding_window_batch_size = 2

@@ -35,7 +35,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     dataset = NNUNetDataset(f"{input_folder}/dataset", device=device)
     train, val = dataset.fold()
     annotations = inspect(train)
-    annotations.set_roi_shape((32, 224, 224))
+    annotations.set_roi_shape((32, 128, 128))
     train = RandomROIDataset(annotations)
     train._transform = JointTransform(transform=build_nnunet_transforms())
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
@@ -67,12 +67,12 @@ def resize(size: int, input_folder: str | PathLike[str], output_folder: str | Pa
 
 def resize128(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
               device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
-    resize(128, input_folder, output_folder, num_epochs=num_epochs, device=device)
+    resize(128, input_folder, output_folder, num_epochs=num_epochs, device=device, frontend=frontend)
 
 
 def resize256(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
               device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
-    resize(256, input_folder, output_folder, num_epochs=num_epochs, device=device)
+    resize(256, input_folder, output_folder, num_epochs=num_epochs, device=device, frontend=frontend)
 
 
 def roi(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
