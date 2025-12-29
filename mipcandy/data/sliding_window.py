@@ -1,9 +1,10 @@
-from os import PathLike, makedirs
+from os import PathLike, makedirs, listdir
+from typing import override, Literal
 
 import torch
 from torch import nn
 
-from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset
+from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset
 from mipcandy.types import Shape
 
 
@@ -115,24 +116,41 @@ def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -
         return output / weights.clamp(min=1)
 
 
-def _slide(supervised: bool, dataset: UnsupervisedDataset, output_folder: str | PathLike[str], window_shape: Shape, *,
-           overlap: float = .5) -> None:
-    makedirs(f"{output_folder}/imagesTr", exist_ok=True)
-    makedirs(f"{output_folder}/labelsTr", exist_ok=True)
+def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
+           window_shape: Shape, *, overlap: float = .5) -> None:
+    makedirs(f"{output_folder}/images", exist_ok=True)
+    makedirs(f"{output_folder}/labels", exist_ok=True)
     ind = len(dataset) // 10 + 1
     for i, case in enumerate(dataset):
         image = case[0] if supervised else case
         windows = do_sliding_window(image, window_shape, overlap=overlap)
         jnd = len(windows) // 10 + 1
         for j, window in enumerate(windows):
-            torch.save(window, f"{output_folder}/imagesTr/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+            torch.save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
         if supervised:
             label = case[1]
             windows = do_sliding_window(label, window_shape, overlap=overlap)
             for j, window in enumerate(windows):
-                torch.save(window, f"{output_folder}/labelsTr/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+                torch.save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
 
 
 def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
                   window_shape: Shape, *, overlap: float = .5) -> None:
     _slide(isinstance(dataset, SupervisedDataset), dataset, output_folder, window_shape, overlap=overlap)
+
+
+class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
+    def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images") -> None:
+        super().__init__(listdir(f"{folder}/{subfolder}"))
+        self._folder: str = folder
+        self._subfolder: Literal["images", "labels"] = subfolder
+
+    @override
+    def load(self, idx: int) -> torch.Tensor:
+        return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
+                            is_label=self._subfolder == "labels", device=self._device)
+
+
+class SupervisedSWDataset(MergedDataset):
+    def __init__(self, folder: str | PathLike[str]) -> None:
+        super().__init__(UnsupervisedSWDataset(folder), UnsupervisedSWDataset(folder, subfolder="labels"))
