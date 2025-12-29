@@ -1,3 +1,4 @@
+from math import log10
 from os import PathLike, makedirs, listdir
 from typing import override, Literal
 
@@ -111,11 +112,11 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
            window_shape: Shape, *, overlap: float = .5) -> None:
     makedirs(f"{output_folder}/images", exist_ok=True)
     makedirs(f"{output_folder}/labels", exist_ok=True)
-    ind = len(dataset) // 10 + 1
+    ind = int(log10(len(dataset))) + 1
     for i, case in enumerate(dataset):
         image = case[0] if supervised else case
         windows = do_sliding_window(image, window_shape, overlap=overlap)
-        jnd = len(windows) // 10 + 1
+        jnd = int(log10(len(windows))) + 1
         for j, window in enumerate(windows):
             torch.save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
         if supervised:
