@@ -30,7 +30,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
          device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     dataset = NNUNetDataset(f"{input_folder}/dataset", device=device)
     train, val = dataset.fold(fold=0)
-    if not exists(f"{input_folder}/{BENCHMARK_DATASET}"):
+    if not exists(f"{input_folder}/{BENCHMARK_DATASET}/val_slided"):
         slide_dataset(val, f"{input_folder}/{BENCHMARK_DATASET}/val_slided", (32, 128, 128))
     val = SupervisedSWDataset(f"{input_folder}/{BENCHMARK_DATASET}/val_slided", device=device)
     annotations = inspect(train)
