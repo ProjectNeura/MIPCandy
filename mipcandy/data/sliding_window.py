@@ -5,7 +5,8 @@ import torch
 from torch import nn
 
 from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset
-from mipcandy.types import Shape
+from mipcandy.data.transform import JointTransform
+from mipcandy.types import Shape, Transform, Device
 
 
 def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
@@ -140,17 +141,20 @@ def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folde
 
 
 class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
-    def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images") -> None:
-        super().__init__(listdir(f"{folder}/{subfolder}"))
+    def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images",
+                 transform: Transform | None = None, device: Device = "cpu") -> None:
+        super().__init__(listdir(f"{folder}/{subfolder}"), transform=transform, device=device)
         self._folder: str = folder
         self._subfolder: Literal["images", "labels"] = subfolder
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
-                            is_label=self._subfolder == "labels", device=self._device)
+        return torch.load(f"{self._folder}/{self._subfolder}/{self._images[idx]}", device=self._device)
 
 
 class SupervisedSWDataset(MergedDataset):
-    def __init__(self, folder: str | PathLike[str]) -> None:
-        super().__init__(UnsupervisedSWDataset(folder), UnsupervisedSWDataset(folder, subfolder="labels"))
+    def __init__(self, folder: str | PathLike[str], *, transform: JointTransform | None = None,
+                 device: Device = "cpu") -> None:
+        super().__init__(UnsupervisedSWDataset(folder, device=device),
+                         UnsupervisedSWDataset(folder, subfolder="labels", device=device),
+                         transform=transform, device=device)

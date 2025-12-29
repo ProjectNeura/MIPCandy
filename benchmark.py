@@ -8,13 +8,13 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
-    load_inspection_annotations, ROIDataset, JointTransform, RandomROIDataset, Frontend
+    load_inspection_annotations, JointTransform, RandomROIDataset, Frontend, slide_dataset, SupervisedSWDataset
 from mipcandy.frontend.notion_fe import NotionFrontend
 from mipcandy.frontend.wandb_fe import WandBFrontend
 from transforms import build_nnunet_transforms
 from unet import UNetTrainer, UNetSlidingTrainer
 
-BENCHMARK_DATASET: str = "nnunet_datasets/AbdomenCT-1K-ss1"
+BENCHMARK_DATASET: str = "AbdomenCT-1K-ss1"
 BENCHMARK_NUM_CLASSES: int = 5
 
 
@@ -28,12 +28,11 @@ def inspect_dataset(dataset: NNUNetDataset, output_folder: str | PathLike[str]) 
 
 def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
          device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
-    if not device:
-        device = auto_device()
-    if not exists(f"{input_folder}/dataset"):
-        download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
     dataset = NNUNetDataset(f"{input_folder}/dataset", device=device)
-    train, val = dataset.fold()
+    train, val = dataset.fold(fold=0)
+    if not exists(f"{input_folder}/{BENCHMARK_DATASET}"):
+        slide_dataset(val, f"{input_folder}/{BENCHMARK_DATASET}/val_slided", (32, 128, 128))
+    val = SupervisedSWDataset(f"{input_folder}/{BENCHMARK_DATASET}/val_slided", device=device)
     annotations = inspect(train)
     annotations.set_roi_shape((32, 128, 128))
     train = RandomROIDataset(annotations)
@@ -49,14 +48,10 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
 
 def resize(size: int, input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
            device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
-    if not device:
-        device = auto_device()
-    if not exists(f"{input_folder}/dataset"):
-        download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset", transform=JointTransform(transform=Compose([
+    dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}", transform=JointTransform(transform=Compose([
         Resized(("image", "label"), (size, size, size)), build_nnunet_transforms()
     ])), device=device)
-    train, val = dataset.fold()
+    train, val = dataset.fold(fold=0)
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
@@ -75,28 +70,10 @@ def resize256(input_folder: str | PathLike[str], output_folder: str | PathLike[s
     resize(256, input_folder, output_folder, num_epochs=num_epochs, device=device, frontend=frontend)
 
 
-def roi(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
-        device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
-    if not device:
-        device = auto_device()
-    if not exists(f"{input_folder}/dataset"):
-        download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{input_folder}/dataset")
-    dataset = NNUNetDataset(f"{input_folder}/dataset")
-    annotations = inspect_dataset(dataset, output_folder)
-    dataset = ROIDataset(annotations)
-    train, val = dataset.fold()
-    train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=1, shuffle=False)
-    trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
-    trainer.num_classes = BENCHMARK_NUM_CLASSES
-    trainer.set_frontend(frontend)
-    trainer.train(num_epochs, note=f"MIP Candy Benchmark - roi")
-
-
 if __name__ == "__main__":
     parser = ArgumentParser(prog="MIP Candy Benchmark", description="MIP Candy Benchmark",
                             epilog="GitHub: https://github.com/ProjectNeura/MIPCandy")
-    parser.add_argument("test", choices=("full", "resize128", "resize256", "roi"))
+    parser.add_argument("test", choices=("full", "resize128", "resize256"))
     parser.add_argument("-i", "--input-folder")
     parser.add_argument("-o", "--output-folder")
     parser.add_argument("--num-epochs", type=int, default=100)
@@ -104,6 +81,9 @@ if __name__ == "__main__":
     parser.add_argument("--front-end", choices=(None, "n", "w"), default=None)
     args = parser.parse_args()
     test = locals()[args.test]
-    test(args.input_folder, args.output_folder, num_epochs=args.num_epochs, device=args.device, frontend={
+    if not exists(f"{args.input_folder}/{BENCHMARK_DATASET}"):
+        download_dataset(f"nnunet_datasets/{BENCHMARK_DATASET}", f"{args.input_folder}/{BENCHMARK_DATASET}")
+    test(args.input_folder, args.output_folder, num_epochs=args.num_epochs,
+         device=args.device if args.device else auto_device(), frontend={
         None: Frontend, "n": NotionFrontend, "w": WandBFrontend
     }[args.front_end])
