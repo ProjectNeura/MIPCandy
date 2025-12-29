@@ -15,7 +15,7 @@ def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = 
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
     stride = tuple(int(w * (1 - overlap)) for w in window_shape)
     if ndim == 2:
-        _, _, h, w = x.shape
+        h, w = x.shape[-2:]
         pad_h = (stride[0] - (h - window_shape[0]) % stride[0]) % stride[0]
         pad_w = (stride[1] - (w - window_shape[1]) % stride[1]) % stride[1]
         if pad_h > 0 or pad_w > 0:
@@ -25,7 +25,7 @@ def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = 
         x = x.permute(0, 2, 3, 1, 4, 5).reshape(b * n_h * n_w, c, win_h, win_w)
         return [x[i] for i in range(x.shape[0])]
     else:
-        _, _, d, h, w = x.shape
+        d, h, w = x.shape[-3:]
         pad_d = (stride[0] - (d - window_shape[0]) % stride[0]) % stride[0]
         pad_h = (stride[1] - (h - window_shape[1]) % stride[1]) % stride[1]
         pad_w = (stride[2] - (w - window_shape[2]) % stride[2]) % stride[2]
