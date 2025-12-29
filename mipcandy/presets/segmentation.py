@@ -85,5 +85,9 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
             batch = torch.stack(windows[i:i + self.batch_size])
             outputs.extend(model(batch).unbind(0))
         reconstructed = revert_sliding_window(outputs, overlap=self.overlap)
+        pad: list[int] = []
+        for r, l in zip(reversed(reconstructed.shape[2:]), reversed(label.shape[1:])):
+            pad.extend([0, r - l])
+        label = nn.functional.pad(label, pad)
         loss, metrics = toolbox.criterion(reconstructed, label.unsqueeze(0))
         return -loss.item(), metrics, reconstructed.squeeze(0)
