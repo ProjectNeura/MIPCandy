@@ -7,7 +7,9 @@ from rich.console import Console
 from rich.progress import Progress
 
 from mipcandy.common import Pad2d, Pad3d
-from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset
+from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset, \
+    TensorLoader
+from mipcandy.data.io import fast_save
 from mipcandy.data.transform import JointTransform
 from mipcandy.types import Shape, Transform, Device
 
@@ -123,12 +125,12 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
             windows = do_sliding_window(image, window_shape, overlap=overlap)
             jnd = int(log10(len(windows))) + 1
             for j, window in enumerate(windows):
-                torch.save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+                fast_save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
             if supervised:
                 label = case[1]
                 windows = do_sliding_window(label, window_shape, overlap=overlap)
                 for j, window in enumerate(windows):
-                    torch.save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+                    fast_save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
             progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
 
@@ -138,7 +140,7 @@ def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folde
            console=console)
 
 
-class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
+class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images",
                  transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(listdir(f"{folder}/{subfolder}"), transform=transform, device=device)
@@ -147,10 +149,11 @@ class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return torch.load(f"{self._folder}/{self._subfolder}/{self._images[idx]}")
+        return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
+                            is_label=self._subfolder == "labels", device=self._device)
 
 
-class SupervisedSWDataset(MergedDataset):
+class SupervisedSWDataset(TensorLoader, MergedDataset):
     def __init__(self, folder: str | PathLike[str], *, transform: JointTransform | None = None,
                  device: Device = "cpu") -> None:
         super().__init__(UnsupervisedSWDataset(folder, device=device),

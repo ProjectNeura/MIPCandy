@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from json import dump
-from os import PathLike, listdir, makedirs
+from os import PathLike, listdir, makedirs, rmdir
 from os.path import exists
 from random import choices
 from shutil import copy2
@@ -10,7 +10,7 @@ import torch
 from pandas import DataFrame
 from torch.utils.data import Dataset
 
-from mipcandy.data.io import load_image
+from mipcandy.data.io import fast_save, fast_load, load_image
 from mipcandy.data.transform import JointTransform
 from mipcandy.layer import HasDevice
 from mipcandy.types import Transform, Device
@@ -44,6 +44,13 @@ class Loader(object):
     @staticmethod
     def do_load(path: str | PathLike[str], *, is_label: bool = False, device: Device = "cpu", **kwargs) -> torch.Tensor:
         return load_image(path, is_label=is_label, device=device, **kwargs)
+
+
+class TensorLoader(Loader):
+    @staticmethod
+    @override
+    def do_load(path: str | PathLike[str], *, is_label: bool = False, device: Device = "cpu", **kwargs) -> torch.Tensor:
+        return fast_load(path).to(device)
 
 
 T = TypeVar("T")
@@ -275,6 +282,12 @@ class NNUNetDataset(PathBasedSupervisedDataset):
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        if self._split.endswith("Preloaded"):
+            return (
+                TensorLoader.do_load(f"{self._folder}/images{self._split}/{self._images[idx]}.pt", device=self._device),
+                TensorLoader.do_load(f"{self._folder}/labels{self._split}/{self._labels[idx]}.pt", is_label=True,
+                                     device=self._device)
+            )
         image = torch.cat([self.do_load(
             f"{self._folder}/images{self._split}/{path}", align_spacing=self._align_spacing, device=self._device
         ) for path in self._multimodal_images[idx]]) if self._multimodal_images else self.do_load(
@@ -298,6 +311,20 @@ class NNUNetDataset(PathBasedSupervisedDataset):
             copy2(f"{self._folder}/labels{self._split}/{label_path}", f"{labels_target}/{label_path}")
         self._split = split
         self._folded = False
+
+    def preload(self) -> None:
+        images_path = f"{self._folder}/images{self._split}Preloaded"
+        labels_path = f"{self._folder}/labels{self._split}Preloaded"
+        if not exists(images_path) or not exists(labels_path):
+            rmdir(images_path)
+            rmdir(labels_path)
+            makedirs(images_path)
+            makedirs(images_path)
+            for idx in range(len(self)):
+                image, label = self.load(idx)
+                fast_save(image, f"{images_path}/{self._images[idx]}.pt")
+                fast_save(label, f"{labels_path}/{self._labels[idx]}.pt")
+        self._split += "Preloaded"
 
     @override
     def construct_new(self, images: list[str], labels: list[str]) -> Self:
