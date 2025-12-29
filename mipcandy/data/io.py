@@ -9,6 +9,14 @@ from mipcandy.data.geometric import ensure_num_dimensions
 from mipcandy.types import Device
 
 
+def fast_save(x: torch.Tensor, path: str | PathLike[str]) -> None:
+    torch.save(x, path)
+
+
+def fast_load(path: str | PathLike[str]) -> torch.Tensor:
+    return torch.load(path, mmap=True)
+
+
 def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None,
                           interpolator: int = SpITK.sitkBSpline) -> SpITK.Image:
     dim = image.GetDimension()
