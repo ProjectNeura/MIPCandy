@@ -10,21 +10,21 @@ from mipcandy.types import Shape, Transform, Device
 
 
 def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
-    shape = tuple(round(s * (1 + overlap)) for s in window_shape)
-    ndim = len(shape)
+    stride = tuple(int(s * (1 + overlap)) for s in window_shape)
+    ndim = len(stride)
     if ndim not in (2, 3):
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
-    stride = tuple(int(w * (1 - overlap)) for w in shape)
     if ndim == 2:
-        x = Pad2d(shape, batch=False)(x)
-        x = x.unfold(2, shape[0], stride[0]).unfold(3, shape[1], stride[1])
-        b, c, n_h, n_w, win_h, win_w = x.shape
-        x = x.permute(0, 2, 3, 1, 4, 5).reshape(b * n_h * n_w, c, win_h, win_w)
+        x = Pad2d(stride, batch=False)(x)
+        x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1])
+        c, n_h, n_w, win_h, win_w = x.shape
+        x = x.permute(1, 2, 0, 3, 4).reshape(n_h * n_w, c, win_h, win_w)
         return [x[i] for i in range(x.shape[0])]
-    x = Pad3d(shape, batch=False)(x)
-    x = x.unfold(2, shape[0], stride[0]).unfold(3, shape[1], stride[1]).unfold(4, shape[2], stride[2])
-    b, c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
-    x = x.permute(0, 2, 3, 4, 1, 5, 6, 7).reshape(b * n_d * n_h * n_w, c, win_d, win_h, win_w)
+    x = Pad3d(stride, batch=False)(x)
+    x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1]).unfold(3, window_shape[2],
+                                                                                             stride[2])
+    c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
+    x = x.permute(1, 2, 3, 0, 4, 5, 6).reshape(n_d * n_h * n_w, c, win_d, win_h, win_w)
     return [x[i] for i in range(x.shape[0])]
 
 
@@ -65,7 +65,7 @@ def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -
                 weights[0, 0, h_start:h_start + h_win, w_start:w_start + w_win] += 1
                 idx += 1
         return output / weights.clamp(min=1)
-    else:  # 3D
+    else:
         d_win, h_win, w_win = window_shape
         import math
         grid_size = round(num_windows ** (1 / 3))
