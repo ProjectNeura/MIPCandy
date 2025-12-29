@@ -3,6 +3,8 @@ from os import PathLike, makedirs, listdir
 from typing import override, Literal
 
 import torch
+from rich.console import Console
+from rich.progress import Progress
 
 from mipcandy.common import Pad2d, Pad3d
 from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset
@@ -109,26 +111,31 @@ def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -
 
 
 def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
-           window_shape: Shape, *, overlap: float = .5) -> None:
+           window_shape: Shape, *, overlap: float = .5, console: Console = Console()) -> None:
     makedirs(f"{output_folder}/images", exist_ok=True)
     makedirs(f"{output_folder}/labels", exist_ok=True)
     ind = int(log10(len(dataset))) + 1
-    for i, case in enumerate(dataset):
-        image = case[0] if supervised else case
-        windows = do_sliding_window(image, window_shape, overlap=overlap)
-        jnd = int(log10(len(windows))) + 1
-        for j, window in enumerate(windows):
-            torch.save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
-        if supervised:
-            label = case[1]
-            windows = do_sliding_window(label, window_shape, overlap=overlap)
+    with Progress(console=console) as progress:
+        task = progress.add_task("Sliding dataset...", total=len(dataset))
+        for i, case in enumerate(dataset):
+            image = case[0] if supervised else case
+            progress.update(task, description=f"Sliding dataset {tuple(image.shape)}...")
+            windows = do_sliding_window(image, window_shape, overlap=overlap)
+            jnd = int(log10(len(windows))) + 1
             for j, window in enumerate(windows):
-                torch.save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+                torch.save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+            if supervised:
+                label = case[1]
+                windows = do_sliding_window(label, window_shape, overlap=overlap)
+                for j, window in enumerate(windows):
+                    torch.save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+            progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
 
 def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
-                  window_shape: Shape, *, overlap: float = .5) -> None:
-    _slide(isinstance(dataset, SupervisedDataset), dataset, output_folder, window_shape, overlap=overlap)
+                  window_shape: Shape, *, overlap: float = .5, console: Console = Console()) -> None:
+    _slide(isinstance(dataset, SupervisedDataset), dataset, output_folder, window_shape, overlap=overlap,
+           console=console)
 
 
 class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
