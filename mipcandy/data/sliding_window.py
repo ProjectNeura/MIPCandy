@@ -2,39 +2,29 @@ from os import PathLike, makedirs, listdir
 from typing import override, Literal
 
 import torch
-from torch import nn
 
+from mipcandy.common import Pad2d, Pad3d
 from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset
-from mipcandy.types import Shape
+from mipcandy.data.transform import JointTransform
+from mipcandy.types import Shape, Transform, Device
 
 
-def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
-    ndim = len(window_shape)
+def do_sliding_window(x: torch.Tensor, shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
+    ndim = len(shape)
     if ndim not in (2, 3):
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
-    stride = tuple(int(w * (1 - overlap)) for w in window_shape)
+    stride = tuple(int(w * (1 - overlap)) for w in shape)
     if ndim == 2:
-        h, w = x.shape[-2:]
-        pad_h = (stride[0] - (h - window_shape[0]) % stride[0]) % stride[0]
-        pad_w = (stride[1] - (w - window_shape[1]) % stride[1]) % stride[1]
-        if pad_h > 0 or pad_w > 0:
-            x = nn.functional.pad(x, (0, pad_w, 0, pad_h))
-        x = x.unfold(2, window_shape[0], stride[0]).unfold(3, window_shape[1], stride[1])
+        x = Pad2d(shape, batch=False)(x)
+        x = x.unfold(2, shape[0], stride[0]).unfold(3, shape[1], stride[1])
         b, c, n_h, n_w, win_h, win_w = x.shape
         x = x.permute(0, 2, 3, 1, 4, 5).reshape(b * n_h * n_w, c, win_h, win_w)
         return [x[i] for i in range(x.shape[0])]
-    else:
-        d, h, w = x.shape[-3:]
-        pad_d = (stride[0] - (d - window_shape[0]) % stride[0]) % stride[0]
-        pad_h = (stride[1] - (h - window_shape[1]) % stride[1]) % stride[1]
-        pad_w = (stride[2] - (w - window_shape[2]) % stride[2]) % stride[2]
-        if pad_d > 0 or pad_h > 0 or pad_w > 0:
-            x = nn.functional.pad(x, (0, pad_w, 0, pad_h, 0, pad_d))
-        x = x.unfold(2, window_shape[0], stride[0]).unfold(3, window_shape[1], stride[1]).unfold(4, window_shape[2],
-                                                                                                 stride[2])
-        b, c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
-        x = x.permute(0, 2, 3, 4, 1, 5, 6, 7).reshape(b * n_d * n_h * n_w, c, win_d, win_h, win_w)
-        return [x[i] for i in range(x.shape[0])]
+    x = Pad3d(shape, batch=False)(x)
+    x = x.unfold(2, shape[0], stride[0]).unfold(3, shape[1], stride[1]).unfold(4, shape[2], stride[2])
+    b, c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
+    x = x.permute(0, 2, 3, 4, 1, 5, 6, 7).reshape(b * n_d * n_h * n_w, c, win_d, win_h, win_w)
+    return [x[i] for i in range(x.shape[0])]
 
 
 def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -> torch.Tensor:
@@ -140,17 +130,20 @@ def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folde
 
 
 class UnsupervisedSWDataset(PathBasedUnsupervisedDataset):
-    def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images") -> None:
-        super().__init__(listdir(f"{folder}/{subfolder}"))
+    def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images",
+                 transform: Transform | None = None, device: Device = "cpu") -> None:
+        super().__init__(listdir(f"{folder}/{subfolder}"), transform=transform, device=device)
         self._folder: str = folder
         self._subfolder: Literal["images", "labels"] = subfolder
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
-                            is_label=self._subfolder == "labels", device=self._device)
+        return torch.load(f"{self._folder}/{self._subfolder}/{self._images[idx]}", device=self._device)
 
 
 class SupervisedSWDataset(MergedDataset):
-    def __init__(self, folder: str | PathLike[str]) -> None:
-        super().__init__(UnsupervisedSWDataset(folder), UnsupervisedSWDataset(folder, subfolder="labels"))
+    def __init__(self, folder: str | PathLike[str], *, transform: JointTransform | None = None,
+                 device: Device = "cpu") -> None:
+        super().__init__(UnsupervisedSWDataset(folder, device=device),
+                         UnsupervisedSWDataset(folder, subfolder="labels", device=device),
+                         transform=transform, device=device)
