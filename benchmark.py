@@ -8,9 +8,8 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
-    load_inspection_annotations, JointTransform, RandomROIDataset, Frontend, PadTo
-from mipcandy.frontend.notion_fe import NotionFrontend
-from mipcandy.frontend.wandb_fe import WandBFrontend
+    load_inspection_annotations, JointTransform, RandomROIDataset, Frontend, PadTo, NotionFrontend, WandBFrontend, \
+    MONAITransform
 from transforms import build_nnunet_transforms
 from unet import UNetTrainer
 
@@ -29,8 +28,8 @@ def inspect_dataset(dataset: NNUNetDataset, output_folder: str | PathLike[str]) 
 def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
          device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     patch_shape = (128, 128, 128)
-    dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}",
-                            transform=JointTransform(transform=PadTo(patch_shape)), device=device)
+    dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}", transform=JointTransform(
+        transform=MONAITransform(PadTo(patch_shape))), device=device)
     train, val = dataset.fold(fold=0)
     annotations = inspect(train)
     annotations.set_roi_shape(patch_shape)
