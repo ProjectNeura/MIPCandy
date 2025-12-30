@@ -29,7 +29,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
          device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
     patch_shape = (128, 128, 128)
     dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}", transform=JointTransform(
-        transform=MONAITransform(PadTo(patch_shape))), device=device)
+        transform=MONAITransform(PadTo(patch_shape, batch=False))), device=device)
     train, val = dataset.fold(fold=0)
     annotations = inspect(train)
     annotations.set_roi_shape(patch_shape)
