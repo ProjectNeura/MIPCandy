@@ -9,7 +9,7 @@ from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
     load_inspection_annotations, JointTransform, RandomROIDataset, Frontend, PadTo, NotionFrontend, WandBFrontend, \
-    MONAITransform
+    MONAITransform, slide_dataset, SupervisedSWDataset
 from transforms import build_nnunet_transforms
 from unet import UNetTrainer
 
@@ -31,6 +31,9 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}", transform=JointTransform(
         transform=MONAITransform(PadTo(patch_shape, batch=False))), device=device)
     train, val = dataset.fold(fold=0)
+    if not exists(f"{input_folder}/{BENCHMARK_DATASET}/val_slided"):
+        slide_dataset(val, f"{input_folder}/{BENCHMARK_DATASET}/val_slided", patch_shape)
+    val = SupervisedSWDataset(f"{input_folder}/{BENCHMARK_DATASET}/val_slided", device=device)
     annotations = inspect(train)
     annotations.set_roi_shape(patch_shape)
     train = RandomROIDataset(annotations)
