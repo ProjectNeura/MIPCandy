@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 
 from mipcandy import Device, auto_device, download_dataset, NNUNetDataset, inspect, InspectionAnnotations, \
-    load_inspection_annotations, JointTransform, RandomROIDataset, Frontend, slide_dataset, SupervisedSWDataset
+    load_inspection_annotations, JointTransform, RandomROIDataset, Frontend, PadTo
 from mipcandy.frontend.notion_fe import NotionFrontend
 from mipcandy.frontend.wandb_fe import WandBFrontend
 from transforms import build_nnunet_transforms
@@ -28,17 +28,16 @@ def inspect_dataset(dataset: NNUNetDataset, output_folder: str | PathLike[str]) 
 
 def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], *, num_epochs: int = 100,
          device: Device | None = None, frontend: type[Frontend] = Frontend) -> None:
-    dataset = NNUNetDataset(f"{input_folder}/dataset", device=device)
+    patch_shape = (128, 128, 128)
+    dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}",
+                            transform=JointTransform(transform=PadTo(patch_shape)), device=device)
     train, val = dataset.fold(fold=0)
-    if not exists(f"{input_folder}/{BENCHMARK_DATASET}/val_slided"):
-        slide_dataset(val, f"{input_folder}/{BENCHMARK_DATASET}/val_slided", (128, 128, 128))
-    val = SupervisedSWDataset(f"{input_folder}/{BENCHMARK_DATASET}/val_slided", device=device)
     annotations = inspect(train)
-    annotations.set_roi_shape((32, 128, 128))
+    annotations.set_roi_shape(patch_shape)
     train = RandomROIDataset(annotations)
     train._transform = JointTransform(transform=build_nnunet_transforms())
-    train_loader = DataLoader(train, batch_size=4, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=1, shuffle=False)
+    train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
+    val_loader = DataLoader(val, batch_size=2, shuffle=False)
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
