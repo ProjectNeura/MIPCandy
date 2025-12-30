@@ -6,7 +6,6 @@ from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
-from mipcandy.data.sliding_window import do_sliding_window, revert_sliding_window
 from mipcandy.training import Trainer, TrainerToolbox
 from mipcandy.types import Params, Shape
 
@@ -76,18 +75,14 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     batch_size: int = 1
 
     @override
-    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
+    def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
+        # todo: load image patches and full labels
+        ...
+
+    @override
+    def validate_case(self, image: list[torch.Tensor], label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[
         str, float], torch.Tensor]:
-        windows = do_sliding_window(image, self.window_shape, overlap=self.overlap)
-        model = toolbox.ema if toolbox.ema else toolbox.model
-        outputs: list[torch.Tensor] = []
-        for i in range(0, len(windows), self.batch_size):
-            batch = torch.stack(windows[i:i + self.batch_size])
-            outputs.extend(model(batch).unbind(0))
-        reconstructed = revert_sliding_window(outputs, overlap=self.overlap)
-        pad: list[int] = []
-        for r, l in zip(reversed(reconstructed.shape[2:]), reversed(label.shape[1:])):
-            pad.extend([0, r - l])
-        label = nn.functional.pad(label, pad)
-        loss, metrics = toolbox.criterion(reconstructed, label.unsqueeze(0))
-        return -loss.item(), metrics, reconstructed.squeeze(0)
+        # todo: predict all the image patches and revert output mask patches back to a full mask, then compare the full
+        # todo: mask with the full label
+        ...
