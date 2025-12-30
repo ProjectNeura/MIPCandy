@@ -36,7 +36,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     train = RandomROIDataset(annotations)
     train._transform = JointTransform(transform=build_nnunet_transforms())
     train_loader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
-    val_loader = DataLoader(val, batch_size=2, shuffle=False)
+    val_loader = DataLoader(val, batch_size=1, shuffle=False)
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
