@@ -7,7 +7,7 @@ from torch import nn, optim
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
 from mipcandy.training import Trainer, TrainerToolbox
-from mipcandy.types import Params, Shape
+from mipcandy.types import Params
 
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
@@ -70,10 +70,6 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
-    window_shape: Shape = (128, 128)
-    overlap: float = 0.5
-    batch_size: int = 1
-
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         # todo: load image patches and full labels
