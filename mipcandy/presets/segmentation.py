@@ -8,9 +8,8 @@ from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
-from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
-from mipcandy.data.io import fast_load
-from mipcandy.data.sliding_window import revert_sliding_window
+from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, fast_load, \
+    revert_sliding_window, PathBasedSupervisedDataset, SupervisedSWDataset
 from mipcandy.training import Trainer, TrainerToolbox, try_append_all
 from mipcandy.types import Params
 
@@ -75,7 +74,13 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
-    overlap: float = 0.5
+    overlap: float = .5
+    validation_dataset: PathBasedSupervisedDataset | None = None
+    slided_validation_dataset: SupervisedSWDataset | None = None
+
+    def set_validation_datasets(self, dataset: PathBasedSupervisedDataset, slided_dataset: SupervisedSWDataset) -> None:
+        self.validation_dataset = dataset
+        self.slided_validation_dataset = slided_dataset
 
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
