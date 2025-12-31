@@ -116,6 +116,8 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
            window_shape: Shape, *, overlap: float = .5, console: Console = Console()) -> None:
     makedirs(f"{output_folder}/images", exist_ok=True)
     makedirs(f"{output_folder}/labels", exist_ok=True)
+    if supervised:
+        makedirs(f"{output_folder}/full_labels", exist_ok=True)
     ind = int(log10(len(dataset))) + 1
     with Progress(console=console) as progress:
         task = progress.add_task("Sliding dataset...", total=len(dataset))
@@ -128,6 +130,7 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
                 fast_save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
             if supervised:
                 label = case[1]
+                fast_save(label, f"{output_folder}/full_labels/{str(i).zfill(ind)}.pt")
                 windows = do_sliding_window(label, window_shape, overlap=overlap)
                 for j, window in enumerate(windows):
                     fast_save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
