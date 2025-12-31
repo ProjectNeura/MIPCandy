@@ -215,9 +215,7 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
 class SimpleDataset(PathBasedUnsupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, transform: Transform | None = None,
                  device: Device = "cpu") -> None:
-        images = listdir(folder)
-        images.sort()
-        super().__init__(images, transform=transform, device=device)
+        super().__init__(sorted(listdir(folder)), transform=transform, device=device)
         self._folder: str = folder
 
     @override
@@ -250,10 +248,8 @@ class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta
 class NNUNetDataset(PathBasedSupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, split: str | Literal["Tr", "Ts"] = "Tr", prefix: str = "",
                  align_spacing: bool = False, transform: JointTransform | None = None, device: Device = "cpu") -> None:
-        images: list[str] = [f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)]
-        images.sort()
-        labels: list[str] = [f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)]
-        labels.sort()
+        images = sorted([f for f in listdir(f"{folder}/images{split}") if f.startswith(prefix)])
+        labels = sorted([f for f in listdir(f"{folder}/labels{split}") if f.startswith(prefix)])
         self._multimodal_images: list[list[str]] = []
         if len(images) == len(labels):
             super().__init__(images, labels, transform=transform, device=device)
