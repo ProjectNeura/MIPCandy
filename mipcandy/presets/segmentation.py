@@ -1,6 +1,5 @@
 from abc import ABCMeta
 from collections import defaultdict
-from os import listdir
 from typing import override
 
 import torch
@@ -8,7 +7,7 @@ from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
-from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, fast_load, \
+from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, \
     revert_sliding_window, PathBasedSupervisedDataset, SupervisedSWDataset
 from mipcandy.training import Trainer, TrainerToolbox, try_append_all
 from mipcandy.types import Params
@@ -84,28 +83,25 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
 
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        dataset = self._validation_dataloader.dataset
-        folder: str = dataset._image_dataset._folder
-        image_files = sorted(listdir(f"{folder}/images"))
-        groups: dict[str, list[str]] = defaultdict(list)
-        for filename in image_files:
+        image_files = self.slided_validation_dataset._images.paths()
+        groups = defaultdict(list)
+        for idx, filename in enumerate(image_files):
             case_id = filename.split("_")[0]
-            groups[case_id].append(filename)
-        full_label_files = sorted(listdir(f"{folder}/full_labels"))
+            groups[case_id].append(idx)
         toolbox.model.eval()
         if toolbox.ema:
             toolbox.ema.eval()
         score = 0.0
         worst_score = float("+inf")
-        metrics: dict[str, list[float]] = {}
+        metrics = {}
         num_cases = len(groups)
         with torch.no_grad(), Progress(
                 *Progress.get_default_columns(), SpinnerColumn(), console=self._console
         ) as progress:
             val_prog = progress.add_task("Validating", total=num_cases)
-            for case_id, full_label_file in zip(sorted(groups.keys()), full_label_files):
-                patches = [fast_load(f"{folder}/images/{f}").to(self._device) for f in groups[case_id]]
-                label = fast_load(f"{folder}/full_labels/{full_label_file}").to(self._device)
+            for case_idx, case_id in enumerate(sorted(groups.keys())):
+                patches = [self.slided_validation_dataset[idx][0].to(self._device) for idx in groups[case_id]]
+                label = self.validation_dataset[case_idx][1].to(self._device)
                 progress.update(val_prog, description=f"Validating case {case_id} ({len(patches)} patches)")
                 case_score, case_metrics, output = self.validate_case(patches, label, toolbox)
                 score += case_score
@@ -120,11 +116,11 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     def validate_case(self, patches: list[torch.Tensor], label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
-        outputs: list[torch.Tensor] = []
+        outputs = []
         for patch in patches:
             outputs.append(model(patch.unsqueeze(0)).squeeze(0))
         reconstructed = revert_sliding_window(outputs, overlap=self.overlap)
-        pad: list[int] = []
+        pad = []
         for r, l in zip(reversed(reconstructed.shape[2:]), reversed(label.shape[1:])):
             pad.extend([0, r - l])
         label = nn.functional.pad(label, pad)
