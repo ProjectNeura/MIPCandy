@@ -30,9 +30,9 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     patch_shape = (128, 128, 128)
     dataset = NNUNetDataset(f"{input_folder}/{BENCHMARK_DATASET}", transform=JointTransform(
         transform=MONAITransform(PadTo(patch_shape, batch=False))), device=device)
-    train, val = dataset.fold(fold=0)
+    train, o_val = dataset.fold(fold=0)
     if not exists(f"{input_folder}/{BENCHMARK_DATASET}/val_slided"):
-        slide_dataset(val, f"{input_folder}/{BENCHMARK_DATASET}/val_slided", patch_shape)
+        slide_dataset(o_val, f"{input_folder}/{BENCHMARK_DATASET}/val_slided", patch_shape)
     val = SupervisedSWDataset(f"{input_folder}/{BENCHMARK_DATASET}/val_slided", device=device)
     annotations = inspect(train)
     annotations.set_roi_shape(patch_shape)
@@ -42,6 +42,7 @@ def full(input_folder: str | PathLike[str], output_folder: str | PathLike[str], 
     val_loader = DataLoader(val, batch_size=1, shuffle=False)
     getattr(torch, "_dynamo").config.automatic_dynamic_shapes = True
     trainer = UNetTrainer(output_folder, train_loader, val_loader, recoverable=False, device=device)
+    trainer.set_validation_datasets(o_val, val)
     trainer.num_classes = BENCHMARK_NUM_CLASSES
     trainer.set_frontend(frontend)
     trainer.train(num_epochs, note="MIP Candy Benchmark - full size")
