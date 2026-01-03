@@ -153,9 +153,15 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
                             is_label=self._subfolder == "labels", device=self._device)
 
 
-class SupervisedSWDataset(TensorLoader, MergedDataset):
+class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):
     def __init__(self, folder: str | PathLike[str], *, transform: JointTransform | None = None,
                  device: Device = "cpu") -> None:
-        super().__init__(UnsupervisedSWDataset(folder, device=device),
-                         UnsupervisedSWDataset(folder, subfolder="labels", device=device),
-                         transform=transform, device=device)
+        MergedDataset.__init__(self, UnsupervisedSWDataset(folder, device=device),
+                               UnsupervisedSWDataset(folder, subfolder="labels", device=device),
+                               transform=transform, device=device)
+
+    def images(self) -> UnsupervisedSWDataset:
+        return self._images
+
+    def labels(self) -> UnsupervisedSWDataset:
+        return self._labels
