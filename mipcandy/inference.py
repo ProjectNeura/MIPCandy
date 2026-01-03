@@ -2,15 +2,13 @@ from abc import ABCMeta
 from math import log, ceil
 from os import PathLike, listdir
 from os.path import isdir, basename, exists
-from typing import Sequence, override
+from typing import Sequence
 
 import torch
 from torch import nn
 
-from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
 from mipcandy.data import save_image, Loader, UnsupervisedDataset, PathBasedUnsupervisedDataset
 from mipcandy.layer import WithPaddingModule, WithNetwork
-from mipcandy.sliding_window import SlidingWindow
 from mipcandy.types import SupportedPredictant, Device, AmbiguousShape
 
 
@@ -105,26 +103,3 @@ class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
         return self.predict(x)
-
-
-class SlidingPredictor(Predictor, SlidingWindow, metaclass=ABCMeta):
-    @override
-    def build_padding_module(self) -> nn.Module | None:
-        window_shape = self.get_window_shape()
-        return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
-
-    @override
-    def build_restoring_module(self, padding_module: nn.Module | None) -> nn.Module | None:
-        if not isinstance(padding_module, (Pad2d, Pad3d)):
-            raise TypeError("`padding_module` should be either `Pad2d` or `Pad3d`")
-        window_shape = self.get_window_shape()
-        return (Restore2d if len(window_shape) == 2 else Restore3d)(padding_module)
-
-    @override
-    def predict_image(self, image: torch.Tensor, *, batch: bool = False) -> torch.Tensor:
-        if not batch:
-            image = image.unsqueeze(0)
-        images, metadata = self.do_sliding_window(image)
-        outputs = super().predict_image(images, batch=True)
-        outputs = self.revert_sliding_window(outputs, metadata)
-        return outputs if batch else outputs.squeeze(0)

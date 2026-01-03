@@ -5,6 +5,8 @@ from mipcandy.data.download import download_dataset
 from mipcandy.data.geometric import ensure_num_dimensions, orthographic_views, aggregate_orthographic_views, crop
 from mipcandy.data.inspection import InspectionAnnotation, InspectionAnnotations, load_inspection_annotations, \
     inspect, ROIDataset, RandomROIDataset
-from mipcandy.data.io import resample_to_isotropic, load_image, save_image
+from mipcandy.data.io import fast_save, fast_load, resample_to_isotropic, load_image, save_image
+from mipcandy.data.sliding_window import do_sliding_window, revert_sliding_window, slide_dataset, \
+    UnsupervisedSWDataset, SupervisedSWDataset
 from mipcandy.data.transform import JointTransform, MONAITransform
 from mipcandy.data.visualization import visualize2d, visualize3d, overlay
