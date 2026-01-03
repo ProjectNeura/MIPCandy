@@ -21,12 +21,11 @@ from rich.table import Table
 from torch import nn, optim
 from torch.utils.data import DataLoader
 
-from mipcandy.common import Pad2d, Pad3d, quotient_regression, quotient_derivative, quotient_bounds
+from mipcandy.common import quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sanity_check import sanity_check
-from mipcandy.sliding_window import SWMetadata, SlidingWindow
 from mipcandy.types import Params, Setting, AmbiguousShape
 
 
@@ -537,75 +536,3 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     @override
     def __str__(self) -> str:
         return f"{self.__class__.__name__} {self._experiment_id}"
-
-
-class SlidingTrainer(Trainer, SlidingWindow, metaclass=ABCMeta):
-    @override
-    def get_example_input(self) -> torch.Tensor:
-        return torch.ones((super().get_example_input().shape[0], *(s * 2 for s in self.get_window_shape())))
-
-    @override
-    def build_padding_module(self) -> nn.Module | None:
-        window_shape = self.get_window_shape()
-        return (Pad2d if len(window_shape) == 2 else Pad3d)(window_shape)
-
-    @abstractmethod
-    def validate_case_windowed(self, outputs: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox,
-                               metadata: SWMetadata) -> tuple[float, dict[str, float], torch.Tensor]:
-        raise NotImplementedError
-
-    @override
-    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float], torch.Tensor]:
-        images, metadata = self.do_sliding_window(image.unsqueeze(0))
-        batch_size = self.get_batch_size()
-        model = toolbox.ema if toolbox.ema else toolbox.model
-        if not batch_size or batch_size >= images.shape[0]:
-            outputs = model(images)
-        else:
-            num_windows = images.shape[0]
-            num_batches = (num_windows + batch_size - 1) // batch_size
-            first_batch = model(images[:batch_size])
-            outputs = torch.empty((num_windows, *first_batch.shape[1:]), dtype=first_batch.dtype,
-                                  device=first_batch.device)
-            outputs[:batch_size] = first_batch
-            for batch_idx in range(1, num_batches):
-                start = batch_idx * batch_size
-                end = min(start + batch_size, num_windows)
-                outputs[start:end] = model(images[start:end])
-        return self.validate_case_windowed(outputs, label, toolbox, metadata)
-
-    @abstractmethod
-    def backward_windowed(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox,
-                          metadata: SWMetadata) -> tuple[float, dict[str, float]]:
-        raise NotImplementedError
-
-    @override
-    def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float]]:
-        images, metadata = self.do_sliding_window(images)
-        labels, _ = self.do_sliding_window(labels)
-        batch_size = self.get_batch_size()
-        if not batch_size or batch_size >= images.shape[0]:
-            return self.backward_windowed(images, labels, toolbox, metadata)
-        num_windows = images.shape[0]
-        num_batches = (num_windows + batch_size - 1) // batch_size
-        total_loss = 0
-        total_metrics = {}
-        for batch_idx in range(num_batches):
-            start = batch_idx * batch_size
-            end = min(start + batch_size, num_windows)
-            batch_size_actual = end - start
-            batch_images = images[start:end]
-            batch_labels = labels[start:end]
-            loss, metrics = self.backward_windowed(batch_images, batch_labels, toolbox, metadata)
-            total_loss += loss * batch_size_actual
-            for key, value in metrics.items():
-                if key in total_metrics:
-                    total_metrics[key] += value * batch_size_actual
-                else:
-                    total_metrics[key] = value * batch_size_actual
-        total_loss /= num_windows
-        for key in total_metrics:
-            total_metrics[key] /= num_windows
-        return total_loss, total_metrics
