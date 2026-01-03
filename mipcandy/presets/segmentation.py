@@ -74,16 +74,28 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     overlap: float = .5
-    validation_dataset: PathBasedSupervisedDataset | None = None
-    slided_validation_dataset: SupervisedSWDataset | None = None
+    _validation_dataset: PathBasedSupervisedDataset | None = None
+    _slided_validation_dataset: SupervisedSWDataset | None = None
 
     def set_validation_datasets(self, dataset: PathBasedSupervisedDataset, slided_dataset: SupervisedSWDataset) -> None:
-        self.validation_dataset = dataset
-        self.slided_validation_dataset = slided_dataset
+        self._validation_dataset = dataset
+        self._slided_validation_dataset = slided_dataset
+
+    def validation_dataset(self) -> PathBasedSupervisedDataset:
+        if self._validation_dataset:
+            return self._validation_dataset
+        raise ValueError("Validation datasets are not set")
+
+    def slided_validation_dataset(self) -> SupervisedSWDataset:
+        if self._slided_validation_dataset:
+            return self._slided_validation_dataset
+        raise ValueError("Validation datasets are not set")
 
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        image_files = self.slided_validation_dataset.images().paths()
+        validation_dataset = self.validation_dataset()
+        slided_validation_dataset = self.slided_validation_dataset()
+        image_files = slided_validation_dataset.images().paths()
         groups = defaultdict(list)
         for idx, filename in enumerate(image_files):
             case_id = filename.split("_")[0]
@@ -100,8 +112,8 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         ) as progress:
             val_prog = progress.add_task("Validating", total=num_cases)
             for case_idx, case_id in enumerate(sorted(groups.keys())):
-                patches = [self.slided_validation_dataset[idx][0].to(self._device) for idx in groups[case_id]]
-                label = self.validation_dataset[case_idx][1].to(self._device)
+                patches = [slided_validation_dataset[idx][0].to(self._device) for idx in groups[case_id]]
+                label = validation_dataset[case_idx][1].to(self._device)
                 progress.update(val_prog, description=f"Validating case {case_id} ({len(patches)} patches)")
                 case_score, case_metrics, output = self.validate_case(patches, label, toolbox)
                 score += case_score
