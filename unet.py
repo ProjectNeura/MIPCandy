@@ -3,10 +3,10 @@ from typing import override
 from monai.networks.nets import BasicUNet
 from torch import nn
 
-from mipcandy import SegmentationTrainer, AmbiguousShape, DiceBCELossWithLogits
+from mipcandy import SlidingTrainer, AmbiguousShape, DiceBCELossWithLogits
 
 
-class UNetTrainer(SegmentationTrainer):
+class UNetTrainer(SlidingTrainer):
     @override
     def build_criterion(self) -> nn.Module:
         return DiceBCELossWithLogits(self.num_classes, include_background=False)
