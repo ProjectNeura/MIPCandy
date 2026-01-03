@@ -83,7 +83,7 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
 
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        image_files = self.slided_validation_dataset._images.paths()
+        image_files = self.slided_validation_dataset.images().paths()
         groups = defaultdict(list)
         for idx, filename in enumerate(image_files):
             case_id = filename.split("_")[0]
@@ -91,7 +91,7 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         toolbox.model.eval()
         if toolbox.ema:
             toolbox.ema.eval()
-        score = 0.0
+        score = 0
         worst_score = float("+inf")
         metrics = {}
         num_cases = len(groups)
