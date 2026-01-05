@@ -13,7 +13,8 @@ authors = [
     { name = "Project Neura", email = "central@projectneura.org" }
 ]
 dependencies = [
-    "pyyaml", "torch", "torchvision", "ptflops", "numpy", "SimpleITK", "matplotlib", "rich", "pandas", "requests"
+    "pyyaml", "torch", "torchvision", "ptflops", "numpy", "safetensors", "SimpleITK", "matplotlib", "rich", "pandas",
+    "requests"
 ]
 
 [project.optional-dependencies]

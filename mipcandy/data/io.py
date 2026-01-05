@@ -3,6 +3,7 @@ from os import PathLike
 
 import SimpleITK as SpITK
 import torch
+from safetensors.torch import save_file, load_file
 
 from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
@@ -10,11 +11,11 @@ from mipcandy.types import Device
 
 
 def fast_save(x: torch.Tensor, path: str | PathLike[str]) -> None:
-    torch.save(x, path)
+    save_file({"payload": x}, path)
 
 
-def fast_load(path: str | PathLike[str]) -> torch.Tensor:
-    return torch.load(path, mmap=True)
+def fast_load(path: str | PathLike[str], *, device: Device = "cpu") -> torch.Tensor:
+    return load_file(path, device)["payload"]
 
 
 def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None,

@@ -50,7 +50,7 @@ class TensorLoader(Loader):
     @staticmethod
     @override
     def do_load(path: str | PathLike[str], *, is_label: bool = False, device: Device = "cpu", **kwargs) -> torch.Tensor:
-        return fast_load(path).to(device)
+        return fast_load(path, device=device)
 
 
 T = TypeVar("T")
