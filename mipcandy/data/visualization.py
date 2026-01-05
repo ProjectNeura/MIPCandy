@@ -64,7 +64,6 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
     if ratio > 1:
         image = ensure_num_dimensions(nn.functional.avg_pool3d(ensure_num_dimensions(image, 5), kernel_size=ratio,
                                                                stride=ratio, ceil_mode=True), 3)
-    image /= image.max()
     image = image.numpy()
     if backend == "auto":
         backend = "pyvista" if find_spec("pyvista") else "matplotlib"
