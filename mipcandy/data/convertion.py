@@ -23,4 +23,4 @@ def convert_logits_to_ids(logits: torch.Tensor, *, channel_dim: int = 1) -> torc
 
 
 def auto_convert(image: torch.Tensor) -> torch.Tensor:
-    return (image * 255 if 0 <= image.min() < image.max() <= 1 else Normalize(domain=(0, 255))(image)).int()
+    return (image * 255 if 0 <= image.min() <= image.max() <= 1 else Normalize(domain=(0, 255))(image)).int()
