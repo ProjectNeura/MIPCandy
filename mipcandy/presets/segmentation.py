@@ -118,7 +118,7 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
                 case_score, case_metrics, output = self.validate_case(patches, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
-                    self._tracker.worst_case = (patches[0], label, output)
+                    self._tracker.worst_case = (validation_dataset[case_idx][0], label, output)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
