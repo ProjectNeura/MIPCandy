@@ -91,9 +91,5 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         for window in windows:
             outputs.append(model(window.unsqueeze(0).to(self._device)).squeeze(0))
         reconstructed = revert_sliding_window(outputs, layout, pad, overlap=self.overlap)
-        pad = []
-        for r, l in zip(reversed(reconstructed.shape[2:]), reversed(label.shape[1:])):
-            pad.extend([0, r - l])
-        label = nn.functional.pad(label, pad)
-        loss, metrics = toolbox.criterion(reconstructed, label.unsqueeze(0))
-        return -loss.item(), metrics, reconstructed.squeeze(0)
+        loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
+        return -loss.item(), metrics, reconstructed
