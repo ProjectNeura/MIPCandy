@@ -49,7 +49,7 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d
     window_shape = first_window.shape[1:]
     c = first_window.shape[0]
     stride = tuple(int(w * (1 - overlap)) for w in window_shape)
-    num_windows = len(windows)
+    canvas = torch.stack(windows)
     if ndim == 2:
         h_win, w_win = window_shape
         n_h, n_w = layout
@@ -57,16 +57,13 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d
         out_w = (n_w - 1) * stride[1] + w_win
         output = torch.zeros(c, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
         weights = torch.zeros(1, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-        idx = 0
+        canvas = canvas[:n_h * n_w].reshape(n_h, n_w, c, h_win, w_win)
         for i in range(n_h):
             for j in range(n_w):
-                if idx >= num_windows:
-                    break
                 h_start = i * stride[0]
                 w_start = j * stride[1]
-                output[:, h_start:h_start + h_win, w_start:w_start + w_win] += windows[idx]
+                output[:, h_start:h_start + h_win, w_start:w_start + w_win] += canvas[i, j]
                 weights[0, h_start:h_start + h_win, w_start:w_start + w_win] += 1
-                idx += 1
         return Restore2d(pad)(output / weights.clamp(min=1))
     d_win, h_win, w_win = window_shape
     n_d, n_h, n_w = layout
@@ -75,18 +72,15 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d
     out_w = (n_w - 1) * stride[2] + w_win
     output = torch.zeros(c, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
     weights = torch.zeros(1, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-    idx = 0
+    canvas = canvas[:n_d * n_h * n_w].reshape(n_d, n_h, n_w, c, d_win, h_win, w_win)
     for i in range(n_d):
         for j in range(n_h):
             for k in range(n_w):
-                if idx >= num_windows:
-                    break
                 d_start = i * stride[0]
                 h_start = j * stride[1]
                 w_start = k * stride[2]
-                output[:, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += windows[idx]
+                output[:, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += canvas[i, j, k]
                 weights[0, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += 1
-                idx += 1
     return Restore3d(pad)(output / weights.clamp(min=1))
 
 
