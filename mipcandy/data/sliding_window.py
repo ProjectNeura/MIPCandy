@@ -15,7 +15,7 @@ from mipcandy.types import Shape, Transform, Device
 
 
 def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
-    stride = tuple(int(s * (1 + overlap)) for s in window_shape)
+    stride = tuple(int(s * (1 - overlap)) for s in window_shape)
     ndim = len(stride)
     if ndim not in (2, 3):
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
@@ -81,16 +81,17 @@ def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -
                 n_h += 1
             if n_d * n_h * n_w < num_windows:
                 n_d += 1
-        for nd in range(1, num_windows + 1):
-            if num_windows % nd == 0:
-                remaining = num_windows // nd
-                for nh in range(1, remaining + 1):
-                    if remaining % nh == 0:
-                        n_d = nd
-                        n_h = nh
-                        n_w = remaining // nh
-                        break
-                break
+        if n_d * n_h * n_w > num_windows:
+            for nd in range(1, num_windows + 1):
+                if num_windows % nd == 0:
+                    remaining = num_windows // nd
+                    for nh in range(1, remaining + 1):
+                        if remaining % nh == 0:
+                            n_d = nd
+                            n_h = nh
+                            n_w = remaining // nh
+                            break
+                    break
         out_d = (n_d - 1) * stride[0] + d_win
         out_h = (n_h - 1) * stride[1] + h_win
         out_w = (n_w - 1) * stride[2] + w_win
