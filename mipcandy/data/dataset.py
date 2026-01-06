@@ -127,13 +127,13 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
     def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
         Self, Self]:
-        indexes = picker.pick(len(self), fold)
+        indices = picker.pick(len(self), fold)
         images_train = []
         labels_train = []
         images_val = []
         labels_val = []
         for i in range(len(self)):
-            if i in indexes:
+            if i in indices:
                 images_val.append(self._images[i])
                 labels_val.append(self._labels[i])
             else:
