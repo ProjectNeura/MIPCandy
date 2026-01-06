@@ -135,11 +135,15 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         super().__init__(sorted(listdir(f"{folder}/{subfolder}")), transform=transform, device=device)
         self._folder: str = folder
         self._subfolder: Literal["images", "labels"] = subfolder
-        self._groups: list[SWCase] = [SWCase([], None) for _ in range(len(self))]
+        self._groups: list[SWCase] = []
         self._paddings: list[str] = sorted(listdir(f"{folder}/paddings"))
         for idx, filename in enumerate(self._images):
             meta = filename[:filename.rfind(".")].split("_")
             case_id = int(meta[0])
+            if case_id >= len(self._groups):
+                if case_id != len(self._groups):
+                    raise ValueError(f"Mismatched case id {case_id}")
+                self._groups.append(SWCase([], None))
             self._groups[case_id].window_indices.append(idx)
             if len(meta) == 3:
                 if self._groups[case_id].layout:
