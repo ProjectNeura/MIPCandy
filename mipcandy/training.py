@@ -54,7 +54,7 @@ class TrainerToolbox(object):
 class TrainerTracker(object):
     epoch: int = 0
     best_score: float = float("-inf")
-    worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None
+    worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None  # (image, label, output)
 
 
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
@@ -372,17 +372,17 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         if toolbox.ema:
             toolbox.ema.train()
         with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
-            epoch_prog = progress.add_task(f"Epoch {epoch}", total=len(self._dataloader))
+            task = progress.add_task(f"Epoch {epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
                 images, labels = images.to(self._device), labels.to(self._device)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
-                progress.update(epoch_prog, description=f"Training epoch {epoch} {tuple(images.shape)}")
+                progress.update(task, description=f"Training epoch {epoch} {tuple(images.shape)}")
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
-                progress.update(epoch_prog, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
+                progress.update(task, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
         self._bump_metrics()
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
@@ -496,8 +496,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     # Validation methods
 
     @abstractmethod
-    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float], torch.Tensor]:
+    def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float], torch.Tensor]:
         raise NotImplementedError
 
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
@@ -513,21 +513,23 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         with torch.no_grad(), Progress(
                 *Progress.get_default_columns(), SpinnerColumn(), console=self._console
         ) as progress:
-            val_prog = progress.add_task(f"Validating", total=num_cases)
+            task = progress.add_task(f"Validating", total=num_cases)
+            idx = 0
             for image, label in self._validation_dataloader:
                 image, label = image.to(self._device), label.to(self._device)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
-                progress.update(val_prog, description=f"Validating {tuple(image.shape)}")
-                case_score, case_metrics, output = self.validate_case(image, label, toolbox)
+                progress.update(task, description=f"Validating {tuple(image.shape)}")
+                case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = (image, label, output)
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
-                progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
+                progress.update(task, advance=1, description=f"Validating case {idx} ({case_score:.4f})")
+                idx += 1
         return score / num_cases, metrics
 
     def __call__(self, *args, **kwargs) -> None:

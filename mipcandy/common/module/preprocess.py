@@ -143,6 +143,7 @@ class Normalize(nn.Module):
         self._domain: tuple[float | None, float | None] = domain
         self._strict: bool = strict
         self._method: Literal["linear", "intercept", "cut"] = method
+        self.requires_grad_(False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         left, right = self._domain
@@ -190,6 +191,7 @@ class ColorizeLabel(nn.Module):
                         colormap.append([r * 32, g * 32, 255 - b * 32])
         self._colormap: torch.Tensor = torch.tensor(colormap)
         self._batch: bool = batch
+        self.requires_grad_(False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if not self._batch:
