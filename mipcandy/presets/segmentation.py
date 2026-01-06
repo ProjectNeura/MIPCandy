@@ -1,15 +1,13 @@
 from abc import ABCMeta
-from collections import defaultdict
 from typing import override
 
 import torch
-from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, \
-    revert_sliding_window, PathBasedSupervisedDataset, SupervisedSWDataset
-from mipcandy.training import Trainer, TrainerToolbox, try_append_all
+    revert_sliding_window, SupervisedSWDataset
+from mipcandy.training import Trainer, TrainerToolbox
 from mipcandy.types import Params
 
 
@@ -64,8 +62,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return loss.item(), metrics
 
     @override
-    def validate_case(self, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float], torch.Tensor]:
+    def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float], torch.Tensor]:
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
@@ -74,64 +72,25 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     overlap: float = .5
-    _validation_dataset: PathBasedSupervisedDataset | None = None
     _slided_validation_dataset: SupervisedSWDataset | None = None
 
-    def set_validation_datasets(self, dataset: PathBasedSupervisedDataset, slided_dataset: SupervisedSWDataset) -> None:
-        self._validation_dataset = dataset
-        self._slided_validation_dataset = slided_dataset
-
-    def validation_dataset(self) -> PathBasedSupervisedDataset:
-        if self._validation_dataset:
-            return self._validation_dataset
-        raise ValueError("Validation datasets are not set")
+    def set_slided_validation_dataset(self, dataset: SupervisedSWDataset) -> None:
+        self._slided_validation_dataset = dataset
 
     def slided_validation_dataset(self) -> SupervisedSWDataset:
         if self._slided_validation_dataset:
             return self._slided_validation_dataset
-        raise ValueError("Validation datasets are not set")
+        raise ValueError("Slided validation dataset is not set")
 
     @override
-    def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        validation_dataset = self.validation_dataset()
-        slided_validation_dataset = self.slided_validation_dataset()
-        image_files = slided_validation_dataset.images().paths()
-        groups = defaultdict(list)
-        for idx, filename in enumerate(image_files):
-            case_id = filename.split("_")[0]
-            groups[case_id].append(idx)
-        toolbox.model.eval()
-        if toolbox.ema:
-            toolbox.ema.eval()
-        score = 0
-        worst_score = float("+inf")
-        metrics = {}
-        num_cases = len(groups)
-        with torch.no_grad(), Progress(
-                *Progress.get_default_columns(), SpinnerColumn(), console=self._console
-        ) as progress:
-            val_prog = progress.add_task("Validating", total=num_cases)
-            for case_idx, case_id in enumerate(sorted(groups.keys())):
-                patches = [slided_validation_dataset[idx][0].to(self._device) for idx in groups[case_id]]
-                label = validation_dataset[case_idx][1].to(self._device)
-                progress.update(val_prog, description=f"Validating case {case_id} ({len(patches)} patches)")
-                case_score, case_metrics, output = self.validate_case(patches, label, toolbox)
-                score += case_score
-                if case_score < worst_score:
-                    self._tracker.worst_case = (validation_dataset[case_idx][0], label, output)
-                    worst_score = case_score
-                try_append_all(case_metrics, metrics)
-                progress.update(val_prog, advance=1, description=f"Validating ({case_score:.4f})")
-        return score / num_cases, metrics
-
-    @override
-    def validate_case(self, patches: list[torch.Tensor], label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+    def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
         outputs = []
-        for patch in patches:
-            outputs.append(model(patch.unsqueeze(0)).squeeze(0))
-        reconstructed = revert_sliding_window(outputs, overlap=self.overlap)
+        windows, layout, pad = self.slided_validation_dataset().images().case(idx)
+        for window in windows:
+            outputs.append(model(window.unsqueeze(0)).squeeze(0))
+        reconstructed = revert_sliding_window(outputs, layout, pad, overlap=self.overlap)
         pad = []
         for r, l in zip(reversed(reconstructed.shape[2:]), reversed(label.shape[1:])):
             pad.extend([0, r - l])
