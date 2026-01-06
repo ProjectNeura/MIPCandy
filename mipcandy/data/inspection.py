@@ -11,7 +11,6 @@ from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
 from mipcandy.data.geometric import crop
-from mipcandy.layer import HasDevice
 from mipcandy.types import Shape, AmbiguousShape
 
 
@@ -43,9 +42,8 @@ class InspectionAnnotation(object):
         return asdict(self)
 
 
-class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
+class InspectionAnnotations(Sequence[InspectionAnnotation]):
     def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation) -> None:
-        super().__init__(dataset.device())
         self._dataset: SupervisedDataset = dataset
         self._background: int = background
         self._annotations: tuple[InspectionAnnotation, ...] = annotations
@@ -132,7 +130,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             return self._foreground_heatmap
         depths, heights, widths = self.foreground_shapes()
         max_shape = (max(depths), max(heights), max(widths)) if depths else (max(heights), max(widths))
-        accumulated_label = torch.zeros((1, *max_shape), device=self._device)
+        accumulated_label = torch.zeros((1, *max_shape), device=self._dataset.device())
         for i, (_, label) in enumerate(self._dataset):
             annotation = self._annotations[i]
             paddings = [0, 0, 0, 0]
@@ -247,7 +245,8 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
 
 class ROIDataset(SupervisedDataset[list[int]]):
     def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
-        super().__init__(list(range(len(annotations))), list(range(len(annotations))), device=annotations.device())
+        super().__init__(list(range(len(annotations))), list(range(len(annotations))),
+                         device=annotations.dataset().device())
         self._annotations: InspectionAnnotations = annotations
         self._percentile: float = percentile
 
