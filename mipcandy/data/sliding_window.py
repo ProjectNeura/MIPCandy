@@ -151,10 +151,10 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
                             is_label=self._subfolder == "labels", device=self._device)
 
-    def load_full(self, case_idx: int) -> torch.Tensor:
+    def case(self, case_idx: int) -> tuple[list[torch.Tensor], Shape]:
         case = self._groups[case_idx]
         windows = [self[idx] for idx in case.window_indices]
-        return revert_sliding_window(windows, case.layout)
+        return windows, case.layout
 
 
 class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):
@@ -169,6 +169,3 @@ class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[Unsuper
 
     def labels(self) -> UnsupervisedSWDataset:
         return self._labels
-
-    def load_full(self, case_idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._images.load_full(case_idx), self._labels.load_full(case_idx)
