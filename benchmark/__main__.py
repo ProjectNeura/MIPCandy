@@ -8,7 +8,7 @@ from mipcandy import auto_device, download_dataset, Frontend, NotionFrontend, Wa
 BENCHMARK_DATASET: str = "AbdomenCT-1K-ss1"
 
 if __name__ == "__main__":
-    tests = test = {
+    tests = {
         "SlidingWindow": SlidingWindowTest,
         "Training": TrainingTest,
         "SlidingTraining": SlidingTrainingTest
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     parser.add_argument("--front-end", choices=(None, "n", "w"), default=None)
     args = parser.parse_args()
     DataTest.dataset = BENCHMARK_DATASET
-    tests[args.test](
+    test = tests[args.test](
         args.input_folder, args.output_folder, args.num_epochs, args.device if args.device else auto_device(), {
             None: Frontend, "n": NotionFrontend, "w": WandBFrontend
         }[args.front_end]
