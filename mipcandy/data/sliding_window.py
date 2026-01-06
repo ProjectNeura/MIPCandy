@@ -105,13 +105,13 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
             torch.save(pad, f"{output_folder}/paddings/{str(i).zfill(ind)}.pt")
             jnd = int(log10(len(windows))) + 1
             for j, window in enumerate(windows):
-                path = f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}"
+                path = f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
                 fast_save(window, f"{path}_{layout}.pt" if j == 0 else f"{path}.pt")
             if supervised:
                 label = case[1]
                 windows, layout, _ = do_sliding_window(label, window_shape, overlap=overlap)
                 for j, window in enumerate(windows):
-                    path = f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}"
+                    path = f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
                     fast_save(window, f"{path}_{layout}.pt" if j == 0 else f"{path}.pt")
             progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
