@@ -24,13 +24,13 @@ def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = 
     if ndim not in (2, 3):
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
     if ndim == 2:
-        pad = Pad2d(stride, batch=False)
+        pad = Pad2d(window_shape, batch=False)
         x = pad(x)
         x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1])
         c, n_h, n_w, win_h, win_w = x.shape
         x = x.permute(1, 2, 0, 3, 4).reshape(n_h * n_w, c, win_h, win_w)
         return [x[i] for i in range(x.shape[0])], (n_h, n_w), pad
-    pad = Pad3d(stride, batch=False)
+    pad = Pad3d(window_shape, batch=False)
     x = pad(x)
     x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1]).unfold(
         3, window_shape[2], stride[2])
