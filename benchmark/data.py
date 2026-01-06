@@ -1,15 +1,17 @@
 from typing import override, Literal
 
 from benchmark.prototype import UnitTest
-from mipcandy import NNUNetDataset, do_sliding_window, visualize3d, revert_sliding_window
+from mipcandy import NNUNetDataset, do_sliding_window, visualize3d, revert_sliding_window, JointTransform
 
 
 class DataTest(UnitTest):
     dataset: str = "AbdomenCT-1K-ss1"
+    transform: JointTransform | None = None
 
     @override
     def set_up(self) -> None:
-        self["dataset"] = NNUNetDataset(f"{self.input_folder}/{DataTest.dataset}", device=self.device)
+        self["dataset"] = NNUNetDataset(f"{self.input_folder}/{DataTest.dataset}", transform=self.transform,
+                                        device=self.device)
 
 
 class FoldedDataTest(DataTest):

@@ -32,7 +32,7 @@ class UnitTest(object):
         return True, None
 
     def __setitem__(self, key: str, value: Any) -> None:
-        setattr(self, key, value)
+        setattr(self, "_x_" + key, value)
 
     def __getitem__(self, item: str) -> Any:
-        return getattr(self, item)
+        return getattr(self, "_x_" + item)
