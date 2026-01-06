@@ -31,8 +31,11 @@ class SlidingWindowTest(DataTest):
     @override
     def execute(self) -> None:
         image, _ = self["dataset"][0]
+        print(image.shape)
         visualize3d(image, title="raw")
-        x = do_sliding_window(image, (128, 128, 128))
-        visualize3d(x[0], title="first window")
-        recon = revert_sliding_window(x)
+        windows, layout, pad = do_sliding_window(image, (128, 128, 128))
+        print(windows[0].shape, layout)
+        visualize3d(windows[0], title="first window")
+        recon = revert_sliding_window(windows, layout, pad)
+        print(recon.shape)
         visualize3d(recon, title="reconstructed")
