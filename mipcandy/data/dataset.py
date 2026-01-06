@@ -126,6 +126,11 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
         return image.as_tensor() if hasattr(image, "as_tensor") else image, label.as_tensor() if hasattr(
             label, "as_tensor") else label
 
+    def transform(self, *, transform: JointTransform | None = None) -> None | JointTransform:
+        if transform is None:
+            return self._transform
+        self._transform = transform.to(self._device) if transform else None
+
     @abstractmethod
     def construct_new(self, images: D, labels: D) -> Self:
         raise NotImplementedError
