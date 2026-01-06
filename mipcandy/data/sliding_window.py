@@ -137,7 +137,7 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         self._groups: list[SWCase] = [SWCase([], None) for _ in range(len(self))]
         self._paddings: list[str] = sorted(listdir(f"{folder}/paddings"))
         for idx, filename in enumerate(self._images):
-            meta = filename.split("_")
+            meta = filename[:filename.rfind(".")].split("_")
             case_id = int(meta[0])
             self._groups[case_id].window_indices.append(idx)
             if len(meta) == 3:
