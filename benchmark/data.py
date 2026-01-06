@@ -1,7 +1,8 @@
 from typing import override, Literal
 
 from benchmark.prototype import UnitTest
-from mipcandy import NNUNetDataset, do_sliding_window, visualize3d, revert_sliding_window, JointTransform
+from mipcandy import NNUNetDataset, do_sliding_window, visualize3d, revert_sliding_window, JointTransform, inspect, \
+    RandomROIDataset
 
 
 class DataTest(UnitTest):
@@ -24,12 +25,6 @@ class FoldedDataTest(DataTest):
 
 
 class SlidingWindowTest(DataTest):
-    fold: Literal[0, 1, 2, 3, 4, "all"] = 0
-
-    @override
-    def set_up(self) -> None:
-        super().set_up()
-
     @override
     def execute(self) -> None:
         image, _ = self["dataset"][0]
@@ -41,3 +36,13 @@ class SlidingWindowTest(DataTest):
         recon = revert_sliding_window(windows, layout, pad)
         print(recon.shape)
         visualize3d(recon, title="reconstructed")
+
+
+class RandomROIDatasetTest(DataTest):
+    @override
+    def execute(self) -> None:
+        annotations = inspect(self["dataset"])
+        dataset = RandomROIDataset(annotations)
+        print(len(dataset))
+        visualize3d(self["dataset"][0][0], title="raw")
+        visualize3d(dataset[0][0], title="roi")
