@@ -41,7 +41,8 @@ class SlidingTrainingTest(FoldedDataTest):
         slided_val_dataset = SupervisedSWDataset(f"{self.output_folder}/val_slided")
         train_dataset = self["train_dataset"]
         train_dataset.transform(
-            transform=JointTransform(transform=MONAITransform(PadTo(self.window_shape, batch=False))))
+            transform=JointTransform(transform=MONAITransform(PadTo(self.window_shape, batch=False)))
+        )
         annotations = inspect(train_dataset)
         annotations.set_roi_shape(self.window_shape)
         train_dataset = ROIDataset(annotations)
