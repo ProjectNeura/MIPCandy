@@ -44,5 +44,9 @@ class RandomROIDatasetTest(DataTest):
         annotations = inspect(self["dataset"])
         dataset = RandomROIDataset(annotations)
         print(len(dataset))
-        visualize3d(self["dataset"][0][0], title="raw")
-        visualize3d(dataset[0][0], title="roi")
+        image, label = self["dataset"][0]
+        image_roi, label_roi = dataset[0]
+        visualize3d(image, title="image raw")
+        visualize3d(label, title="label raw")
+        visualize3d(image_roi, title="image roi")
+        visualize3d(label_roi, title="label roi")
