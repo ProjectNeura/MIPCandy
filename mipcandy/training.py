@@ -521,7 +521,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
-                progress.update(task, description=f"Validating {tuple(image.shape)}")
+                progress.update(task, description=f"Validating case {idx} {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
