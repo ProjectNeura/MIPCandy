@@ -93,6 +93,11 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
             item = self._transform(item)
         return item.as_tensor() if hasattr(item, "as_tensor") else item
 
+    def transform(self, *, transform: Transform | None = None) -> None | Transform:
+        if transform is None:
+            return self._transform
+        self._transform = transform.to(self._device) if transform else None
+
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
     """

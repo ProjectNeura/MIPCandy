@@ -50,8 +50,7 @@ class HasDevice(object):
     def device(self, *, device: Device | None = None) -> None | Device:
         if device is None:
             return self._device
-        else:
-            self._device = device
+        self._device = device
 
 
 def auto_device() -> Device:
