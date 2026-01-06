@@ -60,4 +60,4 @@ class SlidingTrainingTest(FoldedDataTest):
 
     @override
     def execute(self) -> None:
-        self["trainer"].train(self.num_epochs, note="Training test")
+        self["trainer"].train(self.num_epochs, note="Training test with sliding window")
