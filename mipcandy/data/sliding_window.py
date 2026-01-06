@@ -92,7 +92,9 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d
 def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
            window_shape: Shape, *, overlap: float = .5, console: Console = Console()) -> None:
     makedirs(f"{output_folder}/images", exist_ok=True)
-    makedirs(f"{output_folder}/labels", exist_ok=True)
+    if supervised:
+        makedirs(f"{output_folder}/labels", exist_ok=True)
+    makedirs(f"{output_folder}/paddings", exist_ok=True)
     ind = int(log10(len(dataset))) + 1
     with Progress(console=console) as progress:
         task = progress.add_task("Sliding dataset...", total=len(dataset))
