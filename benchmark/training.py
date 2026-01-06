@@ -4,10 +4,10 @@ from typing import override
 from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
-from benchmark.data import FoldedDataTest
+from benchmark.data import DataTest, FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    ROIDataset, PadTo, MONAITransform
+    ROIDataset, PadTo, MONAITransform, SimpleDataset
 
 
 class TrainingTest(FoldedDataTest):
@@ -55,6 +55,7 @@ class SlidingTrainingTest(FoldedDataTest):
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
         self["trainer"].num_classes = self.num_classes
+        self["trainer"].set_validation_dataset(SimpleDataset(f"{self.input_folder}/{DataTest.dataset}"))
         self["trainer"].set_slided_validation_dataset(slided_val_dataset)
         self["trainer"].set_frontend(self.frontend)
 
