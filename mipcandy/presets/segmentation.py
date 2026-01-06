@@ -89,7 +89,7 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         outputs = []
         windows, layout, pad = self.slided_validation_dataset().images().case(idx)
         for window in windows:
-            outputs.append(model(window.unsqueeze(0)).squeeze(0))
+            outputs.append(model(window.unsqueeze(0).to(self._device)).squeeze(0))
         reconstructed = revert_sliding_window(outputs, layout, pad, overlap=self.overlap)
         pad = []
         for r, l in zip(reversed(reconstructed.shape[2:]), reversed(label.shape[1:])):
