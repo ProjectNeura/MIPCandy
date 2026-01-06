@@ -6,13 +6,14 @@ from torch.utils.data import DataLoader
 
 from benchmark.data import FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
-from mipcandy import Trainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, ROIDataset, PadTo, \
-    MONAITransform
+from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
+    ROIDataset, PadTo, MONAITransform
 
 
 class TrainingTest(FoldedDataTest):
-    trainer: type[Trainer] = UNetTrainer
+    trainer: type[SegmentationTrainer] = UNetTrainer
     resize: Shape = (256, 256, 256)
+    num_classes: int = 5
 
     @override
     def set_up(self) -> None:
@@ -22,6 +23,7 @@ class TrainingTest(FoldedDataTest):
         val_dataloader = DataLoader(self["val_dataset"], batch_size=1, shuffle=False, pin_memory=True)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
+        self["trainer"].num_classes = self.num_classes
 
     @override
     def execute(self) -> None:
@@ -29,8 +31,9 @@ class TrainingTest(FoldedDataTest):
 
 
 class SlidingTrainingTest(FoldedDataTest):
-    trainer: type[Trainer] = UNetSlidingTrainer
+    trainer: type[SegmentationTrainer] = UNetSlidingTrainer
     window_shape: Shape = (128, 128, 128)
+    num_classes: int = 5
 
     @override
     def set_up(self) -> None:
@@ -50,6 +53,7 @@ class SlidingTrainingTest(FoldedDataTest):
         val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False, pin_memory=True)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
+        self["trainer"].num_classes = self.num_classes
         self["trainer"].set_slided_validation_dataset(slided_val_dataset)
 
     @override
