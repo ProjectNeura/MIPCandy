@@ -19,8 +19,8 @@ class TrainingTest(FoldedDataTest):
     def set_up(self) -> None:
         self.transform = JointTransform(transform=Resized(("image", "label"), self.resize))
         super().set_up()
-        train_dataloader = DataLoader(self["train_dataset"], batch_size=2, shuffle=True, pin_memory=True)
-        val_dataloader = DataLoader(self["val_dataset"], batch_size=1, shuffle=False, pin_memory=True)
+        train_dataloader = DataLoader(self["train_dataset"], batch_size=2, shuffle=True)
+        val_dataloader = DataLoader(self["val_dataset"], batch_size=1, shuffle=False)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
         self["trainer"].num_classes = self.num_classes
@@ -49,8 +49,8 @@ class SlidingTrainingTest(FoldedDataTest):
         annotations = inspect(train_dataset)
         annotations.set_roi_shape(self.window_shape)
         train_dataset = ROIDataset(annotations)
-        train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True, pin_memory=True)
-        val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False, pin_memory=True)
+        train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
+        val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
         self["trainer"].num_classes = self.num_classes

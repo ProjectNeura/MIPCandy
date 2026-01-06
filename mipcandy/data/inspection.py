@@ -12,7 +12,7 @@ from torch import nn
 from mipcandy.data.dataset import SupervisedDataset
 from mipcandy.data.geometric import crop
 from mipcandy.layer import HasDevice
-from mipcandy.types import Device, Shape, AmbiguousShape
+from mipcandy.types import Shape, AmbiguousShape
 
 
 def format_bbox(bbox: Sequence[int]) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
@@ -44,9 +44,8 @@ class InspectionAnnotation(object):
 
 
 class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
-    def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation,
-                 device: Device = "cpu") -> None:
-        super().__init__(device)
+    def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation) -> None:
+        super().__init__(dataset.device())
         self._dataset: SupervisedDataset = dataset
         self._background: int = background
         self._annotations: tuple[InspectionAnnotation, ...] = annotations
@@ -243,12 +242,12 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
                 tuple(label.shape[1:]), bbox if label.ndim == 3 else bbox + (mins[3], maxs[3] + 1),
                 tuple(label.unique().tolist())
             ))
-    return InspectionAnnotations(dataset, background, *r, device=dataset.device())
+    return InspectionAnnotations(dataset, background, *r)
 
 
 class ROIDataset(SupervisedDataset[list[int]]):
     def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
-        super().__init__(list(range(len(annotations))), list(range(len(annotations))))
+        super().__init__(list(range(len(annotations))), list(range(len(annotations))), device=annotations.device())
         self._annotations: InspectionAnnotations = annotations
         self._percentile: float = percentile
 
