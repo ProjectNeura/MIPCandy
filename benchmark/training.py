@@ -55,7 +55,7 @@ class SlidingTrainingTest(FoldedDataTest):
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
         self["trainer"].num_classes = self.num_classes
-        self["trainer"].set_validation_dataset(SimpleDataset(f"{self.input_folder}/{DataTest.dataset}"))
+        self["trainer"].set_validation_dataset(SimpleDataset(f"{self.input_folder}/{DataTest.dataset}/labelsTr"))
         self["trainer"].set_slided_validation_dataset(slided_val_dataset)
         self["trainer"].set_frontend(self.frontend)
 
