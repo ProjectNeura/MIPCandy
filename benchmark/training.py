@@ -6,7 +6,8 @@ from torch.utils.data import DataLoader
 
 from benchmark.data import FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
-from mipcandy import Trainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, ROIDataset
+from mipcandy import Trainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, ROIDataset, PadTo, \
+    MONAITransform
 
 
 class TrainingTest(FoldedDataTest):
@@ -39,6 +40,7 @@ class SlidingTrainingTest(FoldedDataTest):
             slide_dataset(val_dataset, f"{self.output_folder}/val_slided", self.window_shape)
         slided_val_dataset = SupervisedSWDataset(f"{self.output_folder}/val_slided")
         train_dataset = self["train_dataset"]
+        train_dataset.transform(transform=JointTransform(transform=MONAITransform(PadTo(self.window_shape))))
         annotations = inspect(train_dataset)
         annotations.set_roi_shape(self.window_shape)
         train_dataset = ROIDataset(annotations)
