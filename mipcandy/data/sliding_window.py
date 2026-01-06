@@ -51,8 +51,8 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, *,
         n_h, n_w = layout
         out_h = (n_h - 1) * stride[0] + h_win
         out_w = (n_w - 1) * stride[1] + w_win
-        output = torch.zeros(1, c, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-        weights = torch.zeros(1, 1, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
+        output = torch.zeros(c, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
+        weights = torch.zeros(1, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
         idx = 0
         for i in range(n_h):
             for j in range(n_w):
@@ -60,8 +60,8 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, *,
                     break
                 h_start = i * stride[0]
                 w_start = j * stride[1]
-                output[0, :, h_start:h_start + h_win, w_start:w_start + w_win] += windows[idx]
-                weights[0, 0, h_start:h_start + h_win, w_start:w_start + w_win] += 1
+                output[:, h_start:h_start + h_win, w_start:w_start + w_win] += windows[idx]
+                weights[0, h_start:h_start + h_win, w_start:w_start + w_win] += 1
                 idx += 1
         return output / weights.clamp(min=1)
     else:
@@ -70,8 +70,8 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, *,
         out_d = (n_d - 1) * stride[0] + d_win
         out_h = (n_h - 1) * stride[1] + h_win
         out_w = (n_w - 1) * stride[2] + w_win
-        output = torch.zeros(1, c, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-        weights = torch.zeros(1, 1, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
+        output = torch.zeros(c, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
+        weights = torch.zeros(1, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
         idx = 0
         for i in range(n_d):
             for j in range(n_h):
@@ -81,9 +81,9 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, *,
                     d_start = i * stride[0]
                     h_start = j * stride[1]
                     w_start = k * stride[2]
-                    output[0, :, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += windows[
+                    output[:, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += windows[
                         idx]
-                    weights[0, 0, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += 1
+                    weights[0, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += 1
                     idx += 1
         return output / weights.clamp(min=1)
 
