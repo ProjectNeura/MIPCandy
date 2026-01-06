@@ -164,7 +164,8 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
     def case(self, case_idx: int) -> tuple[list[torch.Tensor], Shape, Pad2d | Pad3d]:
         case = self._groups[case_idx]
         windows = [self[idx] for idx in case.window_indices]
-        return windows, case.layout, torch.load(f"{self._folder}/paddings/{self._paddings[case_idx]}")
+        return windows, case.layout, torch.load(f"{self._folder}/paddings/{self._paddings[case_idx]}",
+                                                weights_only=False)
 
 
 class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):
