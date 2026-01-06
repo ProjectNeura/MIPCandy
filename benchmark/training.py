@@ -24,6 +24,7 @@ class TrainingTest(FoldedDataTest):
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
         self["trainer"].num_classes = self.num_classes
+        self["trainer"].set_frontend(self.frontend)
 
     @override
     def execute(self) -> None:
@@ -55,6 +56,7 @@ class SlidingTrainingTest(FoldedDataTest):
                                        device=self.device)
         self["trainer"].num_classes = self.num_classes
         self["trainer"].set_slided_validation_dataset(slided_val_dataset)
+        self["trainer"].set_frontend(self.frontend)
 
     @override
     def execute(self) -> None:
