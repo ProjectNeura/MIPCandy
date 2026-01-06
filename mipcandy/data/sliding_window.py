@@ -1,7 +1,8 @@
 from ast import literal_eval
 from dataclasses import dataclass
-from itertools import product
+from functools import reduce
 from math import log10
+from operator import mul
 from os import PathLike, makedirs, listdir
 from typing import override, Literal
 
@@ -148,7 +149,7 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
             windows, layout = case.window_indices, case.layout
             if not layout:
                 raise ValueError(f"Layout not specified for case {idx}")
-            if len(windows) != product(layout):
+            if len(windows) != reduce(mul, layout):
                 raise ValueError(f"Mismatched number of windows {len(windows)} and layout {layout} for case {idx}")
 
     @override
