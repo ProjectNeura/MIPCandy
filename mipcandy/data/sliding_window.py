@@ -14,7 +14,7 @@ from mipcandy.data.transform import JointTransform
 from mipcandy.types import Shape, Transform, Device
 
 
-def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> list[torch.Tensor]:
+def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> tuple[list[torch.Tensor], Shape]:
     stride = tuple(int(s * (1 - overlap)) for s in window_shape)
     ndim = len(stride)
     if ndim not in (2, 3):
@@ -24,16 +24,17 @@ def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = 
         x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1])
         c, n_h, n_w, win_h, win_w = x.shape
         x = x.permute(1, 2, 0, 3, 4).reshape(n_h * n_w, c, win_h, win_w)
-        return [x[i] for i in range(x.shape[0])]
+        return [x[i] for i in range(x.shape[0])], (n_h, n_w)
     x = Pad3d(stride, batch=False)(x)
-    x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1]).unfold(3, window_shape[2],
-                                                                                             stride[2])
+    x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1]).unfold(
+        3, window_shape[2], stride[2])
     c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
     x = x.permute(1, 2, 3, 0, 4, 5, 6).reshape(n_d * n_h * n_w, c, win_d, win_h, win_w)
-    return [x[i] for i in range(x.shape[0])]
+    return [x[i] for i in range(x.shape[0])], (n_d, n_h, n_w)
 
 
-def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -> torch.Tensor:
+def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, *,
+                          overlap: float = .5) -> torch.Tensor:
     first_window = windows[0]
     ndim = first_window.ndim - 1
     if ndim not in (2, 3):
@@ -44,17 +45,7 @@ def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -
     num_windows = len(windows)
     if ndim == 2:
         h_win, w_win = window_shape
-        import math
-        grid_size = math.isqrt(num_windows)
-        n_h = n_w = grid_size
-        while n_h * n_w < num_windows:
-            n_w += 1
-        if n_h * n_w > num_windows:
-            for nh in range(1, num_windows + 1):
-                if num_windows % nh == 0:
-                    n_h = nh
-                    n_w = num_windows // nh
-                    break
+        n_h, n_w = layout
         out_h = (n_h - 1) * stride[0] + h_win
         out_w = (n_w - 1) * stride[1] + w_win
         output = torch.zeros(1, c, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
@@ -72,26 +63,7 @@ def revert_sliding_window(windows: list[torch.Tensor], *, overlap: float = .5) -
         return output / weights.clamp(min=1)
     else:
         d_win, h_win, w_win = window_shape
-        import math
-        grid_size = round(num_windows ** (1 / 3))
-        n_d = n_h = n_w = grid_size
-        while n_d * n_h * n_w < num_windows:
-            n_w += 1
-            if n_d * n_h * n_w < num_windows:
-                n_h += 1
-            if n_d * n_h * n_w < num_windows:
-                n_d += 1
-        if n_d * n_h * n_w > num_windows:
-            for nd in range(1, num_windows + 1):
-                if num_windows % nd == 0:
-                    remaining = num_windows // nd
-                    for nh in range(1, remaining + 1):
-                        if remaining % nh == 0:
-                            n_d = nd
-                            n_h = nh
-                            n_w = remaining // nh
-                            break
-                    break
+        n_d, n_h, n_w = layout
         out_d = (n_d - 1) * stride[0] + d_win
         out_h = (n_h - 1) * stride[1] + h_win
         out_w = (n_w - 1) * stride[2] + w_win
@@ -123,15 +95,15 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
         for i, case in enumerate(dataset):
             image = case[0] if supervised else case
             progress.update(task, description=f"Sliding dataset {tuple(image.shape)}...")
-            windows = do_sliding_window(image, window_shape, overlap=overlap)
+            windows, layout = do_sliding_window(image, window_shape, overlap=overlap)
             jnd = int(log10(len(windows))) + 1
             for j, window in enumerate(windows):
-                fast_save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+                fast_save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}.pt")
             if supervised:
                 label = case[1]
-                windows = do_sliding_window(label, window_shape, overlap=overlap)
+                windows, layout = do_sliding_window(label, window_shape, overlap=overlap)
                 for j, window in enumerate(windows):
-                    fast_save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}.pt")
+                    fast_save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}.pt")
             progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
 
