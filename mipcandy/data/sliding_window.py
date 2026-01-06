@@ -1,3 +1,6 @@
+from ast import literal_eval
+from dataclasses import dataclass
+from itertools import product
 from math import log10
 from os import PathLike, makedirs, listdir
 from typing import override, Literal
@@ -98,12 +101,14 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
             windows, layout = do_sliding_window(image, window_shape, overlap=overlap)
             jnd = int(log10(len(windows))) + 1
             for j, window in enumerate(windows):
-                fast_save(window, f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}.pt")
+                path = f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}"
+                fast_save(window, f"{path}_{layout}.pt" if j == 0 else f"{path}.pt")
             if supervised:
                 label = case[1]
                 windows, layout = do_sliding_window(label, window_shape, overlap=overlap)
                 for j, window in enumerate(windows):
-                    fast_save(window, f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}.pt")
+                    path = f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}_{layout}"
+                    fast_save(window, f"{path}_{layout}.pt" if j == 0 else f"{path}.pt")
             progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
 
@@ -113,17 +118,43 @@ def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folde
            console=console)
 
 
+@dataclass
+class SWCase(object):
+    window_indices: list[int]
+    layout: Shape | None
+
+
 class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
     def __init__(self, folder: str | PathLike[str], *, subfolder: Literal["images", "labels"] = "images",
                  transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(sorted(listdir(f"{folder}/{subfolder}")), transform=transform, device=device)
         self._folder: str = folder
         self._subfolder: Literal["images", "labels"] = subfolder
+        self._groups: list[SWCase] = [SWCase([], None) for _ in range(len(self))]
+        for idx, filename in enumerate(self._images):
+            meta = filename.split("_")
+            case_id = int(meta[0])
+            self._groups[case_id].window_indices.append(idx)
+            if len(meta) == 3:
+                if self._groups[case_id].layout:
+                    raise ValueError(f"Duplicated layout specification for case {case_id}")
+                self._groups[case_id].layout = literal_eval(meta[2])
+        for idx, case in enumerate(self._groups):
+            windows, layout = case.window_indices, case.layout
+            if not layout:
+                raise ValueError(f"Layout not specified for case {idx}")
+            if len(windows) != product(layout):
+                raise ValueError(f"Mismatched number of windows {len(windows)} and layout {layout} for case {idx}")
 
     @override
     def load(self, idx: int) -> torch.Tensor:
         return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
                             is_label=self._subfolder == "labels", device=self._device)
+
+    def load_full(self, case_idx: int) -> torch.Tensor:
+        case = self._groups[case_idx]
+        windows = [self[idx] for idx in case.window_indices]
+        return revert_sliding_window(windows, case.layout)
 
 
 class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):
@@ -138,3 +169,6 @@ class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[Unsuper
 
     def labels(self) -> UnsupervisedSWDataset:
         return self._labels
+
+    def load_full(self, case_idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self._images.load_full(case_idx), self._labels.load_full(case_idx)
