@@ -1,6 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from json import dump
-from os import PathLike, listdir, makedirs, rmdir
+from os import PathLike, listdir, makedirs
 from os.path import exists
 from random import choices
 from shutil import copy2
@@ -322,8 +322,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         images_path = f"{self._folder}/images{self._split}Preloaded"
         labels_path = f"{self._folder}/labels{self._split}Preloaded"
         if not exists(images_path) or not exists(labels_path):
-            rmdir(images_path)
-            rmdir(labels_path)
             makedirs(images_path)
             makedirs(images_path)
             for idx in range(len(self)):
