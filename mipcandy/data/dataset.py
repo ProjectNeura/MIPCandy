@@ -323,7 +323,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         labels_path = f"{self._folder}/labels{self._split}Preloaded"
         if not exists(images_path) or not exists(labels_path):
             makedirs(images_path)
-            makedirs(images_path)
+            makedirs(labels_path)
             for idx in range(len(self)):
                 image, label = self.load(idx)
                 fast_save(image, f"{images_path}/{self._images[idx]}.pt")
