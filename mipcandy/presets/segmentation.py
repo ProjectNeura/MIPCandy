@@ -106,10 +106,10 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
         outputs = []
-        windows, layout, pad = self.slided_validation_dataset().images().case(idx)
+        windows, layout, original_shape = self.slided_validation_dataset().images().case(idx)
         for window in windows:
             outputs.append(model(window.unsqueeze(0).to(self._device)).squeeze(0))
-        reconstructed = revert_sliding_window(outputs, layout, pad, overlap=self.overlap)
+        reconstructed = revert_sliding_window(outputs, layout, original_shape, overlap=self.overlap)
         label = self.validation_dataset()[idx].to(self._device)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         return -loss.item(), metrics, reconstructed

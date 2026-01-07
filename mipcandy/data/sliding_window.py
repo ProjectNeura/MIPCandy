@@ -9,8 +9,8 @@ from typing import override, Literal
 import torch
 from rich.console import Console
 from rich.progress import Progress
+from torch import nn
 
-from mipcandy.common import Pad2d, Pad3d, Restore2d, Restore3d
 from mipcandy.data.dataset import UnsupervisedDataset, SupervisedDataset, MergedDataset, PathBasedUnsupervisedDataset, \
     TensorLoader
 from mipcandy.data.io import fast_save
@@ -19,28 +19,39 @@ from mipcandy.types import Shape, Transform, Device
 
 
 def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> tuple[
-    list[torch.Tensor], Shape, Pad2d | Pad3d]:
+    list[torch.Tensor], Shape, Shape]:
     stride = tuple(int(s * (1 - overlap)) for s in window_shape)
     ndim = len(stride)
     if ndim not in (2, 3):
         raise ValueError(f"Window shape must be 2D or 3D, got {ndim}D")
+    original_shape = tuple(x.shape[1:])
+    padded_shape = []
+    for i, size in enumerate(original_shape):
+        if size <= window_shape[i]:
+            padded_shape.append(window_shape[i])
+        else:
+            excess = (size - window_shape[i]) % stride[i]
+            padded_shape.append(size if excess == 0 else (size + stride[i] - excess))
+    padding_values = []
+    for i in range(ndim - 1, -1, -1):
+        pad_total = padded_shape[i] - original_shape[i]
+        pad_before = pad_total // 2
+        pad_after = pad_total - pad_before
+        padding_values.extend([pad_before, pad_after])
+    x = nn.functional.pad(x, padding_values, mode='constant', value=0)
     if ndim == 2:
-        pad = Pad2d(window_shape, batch=False)
-        x = pad(x)
         x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1])
         c, n_h, n_w, win_h, win_w = x.shape
         x = x.permute(1, 2, 0, 3, 4).reshape(n_h * n_w, c, win_h, win_w)
-        return [x[i] for i in range(x.shape[0])], (n_h, n_w), pad
-    pad = Pad3d(window_shape, batch=False)
-    x = pad(x)
+        return [x[i] for i in range(x.shape[0])], (n_h, n_w), original_shape
     x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1]).unfold(
         3, window_shape[2], stride[2])
     c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
     x = x.permute(1, 2, 3, 0, 4, 5, 6).reshape(n_d * n_h * n_w, c, win_d, win_h, win_w)
-    return [x[i] for i in range(x.shape[0])], (n_d, n_h, n_w), pad
+    return [x[i] for i in range(x.shape[0])], (n_d, n_h, n_w), original_shape
 
 
-def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d | Pad3d, *,
+def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, original_shape: Shape, *,
                           overlap: float = .5) -> torch.Tensor:
     first_window = windows[0]
     ndim = first_window.ndim - 1
@@ -64,7 +75,12 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d
                 w_start = j * stride[1]
                 output[:, h_start:h_start + h_win, w_start:w_start + w_win] += canvas[i, j]
                 weights[0, h_start:h_start + h_win, w_start:w_start + w_win] += 1
-        return Restore2d(pad)(output / weights.clamp(min=1))
+        output /= weights.clamp(min=1)
+        pad_h = out_h - original_shape[0]
+        pad_w = out_w - original_shape[1]
+        h_start = pad_h // 2
+        w_start = pad_w // 2
+        return output[:, h_start:h_start + original_shape[0], w_start:w_start + original_shape[1]]
     d_win, h_win, w_win = window_shape
     n_d, n_h, n_w = layout
     out_d = (n_d - 1) * stride[0] + d_win
@@ -81,7 +97,16 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, pad: Pad2d
                 w_start = k * stride[2]
                 output[:, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += canvas[i, j, k]
                 weights[0, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += 1
-    return Restore3d(pad)(output / weights.clamp(min=1))
+    output /= weights.clamp(min=1)
+    pad_d = out_d - original_shape[0]
+    pad_h = out_h - original_shape[1]
+    pad_w = out_w - original_shape[2]
+    d_start = pad_d // 2
+    h_start = pad_h // 2
+    w_start = pad_w // 2
+    return output[
+        :, d_start:d_start + original_shape[0], h_start:h_start + original_shape[1], w_start:w_start + original_shape[
+            2]]
 
 
 def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
@@ -89,25 +114,23 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
     makedirs(f"{output_folder}/images", exist_ok=True)
     if supervised:
         makedirs(f"{output_folder}/labels", exist_ok=True)
-    makedirs(f"{output_folder}/paddings", exist_ok=True)
     ind = int(log10(len(dataset))) + 1
     with Progress(console=console) as progress:
         task = progress.add_task("Sliding dataset...", total=len(dataset))
         for i, case in enumerate(dataset):
             image = case[0] if supervised else case
             progress.update(task, description=f"Sliding dataset {tuple(image.shape)}...")
-            windows, layout, pad = do_sliding_window(image, window_shape, overlap=overlap)
-            torch.save(pad, f"{output_folder}/paddings/{str(i).zfill(ind)}.pt")
+            windows, layout, original_shape = do_sliding_window(image, window_shape, overlap=overlap)
             jnd = int(log10(len(windows))) + 1
             for j, window in enumerate(windows):
                 path = f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
-                fast_save(window, f"{path}_{layout}.pt" if j == 0 else f"{path}.pt")
+                fast_save(window, f"{path}_{layout}_{original_shape}.pt" if j == 0 else f"{path}.pt")
             if supervised:
                 label = case[1]
                 windows, layout, _ = do_sliding_window(label, window_shape, overlap=overlap)
                 for j, window in enumerate(windows):
                     path = f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
-                    fast_save(window, f"{path}_{layout}.pt" if j == 0 else f"{path}.pt")
+                    fast_save(window, f"{path}_{layout}_{original_shape}.pt" if j == 0 else f"{path}.pt")
             progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
 
@@ -121,6 +144,7 @@ def slide_dataset(dataset: UnsupervisedDataset | SupervisedDataset, output_folde
 class SWCase(object):
     window_indices: list[int]
     layout: Shape | None
+    original_shape: Shape | None
 
 
 class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
@@ -130,23 +154,27 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         self._folder: str = folder
         self._subfolder: Literal["images", "labels"] = subfolder
         self._groups: list[SWCase] = []
-        self._paddings: list[str] = sorted(listdir(f"{folder}/paddings"))
         for idx, filename in enumerate(self._images):
             meta = filename[:filename.rfind(".")].split("_")
             case_id = int(meta[0])
             if case_id >= len(self._groups):
                 if case_id != len(self._groups):
                     raise ValueError(f"Mismatched case id {case_id}")
-                self._groups.append(SWCase([], None))
+                self._groups.append(SWCase([], None, None))
             self._groups[case_id].window_indices.append(idx)
-            if len(meta) == 3:
+            if len(meta) == 4:
                 if self._groups[case_id].layout:
                     raise ValueError(f"Duplicated layout specification for case {case_id}")
                 self._groups[case_id].layout = literal_eval(meta[2])
+                if self._groups[case_id].original_shape:
+                    raise ValueError(f"Duplicated original shape specification for case {case_id}")
+                self._groups[case_id].original_shape = literal_eval(meta[3])
         for idx, case in enumerate(self._groups):
-            windows, layout = case.window_indices, case.layout
+            windows, layout, original_shape = case.window_indices, case.layout, case.original_shape
             if not layout:
                 raise ValueError(f"Layout not specified for case {idx}")
+            if not original_shape:
+                raise ValueError(f"Original shape not specified for case {idx}")
             if len(windows) != reduce(mul, layout):
                 raise ValueError(f"Mismatched number of windows {len(windows)} and layout {layout} for case {idx}")
 
@@ -155,11 +183,10 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
                             is_label=self._subfolder == "labels", device=self._device)
 
-    def case(self, case_idx: int) -> tuple[list[torch.Tensor], Shape, Pad2d | Pad3d]:
+    def case(self, case_idx: int) -> tuple[list[torch.Tensor], Shape, Shape]:
         case = self._groups[case_idx]
         windows = [self[idx] for idx in case.window_indices]
-        return windows, case.layout, torch.load(f"{self._folder}/paddings/{self._paddings[case_idx]}",
-                                                weights_only=False)
+        return windows, case.layout, case.original_shape
 
 
 class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):
