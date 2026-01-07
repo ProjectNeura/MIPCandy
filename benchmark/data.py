@@ -13,6 +13,7 @@ class DataTest(UnitTest):
     def set_up(self) -> None:
         self["dataset"] = NNUNetDataset(f"{self.input_folder}/{DataTest.dataset}", transform=self.transform,
                                         device=self.device)
+        self["dataset"].preload()
 
 
 class FoldedDataTest(DataTest):
