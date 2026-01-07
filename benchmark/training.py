@@ -35,13 +35,14 @@ class SlidingTrainingTest(FoldedDataTest):
     trainer: type[SegmentationTrainer] = UNetSlidingTrainer
     window_shape: Shape = (128, 128, 128)
     num_classes: int = 5
+    overlap: float = .1
 
     @override
     def set_up(self) -> None:
         super().set_up()
         val_dataset = self["val_dataset"]
         if not exists(f"{self.output_folder}/val_slided"):
-            slide_dataset(val_dataset, f"{self.output_folder}/val_slided", self.window_shape, overlap=.1)
+            slide_dataset(val_dataset, f"{self.output_folder}/val_slided", self.window_shape, overlap=self.overlap)
         slided_val_dataset = SupervisedSWDataset(f"{self.output_folder}/val_slided")
         train_dataset = self["train_dataset"]
         train_dataset.transform(
@@ -57,7 +58,7 @@ class SlidingTrainingTest(FoldedDataTest):
         self["trainer"].num_classes = self.num_classes
         self["trainer"].set_validation_dataset(SimpleDataset(f"{self.input_folder}/{DataTest.dataset}/labelsTr"))
         self["trainer"].set_slided_validation_dataset(slided_val_dataset)
-        self["trainer"].overlap = .1
+        self["trainer"].overlap = self.overlap
         self["trainer"].set_frontend(self.frontend)
 
     @override
