@@ -96,7 +96,7 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         proxy_dataset = DatasetFromMemory([
-            torch.zeros(1) for _ in range(len(self._validation_dataset))
+            torch.zeros(1) for _ in range(len(self._validation_dataloader))
         ])
         self._validation_dataloader = DataLoader(MergedDataset(proxy_dataset, proxy_dataset))
         return super().validate(toolbox)
