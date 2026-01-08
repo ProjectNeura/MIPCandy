@@ -117,6 +117,18 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def __len__(self) -> int:
         return len(self._images)
 
+    @abstractmethod
+    def load_image(self, idx: int) -> torch.Tensor:
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_label(self, idx: int) -> torch.Tensor:
+        raise NotImplementedError
+
+    @override
+    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.load_image(idx), self.load_label(idx)
+
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = super().__getitem__(idx)
@@ -125,6 +137,12 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             image, label = self._transform(image, label)
         return image.as_tensor() if hasattr(image, "as_tensor") else image, label.as_tensor() if hasattr(
             label, "as_tensor") else label
+
+    def image(self, idx: int) -> torch.Tensor:
+        return self.load_image(idx)
+
+    def label(self, idx: int) -> torch.Tensor:
+        return self.load_label(idx)
 
     def transform(self, *, transform: JointTransform | None = None) -> None | JointTransform:
         if transform is None:
@@ -168,8 +186,12 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         super().__init__(images, labels, transform=transform, device=device)
 
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._images[idx], self._labels[idx]
+    def load_image(self, idx: int) -> torch.Tensor:
+        return self._images[idx]
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        return self._labels[idx]
 
     @override
     def construct_new(self, images: UnsupervisedDataset, labels: UnsupervisedDataset) -> Self:
@@ -287,24 +309,28 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         makedirs(folder, exist_ok=True)
 
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+    def load_image(self, idx: int) -> torch.Tensor:
         if self._split.endswith("Preloaded"):
-            return (
-                TensorLoader.do_load(f"{self._folder}/images{self._split}/{self._images[idx]}.pt", device=self._device),
-                TensorLoader.do_load(f"{self._folder}/labels{self._split}/{self._labels[idx]}.pt", is_label=True,
-                                     device=self._device)
+            return TensorLoader.do_load(
+                f"{self._folder}/images{self._split}/{self._images[idx]}.pt", device=self._device
             )
-        image = torch.cat([self.do_load(
+        return torch.cat([self.do_load(
             f"{self._folder}/images{self._split}/{path}", align_spacing=self._align_spacing, device=self._device
         ) for path in self._multimodal_images[idx]]) if self._multimodal_images else self.do_load(
             f"{self._folder}/images{self._split}/{self._images[idx]}", align_spacing=self._align_spacing,
             device=self._device
         )
-        label = self.do_load(
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        if self._split.endswith("Preloaded"):
+            return TensorLoader.do_load(
+                f"{self._folder}/labels{self._split}/{self._labels[idx]}.pt", is_label=True, device=self._device
+            )
+        return self.do_load(
             f"{self._folder}/labels{self._split}/{self._labels[idx]}", is_label=True, align_spacing=self._align_spacing,
             device=self._device
         )
-        return image, label
 
     def save(self, split: str | Literal["Tr", "Ts"], *, target_folder: str | PathLike[str] | None = None) -> None:
         target_base = target_folder if target_folder else self._folder
@@ -354,10 +380,14 @@ class BinarizedDataset(SupervisedDataset[D]):
         raise NotImplementedError
 
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._base.load(idx)
+    def load_image(self, idx: int) -> torch.Tensor:
+        return self._base.load_image(idx)
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        label = self._base.load_label(idx)
         for pid in self._positive_ids:
             label[label == pid] = -1
         label[label > 0] = 0
         label[label == -1] = 1
-        return image, label
+        return label
