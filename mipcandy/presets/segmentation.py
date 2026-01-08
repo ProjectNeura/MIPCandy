@@ -129,14 +129,14 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         model = toolbox.ema if toolbox.ema else toolbox.model
         images = self.slided_validation_dataset().images()
         num_windows, layout, original_shape = images.case_meta(idx)
-        residual = num_windows % self.batch_size
-        if residual == 0:
-            residual = self.batch_size
-        first_output = model(images.case(idx, part=slice(0, residual)).to(self._device))
-        canvas = torch.empty((num_windows, *first_output.shape[1:]), dtype=first_output.dtype, device=self._device)
-        canvas[:self.batch_size] = first_output
-        for i in range(residual, num_windows, self.batch_size):
-            canvas[i:i + self.batch_size] = model(images.case(idx, part=slice(i, i + self.batch_size)).to(self._device))
-        reconstructed = revert_sliding_window(canvas, layout, original_shape, overlap=self.overlap)
+        canvas = None
+        for i in range(0, num_windows, self.batch_size):
+            end = min(i + self.batch_size, num_windows)
+            outputs = model(images.case(idx, part=slice(i, end)).to(self._device)).detach()
+            if canvas is None:
+                canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype, device=self._device)
+            canvas[i:end] = outputs
+            self.empty_cache()
+        reconstructed = revert_sliding_window(canvas.to(self._device), layout, original_shape, overlap=self.overlap)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         return -loss.item(), metrics, reconstructed.detach()
