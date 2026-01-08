@@ -1,7 +1,9 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, Generator, Self, Mapping
+from os import PathLike
+from typing import Any, Generator, Self, override
 
 import torch
+from safetensors.torch import save_file, load_file
 from torch import nn
 
 from mipcandy.types import Device, AmbiguousShape
@@ -95,15 +97,33 @@ class WithPaddingModule(HasDevice):
         return self._restoring_module
 
 
-class WithNetwork(HasDevice, metaclass=ABCMeta):
+class WithCheckpoint(object, metaclass=ABCMeta):
+    @abstractmethod
+    def load_checkpoint(self, path: str | PathLike[str]) -> dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_checkpoint(self, checkpoint: dict[str, Any], path: str | PathLike[str]) -> None:
+        raise NotImplementedError
+
+
+class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
     def __init__(self, device: Device) -> None:
         super().__init__(device)
+
+    @override
+    def load_checkpoint(self, path: str | PathLike[str]) -> dict[str, Any]:
+        return load_file(path, self._device)
+
+    @override
+    def save_checkpoint(self, checkpoint: dict[str, Any], path: str | PathLike[str]) -> None:
+        save_file(checkpoint, path)
 
     @abstractmethod
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
         raise NotImplementedError
 
-    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, checkpoint: Mapping[str, Any]) -> nn.Module:
+    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, checkpoint: dict[str, Any]) -> nn.Module:
         """
         Internally exposed interface for overriding. Use `load_model()` instead.
         """
@@ -112,7 +132,7 @@ class WithNetwork(HasDevice, metaclass=ABCMeta):
         return network
 
     def load_model(self, example_shape: AmbiguousShape, compile_model: bool, *,
-                   checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
+                   checkpoint: dict[str, Any] | None = None) -> nn.Module:
         model = (self.build_network_from_checkpoint(example_shape, checkpoint) if checkpoint else self.build_network(
             example_shape)).to(self._device)
         return torch.compile(model) if compile_model else model

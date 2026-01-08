@@ -83,9 +83,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                                      **training_arguments) -> None:
         if self._unrecoverable:
             return
-        torch.save(toolbox.optimizer.state_dict(), f"{self.experiment_folder()}/optimizer.pth")
-        torch.save(toolbox.scheduler.state_dict(), f"{self.experiment_folder()}/scheduler.pth")
-        torch.save(toolbox.criterion.state_dict(), f"{self.experiment_folder()}/criterion.pth")
+        self.save_checkpoint(toolbox.optimizer.state_dict(), f"{self.experiment_folder()}/optimizer.pth")
+        self.save_checkpoint(toolbox.scheduler.state_dict(), f"{self.experiment_folder()}/scheduler.pth")
+        self.save_checkpoint(toolbox.criterion.state_dict(), f"{self.experiment_folder()}/criterion.pth")
         with open(f"{self.experiment_folder()}/state_orb.json", "w") as f:
             dump({"tracker": tracker, "training_arguments": training_arguments}, f)
 
@@ -106,11 +106,12 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
                      ema: bool) -> TrainerToolbox:
         toolbox = self._build_toolbox(num_epochs, example_shape, compile_model, ema, model=self.load_model(
-            example_shape, compile_model, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
+            example_shape, compile_model,
+            checkpoint=self.load_checkpoint(f"{self.experiment_folder()}/checkpoint_latest.pth")
         ))
-        toolbox.optimizer.load_state_dict(torch.load(f"{self.experiment_folder()}/optimizer.pth"))
-        toolbox.scheduler.load_state_dict(torch.load(f"{self.experiment_folder()}/scheduler.pth"))
-        toolbox.criterion.load_state_dict(torch.load(f"{self.experiment_folder()}/criterion.pth"))
+        toolbox.optimizer.load_state_dict(self.load_checkpoint(f"{self.experiment_folder()}/optimizer.pth"))
+        toolbox.scheduler.load_state_dict(self.load_checkpoint(f"{self.experiment_folder()}/scheduler.pth"))
+        toolbox.criterion.load_state_dict(self.load_checkpoint(f"{self.experiment_folder()}/criterion.pth"))
         return toolbox
 
     def recover_from(self, experiment_id: str) -> Self:
@@ -442,7 +443,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 lr = toolbox.scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
                 self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
-                torch.save(toolbox.model.state_dict(), checkpoint_path("latest"))
+                self.save_checkpoint(toolbox.model.state_dict(), checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
                     self.log(f"Epoch {epoch} checkpoint saved")
