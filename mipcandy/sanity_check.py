@@ -41,4 +41,4 @@ def sanity_check(model: nn.Module, input_shape: Sequence[int], *, device: Device
             raise RuntimeError("Failed to validate model")
         outputs = model.to(device).eval()(torch.randn(1, *input_shape, device=device))
     return SanityCheckResult(num_macs, num_params, layer_stats, (
-        outputs[0] if isinstance(outputs, tuple) else outputs).squeeze(0).detach())
+        outputs[0] if isinstance(outputs, tuple) else outputs).squeeze(0))
