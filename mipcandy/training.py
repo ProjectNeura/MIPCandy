@@ -536,7 +536,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
-                progress.update(task, description=f"Validating case {idx} {tuple(image.shape)}")
+                progress.update(task,
+                                description=f"Validating epoch {self._tracker.epoch} case {idx} {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
                 self.empty_cache()
                 score += case_score
@@ -545,7 +546,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     fast_save(output.detach(), f"{self.experiment_folder()}/worst_output.pt")
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
-                progress.update(task, advance=1, description=f"Validating case {idx} ({case_score:.4f})")
+                progress.update(task, advance=1,
+                                description=f"Validating epoch {self._tracker.epoch} case {idx} ({case_score:.4f})")
                 idx += 1
         self.empty_cache()
         return score / num_cases, metrics
