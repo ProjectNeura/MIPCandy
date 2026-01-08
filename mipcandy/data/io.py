@@ -11,7 +11,7 @@ from mipcandy.types import Device
 
 
 def fast_save(x: torch.Tensor, path: str | PathLike[str]) -> None:
-    save_file({"payload": x}, path)
+    save_file({"payload": x if x.is_contiguous() else x.contiguous()}, path)
 
 
 def fast_load(path: str | PathLike[str], *, device: Device = "cpu") -> torch.Tensor:
