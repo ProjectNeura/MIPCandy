@@ -1,3 +1,4 @@
+from gc import collect
 from math import floor
 from os import PathLike
 
@@ -56,3 +57,13 @@ def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
         image = auto_convert(ensure_num_dimensions(image, 3)).to(torch.uint8).permute(1, 2, 0)
         return SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy(), isVector=True), path)
     raise NotImplementedError(f"Unsupported file type: {path}")
+
+
+def empty_cache(device: Device) -> None:
+    match torch.device(device).type:
+        case "cpu":
+            collect()
+        case "cuda":
+            torch.cuda.empty_cache()
+        case "mps":
+            torch.mps.empty_cache()
