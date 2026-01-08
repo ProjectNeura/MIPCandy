@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader
 
 from mipcandy.common import quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
-from mipcandy.data import fast_save, fast_load
+from mipcandy.data import fast_save, fast_load, empty_cache
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sanity_check import sanity_check
@@ -353,6 +353,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                       ema: bool) -> TrainerToolbox:
         return self._build_toolbox(num_epochs, example_shape, compile_model, ema)
 
+    # Performance
+
+    def empty_cache(self) -> None:
+        empty_cache(self._device)
+
     # Training methods
 
     @abstractmethod
@@ -371,6 +376,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         return loss, metrics
 
     def train_epoch(self, epoch: int, toolbox: TrainerToolbox) -> None:
+        self.empty_cache()
         toolbox.model.train()
         if toolbox.ema:
             toolbox.ema.train()
@@ -387,6 +393,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self.record_all(metrics)
                 progress.update(task, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
         self._bump_metrics()
+        self.empty_cache()
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
               ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
@@ -509,6 +516,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         if self._validation_dataloader.batch_size != 1:
             raise RuntimeError("Validation dataloader should have batch size 1")
+        self.empty_cache()
         toolbox.model.eval()
         if toolbox.ema:
             toolbox.ema.eval()
@@ -537,6 +545,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1, description=f"Validating case {idx} ({case_score:.4f})")
                 idx += 1
+        self.empty_cache()
         return score / num_cases, metrics
 
     def __call__(self, *args, **kwargs) -> None:

@@ -68,6 +68,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
+        self.empty_cache()
         return -loss.item(), metrics, mask.squeeze(0)
 
 
@@ -96,7 +97,7 @@ class _TemplateDataset(SupervisedDataset[tuple[None]]):
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     overlap: float = .5
     batch_size: int = 1
-    _replaced_with_template: bool = False
+    _validation_dataset: SupervisedDataset | None = None
     _slided_validation_dataset: SupervisedSWDataset | None = None
 
     def set_slided_validation_dataset(self, dataset: SupervisedSWDataset) -> None:
@@ -108,13 +109,18 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         raise ValueError("Slided validation dataset is not set")
 
     @override
+    def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
+                     quality: float = .75) -> None:
+        super().save_preview(self._validation_dataset.image(self._tracker.worst_case), image, output, quality=quality)
+
+    @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        if not self._replaced_with_template:
+        if not self._validation_dataset:
             dataset = self._validation_dataloader.dataset
             if not isinstance(dataset, SupervisedDataset):
                 raise ValueError("Validation dataset must be a SupervisedDataset")
+            self._validation_dataset = dataset
             self._validation_dataloader = DataLoader(_TemplateDataset(dataset), 1, False)
-            self._replaced_with_template = True
             self.log("WARNING: Transforms in the validation dataset will not be applied")
         return super().validate(toolbox)
 
@@ -130,8 +136,10 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         first_output = model(images.case(idx, part=slice(0, residual)).to(self._device))
         canvas = torch.empty((num_windows, *first_output.shape[1:]), dtype=first_output.dtype, device=self._device)
         canvas[:self.batch_size] = first_output
+        self.empty_cache()
         for i in range(residual, num_windows, self.batch_size):
             canvas[i:i + self.batch_size] = model(images.case(idx, part=slice(i, i + self.batch_size)).to(self._device))
+            self.empty_cache()
         reconstructed = revert_sliding_window(canvas, layout, original_shape, overlap=self.overlap)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         return -loss.item(), metrics, reconstructed
