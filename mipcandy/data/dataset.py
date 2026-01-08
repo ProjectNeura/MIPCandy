@@ -368,15 +368,15 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         return new
 
 
-class BinarizedDataset(SupervisedDataset[D]):
-    def __init__(self, base: SupervisedDataset[D], positive_ids: tuple[int, ...], *,
+class BinarizedDataset(SupervisedDataset[tuple[None]]):
+    def __init__(self, base: SupervisedDataset, positive_ids: tuple[int, ...], *,
                  transform: JointTransform | None = None, device: Device = "cpu") -> None:
-        super().__init__(base._images, base._labels, transform=transform, device=device)
-        self._base: SupervisedDataset[D] = base
+        super().__init__((None,), (None,), transform=transform, device=device)
+        self._base: SupervisedDataset = base
         self._positive_ids: tuple[int, ...] = positive_ids
 
     @override
-    def construct_new(self, images: D, labels: D) -> Self:
+    def construct_new(self, images: tuple[None], labels: tuple[None]) -> Self:
         raise NotImplementedError
 
     @override
@@ -391,3 +391,12 @@ class BinarizedDataset(SupervisedDataset[D]):
         label[label > 0] = 0
         label[label == -1] = 1
         return label
+
+    @override
+    def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
+        Self, Self]:
+        train, val = self._base.fold(fold=fold, picker=picker)
+        return (
+            self.__class__(train, self._positive_ids, transform=self._transform, device=self._device),
+            self.__class__(val, self._positive_ids, transform=self._transform, device=self._device)
+        )
