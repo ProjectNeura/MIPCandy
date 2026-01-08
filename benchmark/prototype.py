@@ -26,8 +26,11 @@ class UnitTest(object):
         try:
             self.set_up()
             self.execute()
-            self.clean_up()
         except Exception as e:
+            try:
+                self.clean_up()
+            except Exception as e2:
+                print(f"Failed to clean up after exception: {e2}")
             return False, e
         return True, None
 
