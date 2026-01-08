@@ -538,6 +538,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 image, label = image.squeeze(0), label.squeeze(0)
                 progress.update(task, description=f"Validating case {idx} {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
+                self.empty_cache()
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
@@ -546,7 +547,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1, description=f"Validating case {idx} ({case_score:.4f})")
                 idx += 1
-                self.empty_cache()
         self.empty_cache()
         return score / num_cases, metrics
 
