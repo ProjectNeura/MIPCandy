@@ -376,6 +376,10 @@ class BinarizedDataset(SupervisedDataset[tuple[None]]):
         self._positive_ids: tuple[int, ...] = positive_ids
 
     @override
+    def __len__(self) -> int:
+        return len(self._base)
+
+    @override
     def construct_new(self, images: tuple[None], labels: tuple[None]) -> Self:
         raise NotImplementedError
 

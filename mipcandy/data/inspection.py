@@ -208,15 +208,10 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             roi.append(position + offset + right)
         return tuple(roi)
 
-    def crop_image_roi(self, i: int, *, percentile: float = .95) -> torch.Tensor:
-        image = self._dataset.image(i)
+    def crop_roi(self, i: int, *, percentile: float = .95) -> tuple[torch.Tensor, torch.Tensor]:
+        image, label = self._dataset[i]
         roi = self.roi(i, percentile=percentile)
-        return crop(image.unsqueeze(0), roi).squeeze(0)
-
-    def crop_label_roi(self, i: int, *, percentile: float = .95) -> torch.Tensor:
-        label = self._dataset.label(i)
-        roi = self.roi(i, percentile=percentile)
-        return crop(label.unsqueeze(0), roi).squeeze(0)
+        return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
 def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
@@ -261,11 +256,18 @@ class ROIDataset(SupervisedDataset[list[int]]):
 
     @override
     def load_image(self, idx: int) -> torch.Tensor:
-        return self._annotations.crop_image_roi(idx, percentile=self._percentile)
+        raise NotImplementedError
 
     @override
     def load_label(self, idx: int) -> torch.Tensor:
-        return self._annotations.crop_label_roi(idx, percentile=self._percentile)
+        raise NotImplementedError
+
+    @override
+    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        i = self._images[idx]
+        if i != self._labels[idx]:
+            raise ValueError(f"Image {i} and label {self._labels[idx]} indices do not match")
+        return self._annotations.crop_roi(i, percentile=self._percentile)
 
 
 class RandomROIDataset(ROIDataset):
