@@ -144,7 +144,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             accumulated_label += nn.functional.pad(
                 crop((label != self._background).unsqueeze(0), annotation.foreground_bbox), paddings
             ).squeeze(0)
-        self._foreground_heatmap = accumulated_label.squeeze(0)
+        self._foreground_heatmap = accumulated_label.squeeze(0).detach()
         return self._foreground_heatmap
 
     def center_of_foregrounds(self) -> tuple[int, int] | tuple[int, int, int]:
