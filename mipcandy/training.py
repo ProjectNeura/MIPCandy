@@ -543,7 +543,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
-                    fast_save(output.detach(), f"{self.experiment_folder()}/worst_output.pt")
+                    fast_save(output, f"{self.experiment_folder()}/worst_output.pt")
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1,

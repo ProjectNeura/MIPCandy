@@ -68,7 +68,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
-        return -loss.item(), metrics, mask.squeeze(0).detach()
+        return -loss.item(), metrics, mask.squeeze(0)
 
 
 class _TemplateDataset(SupervisedDataset[tuple[None]]):
@@ -132,11 +132,11 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         canvas = None
         for i in range(0, num_windows, self.batch_size):
             end = min(i + self.batch_size, num_windows)
-            outputs = model(images.case(idx, part=slice(i, end)).to(self._device)).detach()
+            outputs = model(images.case(idx, part=slice(i, end)).to(self._device))
             if canvas is None:
                 canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype, device=self._device)
             canvas[i:end] = outputs
             self.empty_cache()
         reconstructed = revert_sliding_window(canvas.to(self._device), layout, original_shape, overlap=self.overlap)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
-        return -loss.item(), metrics, reconstructed.detach()
+        return -loss.item(), metrics, reconstructed

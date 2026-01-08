@@ -228,7 +228,7 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
 
 def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
     r = []
-    with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
+    with torch.no_grad(), Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
         for _, label in dataset:
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
@@ -267,7 +267,8 @@ class ROIDataset(SupervisedDataset[list[int]]):
         i = self._images[idx]
         if i != self._labels[idx]:
             raise ValueError(f"Image {i} and label {self._labels[idx]} indices do not match")
-        return self._annotations.crop_roi(i, percentile=self._percentile)
+        with torch.no_grad():
+            return self._annotations.crop_roi(i, percentile=self._percentile)
 
 
 class RandomROIDataset(ROIDataset):
