@@ -1,3 +1,4 @@
+from os import removedirs
 from os.path import exists
 from typing import override
 
@@ -29,6 +30,10 @@ class TrainingTest(FoldedDataTest):
     @override
     def execute(self) -> None:
         self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}")
+
+    @override
+    def clean_up(self) -> None:
+        removedirs(self["trainer"].experiment_folder())
 
 
 class SlidingTrainingTest(FoldedDataTest):
@@ -64,3 +69,7 @@ class SlidingTrainingTest(FoldedDataTest):
     @override
     def execute(self) -> None:
         self["trainer"].train(self.num_epochs, note="Training test with sliding window")
+
+    @override
+    def clean_up(self) -> None:
+        removedirs(self["trainer"].experiment_folder())
