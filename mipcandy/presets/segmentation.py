@@ -1,11 +1,12 @@
 from abc import ABCMeta
-from typing import override
+from typing import override, Self
 
 import torch
 from torch import nn, optim
+from torch.utils.data import DataLoader
 
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
-from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, \
+from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, SupervisedDataset, \
     revert_sliding_window, SupervisedSWDataset
 from mipcandy.training import Trainer, TrainerToolbox
 from mipcandy.types import Params
@@ -70,9 +71,32 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return -loss.item(), metrics, mask.squeeze(0)
 
 
+class _TemplateDataset(SupervisedDataset[tuple[None]]):
+    def __init__(self, dataset: SupervisedDataset) -> None:
+        super().__init__((None,), (None,))
+        self._base: SupervisedDataset = dataset
+
+    @override
+    def __len__(self) -> int:
+        return len(self._base)
+
+    @override
+    def load_image(self, idx: int) -> torch.Tensor:
+        return self._base.load_label(idx)
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        return torch.empty(1)
+
+    @override
+    def construct_new(self, images: tuple[None], labels: tuple[None]) -> Self:
+        raise NotImplementedError
+
+
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     overlap: float = .5
     batch_size: int = 1
+    _replaced_with_template: bool = False
     _slided_validation_dataset: SupervisedSWDataset | None = None
 
     def set_slided_validation_dataset(self, dataset: SupervisedSWDataset) -> None:
@@ -84,7 +108,18 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         raise ValueError("Slided validation dataset is not set")
 
     @override
-    def validate_case(self, idx: int, _: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+    def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
+        if not self._replaced_with_template:
+            dataset = self._validation_dataloader.dataset
+            if not isinstance(dataset, SupervisedDataset):
+                raise ValueError("Validation dataset must be a SupervisedDataset")
+            self._validation_dataloader = DataLoader(_TemplateDataset(dataset), 1, False)
+            self._replaced_with_template = True
+            self.log("WARNING: Transforms in the validation dataset will not be applied")
+        return super().validate(toolbox)
+
+    @override
+    def validate_case(self, idx: int, label: torch.Tensor, _: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
         images = self.slided_validation_dataset().images()

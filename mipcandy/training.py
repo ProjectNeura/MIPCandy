@@ -23,6 +23,7 @@ from torch.utils.data import DataLoader
 
 from mipcandy.common import quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
+from mipcandy.data import fast_save, fast_load
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.sanity_check import sanity_check
@@ -54,7 +55,7 @@ class TrainerToolbox(object):
 class TrainerTracker(object):
     epoch: int = 0
     best_score: float = float("-inf")
-    worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None  # (image, label, output)
+    worst_case: int | None = None
 
 
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
@@ -85,16 +86,18 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         torch.save(toolbox.optimizer.state_dict(), f"{self.experiment_folder()}/optimizer.pth")
         torch.save(toolbox.scheduler.state_dict(), f"{self.experiment_folder()}/scheduler.pth")
         torch.save(toolbox.criterion.state_dict(), f"{self.experiment_folder()}/criterion.pth")
-        torch.save(tracker, f"{self.experiment_folder()}/tracker.pt")
-        with open(f"{self.experiment_folder()}/training_arguments.json", "w") as f:
-            dump(training_arguments, f)
+        with open(f"{self.experiment_folder()}/state_orb.json", "w") as f:
+            dump({"tracker": tracker, "training_arguments": training_arguments}, f)
+
+    def load_state_orb(self) -> dict[str, dict[str, Setting]]:
+        with open(f"{self.experiment_folder()}/state_orb.json") as f:
+            return load(f)
 
     def load_tracker(self) -> TrainerTracker:
-        return torch.load(f"{self.experiment_folder()}/tracker.pt", weights_only=False)
+        return TrainerTracker(**self.load_state_orb()["tracker"])
 
     def load_training_arguments(self) -> dict[str, Setting]:
-        with open(f"{self.experiment_folder()}/training_arguments.json") as f:
-            return load(f)
+        return self.load_state_orb()["training_arguments"]
 
     def load_metrics(self) -> dict[str, list[float]]:
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
@@ -460,7 +463,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     self._tracker.best_score = score
                     early_stop_tolerance = es_tolerance
                     if save_preview:
-                        self.save_preview(*self._tracker.worst_case, quality=preview_quality)
+                        self.save_preview(
+                            *self._validation_dataloader.dataset[self._tracker.worst_case],
+                            fast_load(f"{self.experiment_folder()}/worst_output.pt"), quality=preview_quality
+                        )
                 else:
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
@@ -525,7 +531,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
-                    self._tracker.worst_case = (image, label, output)
+                    self._tracker.worst_case = idx
+                    fast_save(output, f"{self.experiment_folder()}/worst_output.pt")
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1, description=f"Validating case {idx} ({case_score:.4f})")
