@@ -193,9 +193,13 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
                             is_label=self._subfolder == "labels", device=self._device)
 
-    def case(self, case_idx: int) -> tuple[torch.Tensor, Shape, Shape]:
+    def case_meta(self, case_idx: int) -> tuple[int, Shape, Shape]:
         case = self._groups[case_idx]
-        return torch.stack([self[idx] for idx in case.window_indices]), case.layout, case.original_shape
+        return len(case.window_indices), case.layout, case.original_shape
+
+    def case(self, case_idx: int, *, part: slice | None = None) -> torch.Tensor:
+        indices = self._groups[case_idx].window_indices
+        return torch.stack([self[idx] for idx in (indices[part] if part else indices)])
 
 
 class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):

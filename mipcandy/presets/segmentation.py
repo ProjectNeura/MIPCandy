@@ -87,16 +87,16 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     def validate_case(self, idx: int, _: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
-        windows, layout, original_shape = self.slided_validation_dataset().images().case(idx)
-        num_windows = windows.shape[0]
+        images = self.slided_validation_dataset().images()
+        num_windows, layout, original_shape = images.case_meta(idx)
         residual = num_windows % self.batch_size
         if residual == 0:
             residual = self.batch_size
-        first_output = model(windows[0:residual].to(self._device))
+        first_output = model(images.case(idx, part=slice(0, residual)).to(self._device))
         canvas = torch.empty((num_windows, *first_output.shape[1:]), dtype=first_output.dtype, device=self._device)
         canvas[:self.batch_size] = first_output
         for i in range(residual, num_windows, self.batch_size):
-            canvas[i:i + self.batch_size] = model(windows[i:i + self.batch_size].to(self._device))
+            canvas[i:i + self.batch_size] = model(images.case(idx, part=slice(i, i + self.batch_size)).to(self._device))
         reconstructed = revert_sliding_window(canvas, layout, original_shape, overlap=self.overlap)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         return -loss.item(), metrics, reconstructed
