@@ -3,9 +3,7 @@ from typing import override
 
 import torch
 from torch import nn, optim
-from torch.utils.data import DataLoader
 
-from mipcandy import UnsupervisedDataset, DatasetFromMemory, MergedDataset
 from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, \
     revert_sliding_window, SupervisedSWDataset
@@ -74,19 +72,11 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     overlap: float = .5
-    _validation_dataset: UnsupervisedDataset | None = None
+    batch_size: int = 1
     _slided_validation_dataset: SupervisedSWDataset | None = None
-
-    def set_validation_dataset(self, dataset: UnsupervisedDataset) -> None:
-        self._validation_dataset = dataset
 
     def set_slided_validation_dataset(self, dataset: SupervisedSWDataset) -> None:
         self._slided_validation_dataset = dataset
-
-    def validation_dataset(self) -> UnsupervisedDataset:
-        if self._validation_dataset:
-            return self._validation_dataset
-        raise ValueError("Validation dataset is not set")
 
     def slided_validation_dataset(self) -> SupervisedSWDataset:
         if self._slided_validation_dataset:
@@ -94,22 +84,19 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         raise ValueError("Slided validation dataset is not set")
 
     @override
-    def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
-        proxy_dataset = DatasetFromMemory([
-            torch.zeros(1) for _ in range(len(self._validation_dataloader))
-        ])
-        self._validation_dataloader = DataLoader(MergedDataset(proxy_dataset, proxy_dataset))
-        return super().validate(toolbox)
-
-    @override
-    def validate_case(self, idx: int, _: torch.Tensor, __: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
-        str, float], torch.Tensor]:
+    def validate_case(self, idx: int, _: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
-        outputs = []
         windows, layout, original_shape = self.slided_validation_dataset().images().case(idx)
-        for window in windows:
-            outputs.append(model(window.unsqueeze(0).to(self._device)).squeeze(0))
-        reconstructed = revert_sliding_window(outputs, layout, original_shape, overlap=self.overlap)
-        label = self.validation_dataset()[idx].to(self._device)
+        num_windows = windows.shape[0]
+        residual = num_windows % self.batch_size
+        if residual == 0:
+            residual = self.batch_size
+        first_output = model(windows[0:residual].to(self._device))
+        canvas = torch.empty((num_windows, *first_output.shape[1:]), dtype=first_output.dtype, device=self._device)
+        canvas[:self.batch_size] = first_output
+        for i in range(residual, num_windows, self.batch_size):
+            canvas[i:i + self.batch_size] = model(windows[i:i + self.batch_size].to(self._device))
+        reconstructed = revert_sliding_window(canvas, layout, original_shape, overlap=self.overlap)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         return -loss.item(), metrics, reconstructed

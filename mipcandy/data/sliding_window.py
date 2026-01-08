@@ -19,7 +19,7 @@ from mipcandy.types import Shape, Transform, Device
 
 
 def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = .5) -> tuple[
-    list[torch.Tensor], Shape, Shape]:
+    torch.Tensor, Shape, Shape]:
     stride = tuple(int(s * (1 - overlap)) for s in window_shape)
     ndim = len(stride)
     if ndim not in (2, 3):
@@ -43,15 +43,15 @@ def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = 
         x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1])
         c, n_h, n_w, win_h, win_w = x.shape
         x = x.permute(1, 2, 0, 3, 4).reshape(n_h * n_w, c, win_h, win_w)
-        return [x[i] for i in range(x.shape[0])], (n_h, n_w), original_shape
+        return x, (n_h, n_w), (original_shape[0], original_shape[1])
     x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1]).unfold(
         3, window_shape[2], stride[2])
     c, n_d, n_h, n_w, win_d, win_h, win_w = x.shape
     x = x.permute(1, 2, 3, 0, 4, 5, 6).reshape(n_d * n_h * n_w, c, win_d, win_h, win_w)
-    return [x[i] for i in range(x.shape[0])], (n_d, n_h, n_w), original_shape
+    return x, (n_d, n_h, n_w), (original_shape[0], original_shape[1], original_shape[2])
 
 
-def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, original_shape: Shape, *,
+def revert_sliding_window(windows: torch.Tensor, layout: Shape, original_shape: Shape, *,
                           overlap: float = .5) -> torch.Tensor:
     first_window = windows[0]
     ndim = first_window.ndim - 1
@@ -60,21 +60,27 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, original_s
     window_shape = first_window.shape[1:]
     c = first_window.shape[0]
     stride = tuple(int(w * (1 - overlap)) for w in window_shape)
-    canvas = torch.stack(windows)
     if ndim == 2:
         h_win, w_win = window_shape
         n_h, n_w = layout
         out_h = (n_h - 1) * stride[0] + h_win
         out_w = (n_w - 1) * stride[1] + w_win
-        output = torch.zeros(c, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-        weights = torch.zeros(1, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-        canvas = canvas[:n_h * n_w].reshape(n_h, n_w, c, h_win, w_win)
-        for i in range(n_h):
-            for j in range(n_w):
-                h_start = i * stride[0]
-                w_start = j * stride[1]
-                output[:, h_start:h_start + h_win, w_start:w_start + w_win] += canvas[i, j]
-                weights[0, h_start:h_start + h_win, w_start:w_start + w_win] += 1
+        windows_reshaped = windows[:n_h * n_w].reshape(n_h * n_w, c, h_win, w_win)
+        windows_flat = windows_reshaped.reshape(n_h * n_w, c * h_win * w_win)
+        output = nn.functional.fold(
+            windows_flat.transpose(0, 1),
+            output_size=(out_h, out_w),
+            kernel_size=(h_win, w_win),
+            stride=stride
+        )
+        ones = torch.ones(n_h * n_w, 1, h_win, w_win, device=first_window.device, dtype=first_window.dtype)
+        ones_flat = ones.reshape(n_h * n_w, h_win * w_win)
+        weights = nn.functional.fold(
+            ones_flat.transpose(0, 1),
+            output_size=(out_h, out_w),
+            kernel_size=(h_win, w_win),
+            stride=stride
+        )
         output /= weights.clamp(min=1)
         pad_h = out_h - original_shape[0]
         pad_w = out_w - original_shape[1]
@@ -88,15 +94,18 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, original_s
     out_w = (n_w - 1) * stride[2] + w_win
     output = torch.zeros(c, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
     weights = torch.zeros(1, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-    canvas = canvas[:n_d * n_h * n_w].reshape(n_d, n_h, n_w, c, d_win, h_win, w_win)
+    windows = windows[:n_d * n_h * n_w].reshape(n_d, n_h, n_w, c, d_win, h_win, w_win)
     for i in range(n_d):
+        d_start = i * stride[0]
+        d_slice = slice(d_start, d_start + d_win)
         for j in range(n_h):
-            for k in range(n_w):
-                d_start = i * stride[0]
-                h_start = j * stride[1]
-                w_start = k * stride[2]
-                output[:, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += canvas[i, j, k]
-                weights[0, d_start:d_start + d_win, h_start:h_start + h_win, w_start:w_start + w_win] += 1
+            h_start = j * stride[1]
+            h_slice = slice(h_start, h_start + h_win)
+            w_starts = torch.arange(n_w, device=first_window.device) * stride[2]
+            for k, w_start in enumerate(w_starts.tolist()):
+                w_slice = slice(w_start, w_start + w_win)
+                output[:, d_slice, h_slice, w_slice] += windows[i, j, k]
+                weights[0, d_slice, h_slice, w_slice] += 1
     output /= weights.clamp(min=1)
     pad_d = out_d - original_shape[0]
     pad_h = out_h - original_shape[1]
@@ -104,9 +113,17 @@ def revert_sliding_window(windows: list[torch.Tensor], layout: Shape, original_s
     d_start = pad_d // 2
     h_start = pad_h // 2
     w_start = pad_w // 2
-    return output[
-        :, d_start:d_start + original_shape[0], h_start:h_start + original_shape[1], w_start:w_start + original_shape[
-            2]]
+    return output[:, d_start:d_start + original_shape[0], h_start:h_start + original_shape[1],
+    w_start:w_start + original_shape[2]]
+
+
+def _slide_internal(image: torch.Tensor, window_shape: Shape, overlap: float, i: int, ind: int, output_folder: str, *,
+                    is_label: bool = False) -> None:
+    windows, layout, original_shape = do_sliding_window(image, window_shape, overlap=overlap)
+    jnd = int(log10(windows.shape[0])) + 1
+    for j in range(windows.shape[0]):
+        path = f"{output_folder}/{"labels" if is_label else "images"}/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
+        fast_save(windows[j], f"{path}_{layout}_{original_shape}.pt" if j == 0 else f"{path}.pt")
 
 
 def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, output_folder: str | PathLike[str],
@@ -120,17 +137,10 @@ def _slide(supervised: bool, dataset: UnsupervisedDataset | SupervisedDataset, o
         for i, case in enumerate(dataset):
             image = case[0] if supervised else case
             progress.update(task, description=f"Sliding dataset {tuple(image.shape)}...")
-            windows, layout, original_shape = do_sliding_window(image, window_shape, overlap=overlap)
-            jnd = int(log10(len(windows))) + 1
-            for j, window in enumerate(windows):
-                path = f"{output_folder}/images/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
-                fast_save(window, f"{path}_{layout}_{original_shape}.pt" if j == 0 else f"{path}.pt")
+            _slide_internal(image, window_shape, overlap, i, ind, output_folder)
             if supervised:
                 label = case[1]
-                windows, layout, _ = do_sliding_window(label, window_shape, overlap=overlap)
-                for j, window in enumerate(windows):
-                    path = f"{output_folder}/labels/{str(i).zfill(ind)}_{str(j).zfill(jnd)}"
-                    fast_save(window, f"{path}_{layout}_{original_shape}.pt" if j == 0 else f"{path}.pt")
+                _slide_internal(label, window_shape, overlap, i, ind, output_folder, is_label=True)
             progress.update(task, advance=1, description=f"Sliding dataset ({i + 1}/{len(dataset)})...")
 
 
@@ -183,10 +193,9 @@ class UnsupervisedSWDataset(TensorLoader, PathBasedUnsupervisedDataset):
         return self.do_load(f"{self._folder}/{self._subfolder}/{self._images[idx]}",
                             is_label=self._subfolder == "labels", device=self._device)
 
-    def case(self, case_idx: int) -> tuple[list[torch.Tensor], Shape, Shape]:
+    def case(self, case_idx: int) -> tuple[torch.Tensor, Shape, Shape]:
         case = self._groups[case_idx]
-        windows = [self[idx] for idx in case.window_indices]
-        return windows, case.layout, case.original_shape
+        return torch.stack([self[idx] for idx in case.window_indices]), case.layout, case.original_shape
 
 
 class SupervisedSWDataset(TensorLoader, MergedDataset, SupervisedDataset[UnsupervisedSWDataset]):
