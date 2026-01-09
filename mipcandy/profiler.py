@@ -20,10 +20,10 @@ class ProfilerFrame(object):
 
     @override
     def __str__(self) -> str:
-        r = f"[{self.stack}] CPU: {self.cpu:.2f}% @ Memory: {self.mem:.2f}\n"
+        r = f"[{self.stack}] CPU: {self.cpu:.2f}% @ Memory: {self.mem:.2f}%\n"
         if self.gpu and self.gpu_mem:
             for i, gpu in enumerate(self.gpu):
-                r += f"\tGPU {i}: {gpu:.2f}% @ Memory: {self.gpu_mem[i]:.2f}\n"
+                r += f"\tGPU {i}: {gpu:.2f}% @ Memory: {self.gpu_mem[i]:.2f}%\n"
         return r
 
     def export(self, duration: float) -> str:
@@ -79,7 +79,7 @@ class Profiler(object):
     def _save(self, obj: ProfilerFrame | _LineBreak) -> None:
         with open(self.save_as, "a") as f:
             t = time()
-            f.write(obj.export(t - self._t0))
+            f.write(f"{obj.export(t - self._t0)}\n")
             self._t0 = t
 
     def record(self, *, stack_trace_offset: int = 1) -> ProfilerFrame:
