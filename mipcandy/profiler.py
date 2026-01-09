@@ -70,7 +70,7 @@ class Profiler(object):
         return torch.cuda.utilization(device)
 
     def get_gpu_mem_usage(self, device: Device) -> float:
-        return 100 * torch.cuda.memory_allocated(device) / self.total_gpu_mem[self._gpus.index(device)]
+        return 100 * torch.cuda.device_memory_used(device) / self.total_gpu_mem[self._gpus.index(device)]
 
     @staticmethod
     def get_total_gpu_mem(device: Device) -> float:
