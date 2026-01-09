@@ -263,6 +263,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def record_profiler_linebreak(self, message: str) -> None:
         if self._profiler:
             self._profiler.line_break(message)
+            self.log(f"[PROFILER] {message}")
 
     def _bump_metrics(self) -> None:
         for metric, values in self._epoch_metrics.items():
@@ -402,8 +403,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
             task = progress.add_task(f"Epoch {self._tracker.epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
-                self.record_profiler()
-                self.record_profiler_linebreak("Training batch")
                 images, labels = images.to(self._device), labels.to(self._device)
                 padding_module = self.get_padding_module()
                 if padding_module:
