@@ -83,7 +83,7 @@ class Profiler(object):
             self._t0 = t
 
     def record(self, *, stack_trace_offset: int = 1) -> ProfilerFrame:
-        frame = ProfilerFrame(" -> ".join([f"{f.function}:{f.lineno}" for f in stack()[stack_trace_offset:]]),
+        frame = ProfilerFrame(" -> ".join([f"{f.function}:{f.lineno}" for f in stack()[stack_trace_offset::-1]]),
                               self.get_cpu_usage(), self.get_mem_usage())
         if self.has_gpu:
             frame.gpu = [torch.cuda.utilization(device) for device in self._gpus]
