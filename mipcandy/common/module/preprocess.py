@@ -133,7 +133,7 @@ class PadTo(Pad):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (self._pad2d(x) if x.ndim == (4 if self.batch else 3) else self._pad3d(x)) if any(
-            x.shape[i] < min_size for i, min_size in enumerate(self._min_shape)) else x
+            x.shape[i + (2 if self.batch else 1)] < min_size for i, min_size in enumerate(self._min_shape)) else x
 
 
 class Normalize(nn.Module):
