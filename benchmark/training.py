@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from benchmark.data import FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    RandomROIDataset, PadTo, MONAITransform
+    RandomROIDataset, PadTo, MONAITransform, load_inspection_annotations
 
 
 class TrainingTest(FoldedDataTest):
@@ -53,7 +53,12 @@ class SlidingTrainingTest(FoldedDataTest):
         train_dataset.transform(
             transform=JointTransform(transform=MONAITransform(PadTo(self.window_shape, batch=False)))
         )
-        annotations = inspect(train_dataset)
+        path = f"{self.output_folder}/sliding_training_test_annotations.json"
+        if exists(path):
+            annotations = load_inspection_annotations(path, train_dataset)
+        else:
+            annotations = inspect(train_dataset)
+            annotations.save(path)
         annotations.set_roi_shape(self.window_shape)
         train_dataset = RandomROIDataset(annotations)
         train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
