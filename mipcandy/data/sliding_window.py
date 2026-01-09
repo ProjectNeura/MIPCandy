@@ -65,22 +65,19 @@ def revert_sliding_window(windows: torch.Tensor, layout: Shape, original_shape: 
         n_h, n_w = layout
         out_h = (n_h - 1) * stride[0] + h_win
         out_w = (n_w - 1) * stride[1] + w_win
-        windows_reshaped = windows[:n_h * n_w].reshape(n_h * n_w, c, h_win, w_win)
-        windows_flat = windows_reshaped.reshape(n_h * n_w, c * h_win * w_win)
+        windows_flat = windows[:n_h * n_w].view(n_h * n_w, c * h_win * w_win)
         output = nn.functional.fold(
             windows_flat.transpose(0, 1),
             output_size=(out_h, out_w),
             kernel_size=(h_win, w_win),
             stride=stride
         )
-        ones = torch.ones(n_h * n_w, 1, h_win, w_win, device=first_window.device, dtype=first_window.dtype)
-        ones_flat = ones.reshape(n_h * n_w, h_win * w_win)
         weights = nn.functional.fold(
-            ones_flat.transpose(0, 1),
+            torch.ones(c * h_win * w_win, n_h * n_w, device=first_window.device, dtype=torch.uint8),
             output_size=(out_h, out_w),
             kernel_size=(h_win, w_win),
             stride=stride
-        )
+        ).sum(dim=0, keepdim=True)
         output /= weights.clamp(min=1)
         pad_h = out_h - original_shape[0]
         pad_w = out_w - original_shape[1]
@@ -93,16 +90,16 @@ def revert_sliding_window(windows: torch.Tensor, layout: Shape, original_shape: 
     out_h = (n_h - 1) * stride[1] + h_win
     out_w = (n_w - 1) * stride[2] + w_win
     output = torch.zeros(c, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-    weights = torch.zeros(1, out_d, out_h, out_w, device=first_window.device, dtype=first_window.dtype)
-    windows = windows[:n_d * n_h * n_w].reshape(n_d, n_h, n_w, c, d_win, h_win, w_win)
+    weights = torch.zeros(1, out_d, out_h, out_w, device=first_window.device, dtype=torch.uint8)
+    windows = windows[:n_d * n_h * n_w].view(n_d, n_h, n_w, c, d_win, h_win, w_win)
     for i in range(n_d):
         d_start = i * stride[0]
         d_slice = slice(d_start, d_start + d_win)
         for j in range(n_h):
             h_start = j * stride[1]
             h_slice = slice(h_start, h_start + h_win)
-            w_starts = torch.arange(n_w, device=first_window.device) * stride[2]
-            for k, w_start in enumerate(w_starts.tolist()):
+            for k in range(n_w):
+                w_start = k * stride[2]
                 w_slice = slice(w_start, w_start + w_win)
                 output[:, d_slice, h_slice, w_slice] += windows[i, j, k]
                 weights[0, d_slice, h_slice, w_slice] += 1
