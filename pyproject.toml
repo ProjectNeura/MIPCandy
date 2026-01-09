@@ -14,7 +14,7 @@ authors = [
 ]
 dependencies = [
     "pyyaml", "torch", "torchvision", "ptflops", "numpy", "safetensors", "SimpleITK", "matplotlib", "rich", "pandas",
-    "requests"
+    "requests", "psutil"
 ]
 
 [project.optional-dependencies]

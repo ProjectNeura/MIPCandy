@@ -23,7 +23,7 @@ class TrainingTest(FoldedDataTest):
         train_dataloader = DataLoader(self["train_dataset"], batch_size=2, shuffle=True)
         val_dataloader = DataLoader(self["val_dataset"], batch_size=1, shuffle=False)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
-                                       device=self.device)
+                                       profiler=True, device=self.device)
         self["trainer"].num_classes = self.num_classes
         self["trainer"].set_frontend(self.frontend)
 
@@ -59,7 +59,7 @@ class SlidingTrainingTest(FoldedDataTest):
         train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
-                                       device=self.device)
+                                       profiler=True, device=self.device)
         self["trainer"].num_classes = self.num_classes
         self["trainer"].set_slided_validation_dataset(slided_val_dataset)
         self["trainer"].overlap = self.overlap

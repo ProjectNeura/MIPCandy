@@ -26,6 +26,7 @@ from mipcandy.config import load_settings, load_secrets
 from mipcandy.data import fast_save, fast_load, empty_cache
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
+from mipcandy.profiler import Profiler
 from mipcandy.sanity_check import sanity_check
 from mipcandy.types import Params, Setting, AmbiguousShape
 
@@ -61,7 +62,7 @@ class TrainerTracker(object):
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *, recoverable: bool = True,
-                 device: torch.device | str = "cpu", console: Console = Console()) -> None:
+                 profiler: bool = False, device: torch.device | str = "cpu", console: Console = Console()) -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
         self._trainer_folder: str = trainer_folder
@@ -76,6 +77,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._frontend: Frontend = Frontend({})
         self._lock: Lock = Lock()
         self._tracker: TrainerTracker = TrainerTracker()
+        self._profiler: Profiler | None = None
+        self._use_profiler: bool = profiler
 
     # Recovery methods (PR #108 at https://github.com/ProjectNeura/MIPCandy/pull/108)
 
@@ -228,7 +231,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         with open(f"{experiment_folder}/logs.txt", "w") as f:
             f.write(f"File created by FightTumor, copyright (C) {t.year} Project Neura. All rights reserved\n")
         self.log(f"Experiment (ID {self._experiment_id}) created at {t}")
-        self.log(f"Trainer: {self.__class__.__name__}")
+        self.log(f"Trainer: {self._trainer_variant}")
+        if self._use_profiler:
+            gpus = (self._device,) if torch.device(self._device).type == "cuda" else ()
+            self._profiler = Profiler(self._trainer_variant, f"{experiment_folder}/profiler.txt", gpus=gpus)
 
     # Logging utilities
 
@@ -249,6 +255,14 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def record_all(self, metrics: dict[str, float]) -> None:
         try_append_all(metrics, self._epoch_metrics)
+
+    def record_profiler(self) -> None:
+        if self._profiler:
+            self._profiler.record(stack_trace_offset=2)
+
+    def record_profiler_linebreak(self, message: str) -> None:
+        if self._profiler:
+            self._profiler.line_break(message)
 
     def _bump_metrics(self) -> None:
         for metric, values in self._epoch_metrics.items():
@@ -376,25 +390,31 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             toolbox.ema.update_parameters(toolbox.model)
         return loss, metrics
 
-    def train_epoch(self, epoch: int, toolbox: TrainerToolbox) -> None:
+    def train_epoch(self, toolbox: TrainerToolbox) -> None:
+        self.record_profiler_linebreak(f"Epoch {self._tracker.epoch} training")
+        self.record_profiler()
+        self.record_profiler_linebreak("Emptying cache")
         self.empty_cache()
+        self.record_profiler()
         toolbox.model.train()
         if toolbox.ema:
             toolbox.ema.train()
         with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
-            task = progress.add_task(f"Epoch {epoch}", total=len(self._dataloader))
+            task = progress.add_task(f"Epoch {self._tracker.epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
+                self.record_profiler()
+                self.record_profiler_linebreak("Training batch")
                 images, labels = images.to(self._device), labels.to(self._device)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
-                progress.update(task, description=f"Training epoch {epoch} {tuple(images.shape)}")
+                progress.update(task, description=f"Training epoch {self._tracker.epoch} {tuple(images.shape)}")
                 loss, metrics = self.train_batch(images, labels, toolbox)
                 self.record("combined loss", loss)
                 self.record_all(metrics)
-                progress.update(task, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
+                progress.update(task, advance=1, description=f"Training epoch {self._tracker.epoch} ({loss:.4f})")
+                self.record_profiler()
         self._bump_metrics()
-        self.empty_cache()
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
               ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
@@ -407,6 +427,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         if seed is None:
             seed = randint(0, 100)
         self.set_seed(seed)
+        self.record_profiler()
+        self.record_profiler_linebreak("Sanity check")
         example_input = self.get_example_input().to(self._device).unsqueeze(0)
         padding_module = self.get_padding_module()
         if padding_module:
@@ -420,6 +442,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         sanity_check_result = sanity_check(template_model, example_shape, device=self._device)
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
+        self.record_profiler()
         self.log("Building toolbox...")
         toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
             num_epochs, example_shape, compile_model, ema
@@ -439,7 +462,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self._tracker.epoch = epoch
                 # Training
                 t0 = time()
-                self.train_epoch(epoch, toolbox)
+                self.train_epoch(toolbox)
                 lr = toolbox.scheduler.get_last_lr()[0]
                 self._record("learning rate", lr)
                 self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
@@ -517,7 +540,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         if self._validation_dataloader.batch_size != 1:
             raise RuntimeError("Validation dataloader should have batch size 1")
+        self.record_profiler_linebreak(f"Validating epoch {self._tracker.epoch}")
+        self.record_profiler()
+        self.record_profiler_linebreak("Emptying cache")
         self.empty_cache()
+        self.record_profiler()
         toolbox.model.eval()
         if toolbox.ema:
             toolbox.ema.eval()
@@ -531,6 +558,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             task = progress.add_task(f"Validating", total=num_cases)
             idx = 0
             for image, label in self._validation_dataloader:
+                self.record_profiler()
+                self.record_profiler_linebreak("Validating batch")
                 image, label = image.to(self._device), label.to(self._device)
                 padding_module = self.get_padding_module()
                 if padding_module:
@@ -539,7 +568,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 progress.update(task,
                                 description=f"Validating epoch {self._tracker.epoch} case {idx} {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
+                self.record_profiler()
+                self.record_profiler_linebreak("Emptying cache")
                 self.empty_cache()
+                self.record_profiler()
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
@@ -549,7 +581,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 progress.update(task, advance=1,
                                 description=f"Validating epoch {self._tracker.epoch} case {idx} ({case_score:.4f})")
                 idx += 1
-        self.empty_cache()
+                self.record_profiler()
         return score / num_cases, metrics
 
     def __call__(self, *args, **kwargs) -> None:
@@ -557,4 +589,4 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     @override
     def __str__(self) -> str:
-        return f"{self.__class__.__name__} {self._experiment_id}"
+        return f"{self._trainer_variant} {self._experiment_id}"
