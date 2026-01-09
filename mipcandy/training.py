@@ -568,7 +568,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 progress.update(task,
                                 description=f"Validating epoch {self._tracker.epoch} case {idx} {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
+                self.record_profiler()
+                self.record_profiler_linebreak("Emptying cache")
                 self.empty_cache()
+                self.record_profiler()
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
