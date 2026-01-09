@@ -51,7 +51,7 @@ class Profiler(object):
         self._gpus: Sequence[Device] = gpus
         self.total_gpu_mem: list[float] = [self.get_total_gpu_mem(device) for device in gpus]
         with open(save_as, "w") as f:
-            f.write(f"# {title}\n")
+            f.write(f"# {title}\nTotal memory: {self.total_mem}, Total GPU memory: {self.total_gpu_mem}\n\n")
         self._t0: float = time()
 
     @staticmethod
