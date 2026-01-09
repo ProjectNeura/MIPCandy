@@ -23,7 +23,7 @@ class ProfilerFrame(object):
         r = f"[{self.stack}] CPU: {self.cpu:.2f}% @ Memory: {self.mem:.2f}%\n"
         if self.gpu and self.gpu_mem:
             for i, gpu in enumerate(self.gpu):
-                r += f"\tGPU {i}: {gpu:.2f}% @ Memory: {self.gpu_mem[i]:.2f}%\n"
+                r += f"\t\tGPU {i}: {gpu:.2f}% @ Memory: {self.gpu_mem[i]:.2f}%\n"
         return r
 
     def export(self, duration: float) -> str:

@@ -128,7 +128,7 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
         self.record_profiler()
-        self.record_profiler_linebreak("Loading windows")
+        self.record_profiler_linebreak(f"Loading case {idx} windows")
         images = self.slided_validation_dataset().images()
         num_windows, layout, original_shape = images.case_meta(idx)
         canvas = None
