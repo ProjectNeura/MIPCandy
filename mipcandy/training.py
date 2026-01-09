@@ -62,7 +62,7 @@ class TrainerTracker(object):
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *, recoverable: bool = True,
-                 profiler: bool = True, device: torch.device | str = "cpu", console: Console = Console()) -> None:
+                 profiler: bool = False, device: torch.device | str = "cpu", console: Console = Console()) -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
         self._trainer_folder: str = trainer_folder
