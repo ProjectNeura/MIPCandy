@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from benchmark.data import FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    ROIDataset, PadTo, MONAITransform
+    RandomROIDataset, PadTo, MONAITransform
 
 
 class TrainingTest(FoldedDataTest):
@@ -55,7 +55,7 @@ class SlidingTrainingTest(FoldedDataTest):
         )
         annotations = inspect(train_dataset)
         annotations.set_roi_shape(self.window_shape)
-        train_dataset = ROIDataset(annotations)
+        train_dataset = RandomROIDataset(annotations)
         train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
         val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
         self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
