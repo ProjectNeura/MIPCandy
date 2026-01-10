@@ -1,5 +1,4 @@
 from abc import ABCMeta
-from os import makedirs
 from typing import override, Self
 
 import torch
@@ -124,7 +123,6 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
             dataset.transform(transform=None)
             self._validation_dataset = dataset
             self._validation_dataloader = DataLoader(_TemplateDataset(dataset), 1, False)
-            makedirs(f"{self.experiment_folder()}/validation", exist_ok=True)
         return super().validate(toolbox)
 
     def infer_validation_case(self, idx: int, toolbox: TrainerToolbox) -> tuple[torch.Tensor, Shape, Shape]:
