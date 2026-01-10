@@ -136,13 +136,13 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
             end = min(i + self.batch_size, num_windows)
             outputs = model(images.case(idx, part=slice(i, end)).to(self._device))
             if canvas is None:
-                canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype, device=self._device)
-            canvas[i:end] = outputs
+                canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype)
+            canvas[i:end] = outputs.cpu()
         self.record_profiler()
         self.record_profiler_linebreak("Reconstructing windows")
-        reconstructed = revert_sliding_window(canvas.to(self._device), layout, original_shape, overlap=self.overlap)
+        reconstructed = revert_sliding_window(canvas, layout, original_shape, overlap=self.overlap)
         self.record_profiler()
         self.record_profiler_linebreak("Computing loss")
-        loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
+        loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0).cpu())
         self.record_profiler()
         return -loss.item(), metrics, reconstructed
