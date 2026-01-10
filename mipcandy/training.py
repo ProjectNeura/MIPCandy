@@ -405,7 +405,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
             task = progress.add_task(f"Epoch {self._tracker.epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
-                images, labels = images.to(self._device), labels.to(self._device)
+                images, labels = images.to(self._device, non_blocking=True), labels.to(self._device, non_blocking=True)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
@@ -561,7 +561,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             for image, label in self._validation_dataloader:
                 self.record_profiler()
                 self.record_profiler_linebreak("Validating batch")
-                image, label = image.to(self._device), label.to(self._device)
+                image, label = image.to(self._device, non_blocking=True), label.to(self._device, non_blocking=True)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
