@@ -127,20 +127,17 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
     def validate_case(self, idx: int, label: torch.Tensor, _: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
         model = toolbox.ema if toolbox.ema else toolbox.model
-        self.record_profiler()
-        self.record_profiler_linebreak(f"Loading case {idx} windows")
         images = self.slided_validation_dataset().images()
         num_windows, layout, original_shape = images.case_meta(idx)
         canvas = None
         self.record_profiler()
-        self.record_profiler_linebreak("Inferring windows")
+        self.record_profiler_linebreak(f"Inferring windows for case {idx}")
         for i in range(0, num_windows, self.batch_size):
             end = min(i + self.batch_size, num_windows)
             outputs = model(images.case(idx, part=slice(i, end)).to(self._device))
             if canvas is None:
                 canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype, device=self._device)
             canvas[i:end] = outputs
-            self.empty_cache()
         self.record_profiler()
         self.record_profiler_linebreak("Reconstructing windows")
         reconstructed = revert_sliding_window(canvas.to(self._device), layout, original_shape, overlap=self.overlap)
