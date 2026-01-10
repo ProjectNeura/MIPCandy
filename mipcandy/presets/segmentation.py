@@ -1,4 +1,5 @@
 from abc import ABCMeta
+from os import makedirs
 from typing import override, Self
 
 import torch
@@ -9,7 +10,7 @@ from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, SupervisedDataset, \
     revert_sliding_window, SupervisedSWDataset
 from mipcandy.training import Trainer, TrainerToolbox
-from mipcandy.types import Params
+from mipcandy.types import Params, Shape
 
 
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
@@ -68,7 +69,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
-        return -loss.item(), metrics, mask.squeeze(0)
+        return -loss.item(), {k: v.item() for k, v in metrics.items()}, mask.squeeze(0)
 
 
 class _TemplateDataset(SupervisedDataset[tuple[None]]):
@@ -82,7 +83,7 @@ class _TemplateDataset(SupervisedDataset[tuple[None]]):
 
     @override
     def load_image(self, idx: int) -> torch.Tensor:
-        return self._base.load_label(idx)
+        return torch.empty(1)
 
     @override
     def load_label(self, idx: int) -> torch.Tensor:
@@ -108,9 +109,10 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         raise ValueError("Slided validation dataset is not set")
 
     @override
-    def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
+    def save_preview(self, _: torch.Tensor, __: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
-        super().save_preview(self._validation_dataset.image(self._tracker.worst_case), image, output, quality=quality)
+        image, label = self._validation_dataset[self._tracker.worst_case]
+        super().save_preview(image, label, output, quality=quality)
 
     @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
@@ -118,31 +120,38 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
             dataset = self._validation_dataloader.dataset
             if not isinstance(dataset, SupervisedDataset):
                 raise ValueError("Validation dataset must be a SupervisedDataset")
+            self.log("WARNING: Transforms in the validation dataset will not be applied, shapes will also be incorrect")
+            dataset.transform(transform=None)
             self._validation_dataset = dataset
             self._validation_dataloader = DataLoader(_TemplateDataset(dataset), 1, False)
-            self.log("WARNING: Transforms in the validation dataset will not be applied")
+            makedirs(f"{self.experiment_folder()}/validation", exist_ok=True)
         return super().validate(toolbox)
 
-    @override
-    def validate_case(self, idx: int, label: torch.Tensor, _: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
-        float, dict[str, float], torch.Tensor]:
+    def infer_validation_case(self, idx: int, toolbox: TrainerToolbox) -> tuple[torch.Tensor, Shape, Shape]:
         model = toolbox.ema if toolbox.ema else toolbox.model
         images = self.slided_validation_dataset().images()
         num_windows, layout, original_shape = images.case_meta(idx)
         canvas = None
-        self.record_profiler()
-        self.record_profiler_linebreak(f"Inferring windows for case {idx}")
         for i in range(0, num_windows, self.batch_size):
             end = min(i + self.batch_size, num_windows)
             outputs = model(images.case(idx, part=slice(i, end)).to(self._device))
             if canvas is None:
-                canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype)
-            canvas[i:end] = outputs.cpu()
+                canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype, device=self._device)
+            canvas[i:end] = outputs
+        return canvas, layout, original_shape
+
+    @override
+    def validate_case(self, idx: int, _: torch.Tensor, __: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
+        float, dict[str, float], torch.Tensor]:
+        self.record_profiler()
+        self.record_profiler_linebreak(f"Inferring windows for case {idx}")
+        windows, layout, original_shape = self.infer_validation_case(idx, toolbox)
         self.record_profiler()
         self.record_profiler_linebreak("Reconstructing windows")
-        reconstructed = revert_sliding_window(canvas, layout, original_shape, overlap=self.overlap)
+        reconstructed = revert_sliding_window(windows, layout, original_shape, overlap=self.overlap)
         self.record_profiler()
         self.record_profiler_linebreak("Computing loss")
-        loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0).cpu())
+        label = self._validation_dataset.label(idx)
+        loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         self.record_profiler()
         return -loss.item(), metrics, reconstructed
