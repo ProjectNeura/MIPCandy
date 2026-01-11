@@ -123,12 +123,6 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         raise ValueError("Slided validation dataset is not set")
 
     @override
-    def save_preview(self, _: torch.Tensor, __: torch.Tensor, output: torch.Tensor, *,
-                     quality: float = .75) -> None:
-        image, label = self.full_validation_dataset()[self._tracker.worst_case]
-        super().save_preview(image, label, output, quality=quality)
-
-    @override
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         if self._tracker.epoch not in self.full_validation_at_epochs:
             return super().validate(toolbox)
