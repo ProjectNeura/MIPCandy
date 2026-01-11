@@ -65,9 +65,14 @@ def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *,
     _args_check(output, label)
     axes = tuple(range(2, output.ndim))
     intersection = (output * label).sum(dim=axes)
-    dice = (2 * intersection + smooth) / (output.sum(dim=axes) + label.sum(dim=axes) + smooth)
+    volume_sum = output.sum(dim=axes) + label.sum(dim=axes)
+    dice = (2 * intersection + smooth) / (volume_sum + smooth)
     if not include_background:
         dice = dice[:, 1:]
+        volume_sum = volume_sum[:, 1:]
+    mask = volume_sum > smooth
+    if mask.any():
+        return dice[mask].mean()
     return dice.mean()
 
 
