@@ -68,7 +68,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
-        return -loss.item(), {k: v.item() for k, v in metrics.items()}, mask.squeeze(0)
+        return -loss.item(), metrics, mask.squeeze(0)
 
 
 class _TemplateDataset(SupervisedDataset[tuple[None]]):
@@ -146,10 +146,12 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         windows, layout, original_shape = self.infer_validation_case(idx, toolbox)
         self.record_profiler()
         self.record_profiler_linebreak("Reconstructing windows")
-        reconstructed = revert_sliding_window(windows, layout, original_shape, overlap=self.overlap)
+        self.empty_cache()
+        reconstructed = revert_sliding_window(windows, layout, original_shape, overlap=self.overlap).detach()
+        self.empty_cache()
         self.record_profiler()
         self.record_profiler_linebreak("Computing loss")
         label = self._validation_dataset.label(idx)
         loss, metrics = toolbox.criterion(reconstructed.unsqueeze(0), label.unsqueeze(0))
         self.record_profiler()
-        return -loss.item(), metrics, reconstructed
+        return -loss.detach().cpu().numpy(), metrics, reconstructed
