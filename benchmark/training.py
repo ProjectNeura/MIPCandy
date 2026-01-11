@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from benchmark.data import DataTest, FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    RandomROIDataset, PadTo, MONAITransform, load_inspection_annotations
+    ROIDataset, PadTo, MONAITransform, load_inspection_annotations
 
 
 class TrainingTest(DataTest):
@@ -16,8 +16,7 @@ class TrainingTest(DataTest):
     resize: Shape = (128, 128, 128)
     num_classes: int = 5
 
-    @override
-    def set_up(self) -> None:
+    def set_up_datasets(self) -> None:
         super().set_up()
         self["dataset"].transform(
             transform=JointTransform(transform=MONAITransform(PadTo(self.resize, batch=False)))
@@ -29,14 +28,20 @@ class TrainingTest(DataTest):
             annotations = inspect(self["dataset"])
             annotations.save(path)
         annotations.set_roi_shape(self.resize)
-        dataset = RandomROIDataset(annotations)
-        train, val = dataset.fold(fold=0)
+        dataset = ROIDataset(annotations)
+        self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
+
+    @override
+    def set_up(self) -> None:
+        self.set_up_datasets()
+        train, val = self["train_dataset"], self["val_dataset"]
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True)
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
-        self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
+        trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        device=self.device)
-        self["trainer"].num_classes = self.num_classes
-        self["trainer"].set_frontend(self.frontend)
+        trainer.num_classes = self.num_classes
+        trainer.set_frontend(self.frontend)
+        self["trainer"] = trainer
 
     @override
     def execute(self) -> None:
@@ -58,10 +63,11 @@ class ResizeTrainingTest(FoldedDataTest):
         super().set_up()
         train_dataloader = DataLoader(self["train_dataset"], batch_size=2, shuffle=True)
         val_dataloader = DataLoader(self["val_dataset"], batch_size=1, shuffle=False)
-        self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
+        trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        profiler=True, device=self.device)
-        self["trainer"].num_classes = self.num_classes
-        self["trainer"].set_frontend(self.frontend)
+        trainer.num_classes = self.num_classes
+        trainer.set_frontend(self.frontend)
+        self["trainer"] = trainer
 
     @override
     def execute(self) -> None:
@@ -72,39 +78,30 @@ class ResizeTrainingTest(FoldedDataTest):
         removedirs(self["trainer"].experiment_folder())
 
 
-class SlidingTrainingTest(FoldedDataTest):
+class SlidingTrainingTest(TrainingTest, FoldedDataTest):
     trainer: type[SegmentationTrainer] = UNetSlidingTrainer
     window_shape: Shape = (128, 128, 128)
-    num_classes: int = 5
-    overlap: float = .1
+    overlap: float = .5
 
     @override
     def set_up(self) -> None:
-        super().set_up()
-        val_dataset = self["val_dataset"]
-        if not exists(f"{self.output_folder}/val_slided"):
-            slide_dataset(val_dataset, f"{self.output_folder}/val_slided", self.window_shape, overlap=self.overlap)
-        slided_val_dataset = SupervisedSWDataset(f"{self.output_folder}/val_slided")
-        train_dataset = self["train_dataset"]
-        train_dataset.transform(
-            transform=JointTransform(transform=MONAITransform(PadTo(self.window_shape, batch=False)))
-        )
-        path = f"{self.output_folder}/sliding_training_test_annotations.json"
-        if exists(path):
-            annotations = load_inspection_annotations(path, train_dataset)
-        else:
-            annotations = inspect(train_dataset)
-            annotations.save(path)
-        annotations.set_roi_shape(self.window_shape)
-        train_dataset = RandomROIDataset(annotations)
-        train_dataloader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-        val_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-        self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
+        self.set_up_datasets()
+        train, val = self["train_dataset"], self["val_dataset"]
+        FoldedDataTest.set_up(self)
+        full_val = self["val_dataset"]
+        path = f"{self.output_folder}/val_slided"
+        if not exists(path):
+            slide_dataset(full_val, path, self.window_shape, overlap=self.overlap)
+        slided_val = SupervisedSWDataset(path)
+        train_dataloader = DataLoader(train, batch_size=2, shuffle=True)
+        val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
+        trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
                                        profiler=True, device=self.device)
-        self["trainer"].num_classes = self.num_classes
-        self["trainer"].set_slided_validation_dataset(slided_val_dataset)
-        self["trainer"].overlap = self.overlap
-        self["trainer"].set_frontend(self.frontend)
+        trainer.set_datasets(full_val, slided_val)
+        trainer.num_classes = self.num_classes
+        trainer.overlap = self.overlap
+        trainer.set_frontend(self.frontend)
+        self["trainer"] = trainer
 
     @override
     def execute(self) -> None:
