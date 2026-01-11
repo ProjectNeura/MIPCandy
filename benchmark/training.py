@@ -5,13 +5,49 @@ from typing import override
 from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
-from benchmark.data import FoldedDataTest
+from benchmark.data import DataTest, FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
     RandomROIDataset, PadTo, MONAITransform, load_inspection_annotations
 
 
-class TrainingTest(FoldedDataTest):
+class TrainingTest(DataTest):
+    trainer: type[SegmentationTrainer] = UNetTrainer
+    resize: Shape = (128, 128, 128)
+    num_classes: int = 5
+
+    @override
+    def set_up(self) -> None:
+        super().set_up()
+        self["dataset"].transform(
+            transform=JointTransform(transform=MONAITransform(PadTo(self.resize, batch=False)))
+        )
+        path = f"{self.input_folder}/training_test.json"
+        if exists(path):
+            annotations = load_inspection_annotations(path, self["dataset"])
+        else:
+            annotations = inspect(self["dataset"])
+            annotations.save(path)
+        annotations.set_roi_shape(self.resize)
+        dataset = RandomROIDataset(annotations)
+        train, val = dataset.fold(fold=0)
+        train_dataloader = DataLoader(train, batch_size=2, shuffle=True)
+        val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
+        self["trainer"] = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
+                                       device=self.device)
+        self["trainer"].num_classes = self.num_classes
+        self["trainer"].set_frontend(self.frontend)
+
+    @override
+    def execute(self) -> None:
+        self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}")
+
+    @override
+    def clean_up(self) -> None:
+        removedirs(self["trainer"].experiment_folder())
+
+
+class ResizeTrainingTest(FoldedDataTest):
     trainer: type[SegmentationTrainer] = UNetTrainer
     resize: Shape = (256, 256, 256)
     num_classes: int = 5
@@ -29,7 +65,7 @@ class TrainingTest(FoldedDataTest):
 
     @override
     def execute(self) -> None:
-        self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}")
+        self["trainer"].train(self.num_epochs, note=f"Resize Training test {self.resize}")
 
     @override
     def clean_up(self) -> None:

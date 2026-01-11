@@ -2,7 +2,7 @@ from argparse import ArgumentParser
 from os.path import exists
 
 from benchmark.data import DataTest, SlidingWindowTest, RandomROIDatasetTest
-from benchmark.training import TrainingTest, SlidingTrainingTest
+from benchmark.training import TrainingTest, ResizeTrainingTest, SlidingTrainingTest
 from mipcandy import auto_device, download_dataset, Frontend, NotionFrontend, WandBFrontend
 
 BENCHMARK_DATASET: str = "AbdomenCT-1K-ss1"
@@ -12,6 +12,7 @@ if __name__ == "__main__":
         "SlidingWindow": SlidingWindowTest,
         "RandomROI": RandomROIDatasetTest,
         "Training": TrainingTest,
+        "ResizeTraining": ResizeTrainingTest,
         "SlidingTraining": SlidingTrainingTest
     }
     parser = ArgumentParser(prog="MIP Candy Benchmark", description="MIP Candy Benchmark",
