@@ -557,8 +557,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 *Progress.get_default_columns(), SpinnerColumn(), console=self._console
         ) as progress:
             task = progress.add_task(f"Validating", total=num_cases)
-            idx = 0
-            for image, label in self._validation_dataloader:
+            for idx, (image, label) in enumerate(self._validation_dataloader):
                 self.record_profiler()
                 self.record_profiler_linebreak("Validating batch")
                 image, label = image.to(self._device, non_blocking=True), label.to(self._device, non_blocking=True)
@@ -581,7 +580,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1,
                                 description=f"Validating epoch {self._tracker.epoch} case {idx} ({case_score:.4f})")
-                idx += 1
                 self.record_profiler()
         return score / num_cases, metrics
 
