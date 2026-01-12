@@ -463,7 +463,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
                 # Validation
                 score, metrics = self.validate(toolbox)
-                self.record_all(metrics)
+                self.record_all({f"val {k}": v for k, v in metrics.items()})
                 self.record("val score", score)
                 msg = f"Validation score: {score:.4f}"
                 if epoch > 1:
