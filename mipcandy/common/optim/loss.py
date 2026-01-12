@@ -25,8 +25,8 @@ class FocalBCEWithLogits(nn.Module):
 
 
 class DiceBCELossWithLogits(nn.Module):
-    def __init__(self, num_classes: int, *, lambda_bce: float = .5, lambda_soft_dice: float = 1,
-                 smooth: float = 1e-5, include_background: bool = True) -> None:
+    def __init__(self, num_classes: int, *, lambda_bce: float = 1, lambda_soft_dice: float = 1,
+                 smooth: float = 1, include_background: bool = True) -> None:
         super().__init__()
         self.num_classes: int = num_classes
         self.lambda_bce: float = lambda_bce
