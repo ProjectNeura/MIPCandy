@@ -1,5 +1,5 @@
 from abc import ABCMeta
-from typing import override, Self, Callable
+from typing import override, Callable
 
 import torch
 from rich.progress import Progress, SpinnerColumn
@@ -69,28 +69,6 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         loss, metrics = toolbox.criterion(mask, label)
         return -loss.item(), metrics, mask.squeeze(0)
-
-
-class _TemplateDataset(SupervisedDataset[tuple[None]]):
-    def __init__(self, dataset: SupervisedDataset) -> None:
-        super().__init__((None,), (None,))
-        self._base: SupervisedDataset = dataset
-
-    @override
-    def __len__(self) -> int:
-        return len(self._base)
-
-    @override
-    def load_image(self, idx: int) -> torch.Tensor:
-        return torch.empty(1)
-
-    @override
-    def load_label(self, idx: int) -> torch.Tensor:
-        return torch.empty(1)
-
-    @override
-    def construct_new(self, images: tuple[None], labels: tuple[None]) -> Self:
-        raise NotImplementedError
 
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
