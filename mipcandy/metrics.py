@@ -60,8 +60,8 @@ def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Te
     return apply_multiclass_to_binary(dice_similarity_coefficient_binary, output, label, num_classes, if_empty)
 
 
-def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *,
-                          smooth: float = 1e-5, include_background: bool = True) -> torch.Tensor:
+def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1,
+                          include_background: bool = True) -> torch.Tensor:
     _args_check(output, label)
     axes = tuple(range(2, output.ndim))
     intersection = (output * label).sum(dim=axes)
