@@ -9,7 +9,7 @@ from random import seed as random_seed, randint
 from shutil import copy
 from threading import Lock
 from time import time
-from typing import Sequence, override, Callable, Self
+from typing import Sequence, override, Self
 
 import numpy as np
 import torch
@@ -73,7 +73,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._unrecoverable: bool | None = not recoverable  # None if the trainer is recovered
         self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
-        self._epoch_metrics: dict[str, list[float]] = {}
         self._frontend: Frontend = Frontend({})
         self._lock: Lock = Lock()
         self._tracker: TrainerTracker = TrainerTracker()
@@ -248,13 +247,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self._console.print(msg)
 
     def record(self, metric: str, value: float) -> None:
-        try_append(value, self._epoch_metrics, metric)
-
-    def _record(self, metric: str, value: float) -> None:
         try_append(value, self._metrics, metric)
 
-    def record_all(self, metrics: dict[str, float]) -> None:
-        try_append_all(metrics, self._epoch_metrics)
+    def record_all(self, metrics: dict[str, list[float]]) -> None:
+        try_append_all({k: sum(v) / len(v) for k, v in metrics.items()}, self._metrics)
 
     def record_profiler(self) -> None:
         if self._profiler:
@@ -264,12 +260,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         if self._profiler:
             self._profiler.line_break(message)
             self.log(f"[PROFILER] {message}")
-
-    def _bump_metrics(self) -> None:
-        for metric, values in self._epoch_metrics.items():
-            epoch_overall = sum(values) / len(values)
-            try_append(epoch_overall, self._metrics, metric)
-        self._epoch_metrics.clear()
 
     def save_metrics(self) -> None:
         df = DataFrame(self._metrics)
@@ -312,10 +302,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                      quality: float = .75) -> None:
         ...
 
-    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
-                     epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
-        if not metrics:
-            metrics = self._metrics
+    def show_metrics(self, epoch: int, metrics: dict[str, list[float]], prefix: str, *,
+                     epochwise: bool = True, lookup_prefix: str = "") -> None:
         prefix = prefix.capitalize()
         table = Table(title=f"Epoch {epoch} {prefix}")
         table.add_column("Metric")
@@ -323,16 +311,15 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         table.add_column("Span", style="cyan")
         table.add_column("Diff", style="magenta")
         for metric, values in metrics.items():
-            if skip and skip(metric, values):
-                continue
             span = f"[{min(values):.4f}, {max(values):.4f}]"
             if epochwise:
-                value = f"{values[-1]:.4f}"
-                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
-            else:
                 mean = sum(values) / len(values)
                 value = f"{mean:.4f}"
-                diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
+                m = f"{lookup_prefix}{metric}"
+                diff = f"{mean - self._metrics[m][-1]:+.4f}" if m in self._metrics else "N/A"
+            else:
+                value = f"{values[-1]:.4f}"
+                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
             table.add_row(metric, value, span, diff)
             self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
         console = Console()
@@ -393,7 +380,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             toolbox.ema.update_parameters(toolbox.model)
         return loss, metrics
 
-    def train_epoch(self, toolbox: TrainerToolbox) -> None:
+    def train_epoch(self, toolbox: TrainerToolbox) -> dict[str, list[float]]:
         self.record_profiler_linebreak(f"Epoch {self._tracker.epoch} training")
         self.record_profiler()
         self.record_profiler_linebreak("Emptying cache")
@@ -402,6 +389,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         toolbox.model.train()
         if toolbox.ema:
             toolbox.ema.train()
+        metrics = {}
         with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
             task = progress.add_task(f"Epoch {self._tracker.epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
@@ -410,12 +398,12 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
                 progress.update(task, description=f"Training epoch {self._tracker.epoch} {tuple(images.shape)}")
-                loss, metrics = self.train_batch(images, labels, toolbox)
-                self.record("combined loss", loss)
-                self.record_all(metrics)
+                loss, batch_metrics = self.train_batch(images, labels, toolbox)
+                try_append(loss, metrics, "combined loss")
+                try_append_all(batch_metrics, metrics)
                 progress.update(task, advance=1, description=f"Training epoch {self._tracker.epoch} ({loss:.4f})")
                 self.record_profiler()
-        self._bump_metrics()
+        return metrics
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
               ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
@@ -463,10 +451,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self._tracker.epoch = epoch
                 # Training
                 t0 = time()
-                self.train_epoch(toolbox)
+                metrics = self.train_epoch(toolbox)
+                self.record_all(metrics)
                 lr = toolbox.scheduler.get_last_lr()[0]
-                self._record("learning rate", lr)
-                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
+                self.record("learning rate", lr)
+                self.show_metrics(epoch, metrics, "training")
                 self.save_checkpoint(toolbox.model.state_dict(), checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
@@ -474,7 +463,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
                 # Validation
                 score, metrics = self.validate(toolbox)
-                self._record("val score", score)
+                self.record_all(metrics)
+                self.record("val score", score)
                 msg = f"Validation score: {score:.4f}"
                 if epoch > 1:
                     msg += f" ({score - self._metrics["val score"][-2]:+.4f})"
@@ -487,7 +477,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     etc = self.etc(epoch, num_epochs, target_epoch=target_epoch)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
-                self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
+                self.show_metrics(epoch, metrics, "validation", lookup_prefix="val ")
                 if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
                     self.log(f"======== Best checkpoint updated ({self._tracker.best_score:.4f} -> {
@@ -502,7 +492,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 else:
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
-                self._record("epoch duration", epoch_duration)
+                self.record("epoch duration", epoch_duration)
                 self.log(f"Epoch {epoch} completed in {epoch_duration:.1f} seconds")
                 self.log(f"=============== Best Validation Score {self._tracker.best_score:.4f} ===============")
                 self.save_metrics()
