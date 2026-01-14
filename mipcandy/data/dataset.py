@@ -57,10 +57,6 @@ class TensorLoader(Loader):
 T = TypeVar("T")
 
 
-def _move_transform_to_device(transform: Transform, device: Device) -> Transform:
-    return transform.to(device) if isinstance(transform, nn.Module) else transform
-
-
 class _AbstractDataset(Dataset, Loader, HasDevice, Generic[T], Sequence[T], metaclass=ABCMeta):
     @abstractmethod
     def load(self, idx: int) -> T:
@@ -85,7 +81,8 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     def __init__(self, images: D, *, transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
-        self._transform: Transform | None = transform.to(device) if transform else None
+        self._transform: Transform | None = None
+        self.set_transform(transform)
 
     @override
     def __len__(self) -> int:
@@ -98,10 +95,11 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
             item = self._transform(item)
         return item.as_tensor() if hasattr(item, "as_tensor") else item
 
-    def transform(self, *, transform: Transform | None = None) -> None | Transform:
-        if transform is None:
-            return self._transform
-        self._transform = _move_transform_to_device(transform, self._device) if transform else None
+    def transform(self) -> Transform | None:
+        return self._transform
+
+    def set_transform(self, transform: Transform | None) -> None:
+        self._transform = transform.to(self._device) if isinstance(transform, nn.Module) else transform
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
@@ -116,7 +114,8 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             raise ValueError(f"Unmatched number of images {len(images)} and labels {len(labels)}")
         self._images: D = images
         self._labels: D = labels
-        self._transform: JointTransform | None = transform.to(device) if transform else None
+        self._transform: JointTransform | None = None
+        self.set_transform(transform)
 
     @override
     def __len__(self) -> int:
@@ -149,9 +148,10 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def label(self, idx: int) -> torch.Tensor:
         return self.load_label(idx)
 
-    def transform(self, *, transform: JointTransform | None = None) -> None | JointTransform:
-        if transform is None:
-            return self._transform
+    def transform(self) -> JointTransform | None:
+        return self._transform
+
+    def set_transform(self, transform: JointTransform | None) -> None:
         self._transform = transform.to(self._device) if transform else None
 
     @abstractmethod
