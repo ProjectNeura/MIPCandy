@@ -246,7 +246,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
 class ROIDataset(SupervisedDataset[list[int]]):
     def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
         super().__init__(list(range(len(annotations))), list(range(len(annotations))),
-                         device=annotations.dataset().device())
+                         transform=annotations.dataset().transform(), device=annotations.dataset().device())
         self._annotations: InspectionAnnotations = annotations
         self._percentile: float = percentile
 
