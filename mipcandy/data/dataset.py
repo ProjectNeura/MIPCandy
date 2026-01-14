@@ -8,6 +8,7 @@ from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
 
 import torch
 from pandas import DataFrame
+from torch import nn
 from torch.utils.data import Dataset
 
 from mipcandy.data.io import fast_save, fast_load, load_image
@@ -56,6 +57,10 @@ class TensorLoader(Loader):
 T = TypeVar("T")
 
 
+def _move_transform_to_device(transform: Transform, device: Device) -> Transform:
+    return transform.to(device) if isinstance(transform, nn.Module) else transform
+
+
 class _AbstractDataset(Dataset, Loader, HasDevice, Generic[T], Sequence[T], metaclass=ABCMeta):
     @abstractmethod
     def load(self, idx: int) -> T:
@@ -96,7 +101,7 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     def transform(self, *, transform: Transform | None = None) -> None | Transform:
         if transform is None:
             return self._transform
-        self._transform = transform.to(self._device) if transform else None
+        self._transform = _move_transform_to_device(transform, self._device) if transform else None
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
