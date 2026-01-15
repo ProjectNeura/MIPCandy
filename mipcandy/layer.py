@@ -113,7 +113,7 @@ class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
 
     @override
     def load_checkpoint(self, path: str | PathLike[str]) -> dict[str, Any]:
-        return load_file(path, self._device)
+        return load_file(path)
 
     @override
     def save_checkpoint(self, checkpoint: dict[str, Any], path: str | PathLike[str]) -> None:
