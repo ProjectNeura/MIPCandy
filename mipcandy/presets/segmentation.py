@@ -30,7 +30,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         if output.shape[0] != 1:
             output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0).int()
         self._save_preview(image, "input", quality)
-        self._save_preview(label, "label", quality)
+        self._save_preview(label.int(), "label", quality)
         self._save_preview(output, "prediction", quality)
         if image.ndim == label.ndim == output.ndim == 3 and label.shape[0] == output.shape[0] == 1:
             visualize2d(overlay(image, label), title="expected", blocking=True,
