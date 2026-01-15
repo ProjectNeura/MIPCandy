@@ -85,9 +85,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                                      **training_arguments) -> None:
         if self._unrecoverable:
             return
-        self.save_checkpoint(toolbox.optimizer.state_dict(), f"{self.experiment_folder()}/optimizer.pth")
-        self.save_checkpoint(toolbox.scheduler.state_dict(), f"{self.experiment_folder()}/scheduler.pth")
-        self.save_checkpoint(toolbox.criterion.state_dict(), f"{self.experiment_folder()}/criterion.pth")
+        torch.save({
+            "optimizer": toolbox.optimizer.state_dict(),
+            "scheduler": toolbox.scheduler.state_dict(),
+            "criterion": toolbox.criterion.state_dict()
+        }, f"{self.experiment_folder()}/state_dicts.pth")
         with open(f"{self.experiment_folder()}/state_orb.json", "w") as f:
             dump({"tracker": tracker, "training_arguments": training_arguments}, f)
 
@@ -111,9 +113,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_shape, compile_model,
             checkpoint=self.load_checkpoint(f"{self.experiment_folder()}/checkpoint_latest.pth")
         ))
-        toolbox.optimizer.load_state_dict(self.load_checkpoint(f"{self.experiment_folder()}/optimizer.pth"))
-        toolbox.scheduler.load_state_dict(self.load_checkpoint(f"{self.experiment_folder()}/scheduler.pth"))
-        toolbox.criterion.load_state_dict(self.load_checkpoint(f"{self.experiment_folder()}/criterion.pth"))
+        state_dicts = torch.load(f"{self.experiment_folder()}/state_dicts.pth")
+        toolbox.optimizer.load_state_dict(state_dicts["optimizer"])
+        toolbox.scheduler.load_state_dict(state_dicts["scheduler"])
+        toolbox.criterion.load_state_dict(state_dicts["criterion"])
         return toolbox
 
     def recover_from(self, experiment_id: str) -> Self:
