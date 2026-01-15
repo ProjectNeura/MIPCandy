@@ -280,24 +280,32 @@ class RandomROIDataset(ROIDataset):
         self._min_fg_samples: int = min_foreground_samples
         self._max_fg_samples: int = max_foreground_samples
         self._min_coverage: float = min_percent_coverage
-        self._fg_locations_cache: dict[int, tuple[tuple[int, ...], ...] | None] = {}
+        self._fg_locations_cache: dict[int, dict[int, tuple[tuple[int, ...], ...]] | None] = {}
 
-    def _get_foreground_locations(self, idx: int) -> tuple[tuple[int, ...], ...] | None:
+    def _get_foreground_locations(self, idx: int) -> dict[int, tuple[tuple[int, ...], ...]] | None:
         if idx not in self._fg_locations_cache:
             _, label = self._annotations.dataset()[idx]
-            indices = (label != self._annotations.background()).nonzero()[:, 1:]
-            if len(indices) == 0:
+            background = self._annotations.background()
+            class_ids = [c for c in label.unique().tolist() if c != background]
+            if len(class_ids) == 0:
                 self._fg_locations_cache[idx] = None
-            elif len(indices) <= self._min_fg_samples:
-                self._fg_locations_cache[idx] = tuple(tuple(coord.tolist()) for coord in indices)
             else:
-                target_samples = min(
-                    self._max_fg_samples,
-                    max(self._min_fg_samples, int(np.ceil(len(indices) * self._min_coverage)))
-                )
-                sampled_idx = torch.randperm(len(indices))[:target_samples]
-                sampled = indices[sampled_idx]
-                self._fg_locations_cache[idx] = tuple(tuple(coord.tolist()) for coord in sampled)
+                class_locations: dict[int, tuple[tuple[int, ...], ...]] = {}
+                for class_id in class_ids:
+                    indices = (label == class_id).nonzero()[:, 1:]
+                    if len(indices) == 0:
+                        continue
+                    elif len(indices) <= self._min_fg_samples:
+                        class_locations[class_id] = tuple(tuple(coord.tolist()) for coord in indices)
+                    else:
+                        target_samples = min(
+                            self._max_fg_samples,
+                            max(self._min_fg_samples, int(np.ceil(len(indices) * self._min_coverage)))
+                        )
+                        sampled_idx = torch.randperm(len(indices))[:target_samples]
+                        sampled = indices[sampled_idx]
+                        class_locations[class_id] = tuple(tuple(coord.tolist()) for coord in sampled)
+                self._fg_locations_cache[idx] = class_locations if class_locations else None
         return self._fg_locations_cache[idx]
 
     def _random_roi(self, idx: int) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
@@ -318,13 +326,16 @@ class RandomROIDataset(ROIDataset):
         int, int, int, int, int, int]:
         annotation = self._annotations[idx]
         roi_shape = self._annotations.roi_shape(percentile=self._percentile)
-        foreground_locations = self._get_foreground_locations(idx)
+        class_locations = self._get_foreground_locations(idx)
 
-        if foreground_locations is None or len(foreground_locations) == 0:
+        if class_locations is None or len(class_locations) == 0:
             return self._random_roi(idx)
 
-        fg_idx = torch.randint(0, len(foreground_locations), (1,)).item()
-        fg_position = foreground_locations[fg_idx]
+        class_ids = list(class_locations.keys())
+        selected_class = class_ids[torch.randint(0, len(class_ids), (1,)).item()]
+        locations = class_locations[selected_class]
+        fg_idx = torch.randint(0, len(locations), (1,)).item()
+        fg_position = locations[fg_idx]
 
         roi = []
         for fg_pos, dim_size, patch_size in zip(fg_position, annotation.shape, roi_shape):
