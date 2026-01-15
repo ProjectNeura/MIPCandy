@@ -71,6 +71,8 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
         image = ensure_num_dimensions(nn.functional.avg_pool3d(
             ensure_num_dimensions(image, 5).float(), kernel_size=ratio, stride=ratio, ceil_mode=True
         ), 3).to(image.dtype)
+    if backend == "auto":
+        backend = "pyvista" if find_spec("pyvista") else "matplotlib"
     if is_label:
         max_id = image.max()
         if max_id > 1 and torch.is_floating_point(image):
@@ -78,10 +80,8 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
         if not cmap:
             cmap = __LABEL_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__LABEL_COLORMAP) else "jet"
     elif not cmap:
-            cmap = "gray"
+        cmap = "gray"
     image = image.numpy()
-    if backend == "auto":
-        backend = "pyvista" if find_spec("pyvista") else "matplotlib"
     match backend:
         case "matplotlib":
             warn("Using Matplotlib for 3D visualization is inefficient and inaccurate, consider using PyVista")
