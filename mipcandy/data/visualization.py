@@ -53,8 +53,8 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
 
 
 __LABEL_COLORMAP: list[str] = [
-    "#ffffff", "#7a0f1c", "#8a3b12", "#9a7b00", "#0f5c3a", "#006b6e", "#0a2c66", "#2b1a6f", "#5c136f", "#5a0f3c",
-    "#3b1f14", "#2c2f38", "#2e4057", "#113f2e", "#004f4f", "#4a5a1a"
+    "#ffffff", "#2e4057", "#7a0f1c", "#004f4f", "#9a7b00", "#2c2f38", "#5c136f", "#113f2e", "#8a3b12", "#2b1a6f",
+    "#4a5a1a", "#006b6e", "#3b1f14", "#0a2c66", "#5a0f3c", "#0f5c3a"
 ]
 
 
