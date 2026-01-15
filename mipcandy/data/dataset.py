@@ -1,5 +1,6 @@
 from abc import ABCMeta, abstractmethod
 from json import dump
+from math import log10
 from os import PathLike, listdir, makedirs
 from os.path import exists
 from random import choices
@@ -116,6 +117,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
         self._labels: D = labels
         self._transform: JointTransform | None = None
         self.set_transform(transform)
+        self._preloaded: str = ""
 
     @override
     def __len__(self) -> int:
@@ -131,7 +133,11 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.load_image(idx), self.load_label(idx)
+        if not self._preloaded:
+            return self.load_image(idx), self.load_label(idx)
+        nd = int(log10(len(self))) + 1
+        idx = str(idx).zfill(nd)
+        return fast_load(f"{self._preloaded}/{idx}.pt"), fast_load(f"{self._preloaded}/{idx}.pt")
 
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -154,9 +160,30 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def set_transform(self, transform: JointTransform | None) -> None:
         self._transform = transform.to(self._device) if transform else None
 
+    def _construct_new(self, images: D, labels: D) -> Self:
+        new = self.construct_new(images, labels)
+        new._preloaded = self._preloaded
+        return new
+
     @abstractmethod
     def construct_new(self, images: D, labels: D) -> Self:
         raise NotImplementedError
+
+    def preload(self, output_folder: str | PathLike[str]) -> None:
+        if self._preloaded:
+            return
+        images_path = f"{output_folder}/imagesPreloaded"
+        labels_path = f"{output_folder}/labelsPreloaded"
+        if not exists(images_path) and not exists(labels_path):
+            makedirs(images_path)
+            makedirs(labels_path)
+            nd = int(log10(len(self))) + 1
+            for idx in range(len(self)):
+                image, label = self.load(idx)
+                idx = str(idx).zfill(nd)
+                fast_save(image, f"{images_path}/{idx}.pt")
+                fast_save(label, f"{labels_path}/{idx}.pt")
+        self._preloaded = output_folder
 
     def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
         Self, Self]:
@@ -172,7 +199,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             else:
                 images_train.append(self._images[i])
                 labels_train.append(self._labels[i])
-        return self.construct_new(images_train, labels_train), self.construct_new(images_val, labels_val)
+        return self._construct_new(images_train, labels_train), self._construct_new(images_val, labels_val)
 
 
 class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
@@ -315,10 +342,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
 
     @override
     def load_image(self, idx: int) -> torch.Tensor:
-        if self._split.endswith("Preloaded"):
-            return TensorLoader.do_load(
-                f"{self._folder}/images{self._split}/{self._images[idx]}.pt", device=self._device
-            )
         return torch.cat([self.do_load(
             f"{self._folder}/images{self._split}/{path}", align_spacing=self._align_spacing, device=self._device
         ) for path in self._multimodal_images[idx]]) if self._multimodal_images else self.do_load(
@@ -328,10 +351,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
 
     @override
     def load_label(self, idx: int) -> torch.Tensor:
-        if self._split.endswith("Preloaded"):
-            return TensorLoader.do_load(
-                f"{self._folder}/labels{self._split}/{self._labels[idx]}.pt", is_label=True, device=self._device
-            )
         return self.do_load(
             f"{self._folder}/labels{self._split}/{self._labels[idx]}", is_label=True, align_spacing=self._align_spacing,
             device=self._device
@@ -348,18 +367,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
             copy2(f"{self._folder}/labels{self._split}/{label_path}", f"{labels_target}/{label_path}")
         self._split = split
         self._folded = False
-
-    def preload(self) -> None:
-        images_path = f"{self._folder}/images{self._split}Preloaded"
-        labels_path = f"{self._folder}/labels{self._split}Preloaded"
-        if not exists(images_path) or not exists(labels_path):
-            makedirs(images_path)
-            makedirs(labels_path)
-            for idx in range(len(self)):
-                image, label = self.load(idx)
-                fast_save(image, f"{images_path}/{self._images[idx]}.pt")
-                fast_save(label, f"{labels_path}/{self._labels[idx]}.pt")
-        self._split += "Preloaded"
 
     @override
     def construct_new(self, images: list[str], labels: list[str]) -> Self:
