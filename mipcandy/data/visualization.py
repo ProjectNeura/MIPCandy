@@ -50,10 +50,13 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
         p.show()
 
 
-def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 1e6,
-                backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
-                screenshot_as: str | PathLike[str] | None = None) -> None:
-    image = image.detach().float().cpu()
+__PYVISTA_COLORMAP: list[str] = ["#8931ef", "#f2ca19", "#ff00bd", "#0057e9", "#87e911", "#e11845"]
+
+
+def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | list[str] | None = None,
+                max_volume: int = 1e6, backend: Literal["auto", "matplotlib", "pyvista"] = "auto",
+                blocking: bool = False, screenshot_as: str | PathLike[str] | None = None) -> None:
+    image = image.detach().cpu()
     if image.ndim < 3:
         raise ValueError(f"`image` must have at least 3 dimensions, got {image.shape}")
     if image.ndim > 3:
@@ -62,8 +65,14 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
     total = d * h * w
     ratio = int(ceil((total / max_volume) ** (1 / 3))) if total > max_volume else 1
     if ratio > 1:
-        image = ensure_num_dimensions(nn.functional.avg_pool3d(ensure_num_dimensions(image, 5), kernel_size=ratio,
-                                                               stride=ratio, ceil_mode=True), 3)
+        image = ensure_num_dimensions(nn.functional.avg_pool3d(ensure_num_dimensions(image, 5).float(),
+                                                               kernel_size=ratio, stride=ratio, ceil_mode=True), 3).to(
+            image.dtype)
+    max_id = image.max()
+    if max_id > 1 and torch.is_floating_point(image):
+        raise ValueError("`image` must be class ids that are in [0, 1] or of integer type")
+    if cmap is None:
+        cmap = __PYVISTA_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__PYVISTA_COLORMAP) else "jet"
     image = image.numpy()
     if backend == "auto":
         backend = "pyvista" if find_spec("pyvista") else "matplotlib"
