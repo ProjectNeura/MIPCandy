@@ -43,8 +43,8 @@ class TrainingTest(DataTest):
         val.set_transform(JointTransform(transform=Compose([
             val.transform().transform, validation_transforms()
         ])))
-        train_dataloader = DataLoader(train, batch_size=2, shuffle=True)
-        val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
+        train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
+        val_dataloader = DataLoader(val, batch_size=1, shuffle=False, pin_memory=True)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
         trainer.num_classes = self.num_classes
         trainer.set_frontend(self.frontend)
