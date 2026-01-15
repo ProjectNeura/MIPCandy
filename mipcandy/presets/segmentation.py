@@ -28,7 +28,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
                      quality: float = .75) -> None:
         output = output.sigmoid()
         if output.shape[0] != 1:
-            output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0)
+            output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0).int()
         self._save_preview(image, "input", quality)
         self._save_preview(label, "label", quality)
         self._save_preview(output, "prediction", quality)
