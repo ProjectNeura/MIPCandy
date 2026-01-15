@@ -77,8 +77,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
             raise ValueError(f"Label must be class ids that are in [0, 1] or of integer type, got {image.dtype}")
         if not cmap:
             cmap = __LABEL_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__LABEL_COLORMAP) else "jet"
-    else:
-        if not cmap:
+    elif not cmap:
             cmap = "gray"
     image = image.numpy()
     if backend == "auto":
