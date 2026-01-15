@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from hashlib import md5
 from json import load, dump
@@ -91,7 +91,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             "criterion": toolbox.criterion.state_dict()
         }, f"{self.experiment_folder()}/state_dicts.pth")
         with open(f"{self.experiment_folder()}/state_orb.json", "w") as f:
-            dump({"tracker": tracker, "training_arguments": training_arguments}, f)
+            dump({"tracker": asdict(tracker), "training_arguments": training_arguments}, f)
 
     def load_state_orb(self) -> dict[str, dict[str, Setting]]:
         with open(f"{self.experiment_folder()}/state_orb.json") as f:
