@@ -5,7 +5,7 @@ import torch
 from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 
-from mipcandy.common import AbsoluteLinearLR, DiceBCELossWithLogits
+from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, SupervisedDataset, \
     revert_sliding_window, SupervisedSWDataset, fast_save
 from mipcandy.training import Trainer, TrainerToolbox, try_append_all
@@ -48,11 +48,11 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
     @override
     def build_optimizer(self, params: Params) -> optim.Optimizer:
-        return optim.AdamW(params)
+        return optim.SGD(params, 1e-2, weight_decay=3e-5, momentum=.99, nesterov=True)
 
     @override
     def build_scheduler(self, optimizer: optim.Optimizer, num_epochs: int) -> optim.lr_scheduler.LRScheduler:
-        return AbsoluteLinearLR(optimizer, -8e-6 / len(self._dataloader), 1e-2)
+        return PolyLRScheduler(optimizer, 1e-2, num_epochs * len(self._dataloader))
 
     @override
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
