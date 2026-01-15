@@ -137,7 +137,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             return self.load_image(idx), self.load_label(idx)
         nd = int(log10(len(self))) + 1
         idx = str(idx).zfill(nd)
-        return fast_load(f"{self._preloaded}/{idx}.pt"), fast_load(f"{self._preloaded}/{idx}.pt")
+        return fast_load(f"{self._preloaded}/images/{idx}.pt"), fast_load(f"{self._preloaded}/labels/{idx}.pt")
 
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
@@ -172,8 +172,8 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def preload(self, output_folder: str | PathLike[str]) -> None:
         if self._preloaded:
             return
-        images_path = f"{output_folder}/imagesPreloaded"
-        labels_path = f"{output_folder}/labelsPreloaded"
+        images_path = f"{output_folder}/images"
+        labels_path = f"{output_folder}/labels"
         if not exists(images_path) and not exists(labels_path):
             makedirs(images_path)
             makedirs(labels_path)
