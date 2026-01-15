@@ -52,6 +52,6 @@ class RandomROIDatasetTest(DataTest):
         image, label = self["dataset"][0]
         image_roi, label_roi = dataset[0]
         visualize3d(image, title="image raw")
-        visualize3d(label, title="label raw")
+        visualize3d(label, title="label raw", is_label=True)
         visualize3d(image_roi, title="image roi")
-        visualize3d(label_roi, title="label roi")
+        visualize3d(label_roi, title="label roi", is_label=True)
