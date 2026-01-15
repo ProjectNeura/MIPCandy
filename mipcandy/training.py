@@ -109,9 +109,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
                      ema: bool) -> TrainerToolbox:
+        checkpoint = self.load_checkpoint(f"{self.experiment_folder()}/checkpoint_latest.pth")
+        if compile_model:
+            checkpoint = {k.replace("_orig_mod.", ""): v for k, v in checkpoint.items()}
         toolbox = self._build_toolbox(num_epochs, example_shape, compile_model, ema, model=self.load_model(
-            example_shape, compile_model,
-            checkpoint=self.load_checkpoint(f"{self.experiment_folder()}/checkpoint_latest.pth")
+            example_shape, compile_model, checkpoint=checkpoint
         ))
         state_dicts = torch.load(f"{self.experiment_folder()}/state_dicts.pth")
         toolbox.optimizer.load_state_dict(state_dicts["optimizer"])
