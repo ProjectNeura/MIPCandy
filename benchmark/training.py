@@ -16,6 +16,7 @@ class TrainingTest(DataTest):
     trainer: type[SegmentationTrainer] = UNetTrainer
     resize: Shape = (128, 128, 128)
     num_classes: int = 5
+    _continue: str | None = None  # internal flag for continued training
 
     def set_up_datasets(self) -> None:
         super().set_up()
@@ -52,7 +53,10 @@ class TrainingTest(DataTest):
 
     @override
     def execute(self) -> None:
-        self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}")
+        if not self._continue:
+            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}")
+        self["trainer"].recover_from(self._continue)
+        return self["trainer"].continue_training(self.num_epochs)
 
     @override
     def clean_up(self) -> None:
