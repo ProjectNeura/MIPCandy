@@ -70,7 +70,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
             image.dtype)
     max_id = image.max()
     if max_id > 1 and torch.is_floating_point(image):
-        raise ValueError("`image` must be class ids that are in [0, 1] or of integer type")
+        raise ValueError(f"`image` must be class ids that are in [0, 1] or of integer type, got {image.dtype}")
     if cmap is None:
         cmap = __PYVISTA_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__PYVISTA_COLORMAP) else "jet"
     image = image.numpy()
