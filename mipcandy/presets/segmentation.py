@@ -16,12 +16,13 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     num_classes: int = 1
     include_background: bool = True
 
-    def _save_preview(self, x: torch.Tensor, title: str, quality: float) -> None:
+    def _save_preview(self, x: torch.Tensor, title: str, quality: float, *, is_label: bool = False) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
         if x.ndim == 3 and x.shape[0] in (1, 3, 4):
-            visualize2d(auto_convert(x), title=title, blocking=True, screenshot_as=path)
+            visualize2d(auto_convert(x), title=title, is_label=is_label, blocking=True, screenshot_as=path)
         elif x.ndim == 4 and x.shape[0] == 1:
-            visualize3d(x, title=title, max_volume=int(quality * 1e6), blocking=True, screenshot_as=path)
+            visualize3d(x, title=title, max_volume=int(quality * 1e6), is_label=is_label, blocking=True,
+                        screenshot_as=path)
 
     @override
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
@@ -30,8 +31,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         if output.shape[0] != 1:
             output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0).int()
         self._save_preview(image, "input", quality)
-        self._save_preview(label.int(), "label", quality)
-        self._save_preview(output, "prediction", quality)
+        self._save_preview(label.int(), "label", quality, is_label=True)
+        self._save_preview(output, "prediction", quality, is_label=True)
         if image.ndim == label.ndim == output.ndim == 3 and label.shape[0] == output.shape[0] == 1:
             visualize2d(overlay(image, label), title="expected", blocking=True,
                         screenshot_as=f"{self.experiment_folder()}/expected (preview).png")

@@ -15,7 +15,7 @@ from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
 
 
-def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
+def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str | None = None, is_label: bool = False,
                 blocking: bool = False, screenshot_as: str | PathLike[str] | None = None) -> None:
     image = image.detach().cpu()
     if image.ndim < 2:
@@ -28,6 +28,8 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
         else:
             image = image.permute(1, 2, 0)
     image = auto_convert(image)
+    if not cmap:
+        cmap = "jet" if is_label else "gray"
     plt.imshow(image.numpy(), cmap, vmin=0, vmax=255)
     plt.title(title)
     plt.axis("off")
@@ -73,10 +75,10 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
         max_id = image.max()
         if max_id > 1 and torch.is_floating_point(image):
             raise ValueError(f"Label must be class ids that are in [0, 1] or of integer type, got {image.dtype}")
-        if cmap is None:
+        if not cmap:
             cmap = __LABEL_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__LABEL_COLORMAP) else "jet"
     else:
-        if cmap is None:
+        if not cmap:
             cmap = "gray"
     image = image.numpy()
     if backend == "auto":
