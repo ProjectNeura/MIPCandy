@@ -52,7 +52,10 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
         p.show()
 
 
-__LABEL_COLORMAP: list[str] = ["#8931ef", "#f2ca19", "#ff00bd", "#0057e9", "#87e911", "#e11845"]
+__LABEL_COLORMAP: list[str] = [
+    "#ffffff", "#7a0f1c", "#8a3b12", "#9a7b00", "#0f5c3a", "#006b6e", "#0a2c66", "#2b1a6f", "#5c136f", "#5a0f3c",
+    "#3b1f14", "#2c2f38", "#2e4057", "#113f2e", "#004f4f", "#4a5a1a"
+]
 
 
 def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | list[str] | None = None,
