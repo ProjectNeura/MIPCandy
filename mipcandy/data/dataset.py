@@ -133,15 +133,17 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        if not self._preloaded:
-            return self.load_image(idx), self.load_label(idx)
-        nd = int(log10(len(self))) + 1
-        idx = str(idx).zfill(nd)
-        return fast_load(f"{self._preloaded}/images/{idx}.pt"), fast_load(f"{self._preloaded}/labels/{idx}.pt")
+        return self.load_image(idx), self.load_label(idx)
 
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = super().__getitem__(idx)
+        if self._preloaded:
+            nd = int(log10(len(self))) + 1
+            idx = str(idx).zfill(nd)
+            image, label = fast_load(f"{self._preloaded}/images/{idx}.pt"), fast_load(
+                f"{self._preloaded}/labels/{idx}.pt")
+        else:
+            image, label = super().__getitem__(idx)
         image, label = image.to(self._device, non_blocking=True), label.to(self._device, non_blocking=True)
         if self._transform:
             image, label = self._transform(image, label)
