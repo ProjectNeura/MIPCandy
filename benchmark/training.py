@@ -32,6 +32,7 @@ class TrainingTest(DataTest):
             annotations.save(path)
         annotations.set_roi_shape(self.resize)
         dataset = ROIDataset(annotations)
+        dataset.preload(f"{self.output_folder}/roiPreloaded")
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 
     @override
