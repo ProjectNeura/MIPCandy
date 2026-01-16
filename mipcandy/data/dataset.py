@@ -68,6 +68,8 @@ class _AbstractDataset(Dataset, Loader, HasDevice, Generic[T], Sequence[T], meta
 
     @override
     def __getitem__(self, idx: int) -> T:
+        if idx >= len(self):
+            raise IndexError(f"Index {idx} out of range [0, {len(self)})")
         return self.load(idx)
 
 
@@ -138,6 +140,8 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         if self._preloaded:
+            if idx >= len(self):
+                raise IndexError(f"Index {idx} out of range [0, {len(self)})")
             nd = int(log10(len(self))) + 1
             idx = str(idx).zfill(nd)
             image, label = fast_load(f"{self._preloaded}/images/{idx}.pt"), fast_load(
