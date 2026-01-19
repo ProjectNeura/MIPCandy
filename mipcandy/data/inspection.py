@@ -273,13 +273,13 @@ class ROIDataset(SupervisedDataset[list[int]]):
 
 class RandomROIDataset(ROIDataset):
     def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95,
-                 foreground_oversample_percentage: float = .33, min_foreground_samples: int = 500,
-                 max_foreground_samples: int = 10000, min_percent_coverage: float = .01) -> None:
+                 foreground_oversample_percentage: float = .33, min_foreground_samples: int = 10000,
+                 min_percent_coverage: float = .01, min_foreground_ratio: float = .01) -> None:
         super().__init__(annotations, percentile=percentile)
         self._fg_oversample: float = foreground_oversample_percentage
         self._min_fg_samples: int = min_foreground_samples
-        self._max_fg_samples: int = max_foreground_samples
         self._min_coverage: float = min_percent_coverage
+        self._min_fg_ratio: float = min_foreground_ratio
         self._fg_locations_cache: dict[int, dict[int, tuple[tuple[int, ...], ...]] | None] = {}
 
     def _get_foreground_locations(self, idx: int) -> dict[int, tuple[tuple[int, ...], ...]] | None:
@@ -298,10 +298,9 @@ class RandomROIDataset(ROIDataset):
                     elif len(indices) <= self._min_fg_samples:
                         class_locations[class_id] = tuple(tuple(coord.tolist()) for coord in indices)
                     else:
-                        target_samples = min(
-                            self._max_fg_samples,
-                            max(self._min_fg_samples, int(np.ceil(len(indices) * self._min_coverage)))
-                        )
+                        # nnUNet logic: target = max(min(min_samples, total), coverage_requirement)
+                        target_samples = min(self._min_fg_samples, len(indices))
+                        target_samples = max(target_samples, int(np.ceil(len(indices) * self._min_coverage)))
                         sampled_idx = torch.randperm(len(indices))[:target_samples]
                         sampled = indices[sampled_idx]
                         class_locations[class_id] = tuple(tuple(coord.tolist()) for coord in sampled)
@@ -351,8 +350,8 @@ class RandomROIDataset(ROIDataset):
         return self.__class__(self._annotations, percentile=self._percentile,
                               foreground_oversample_percentage=self._fg_oversample,
                               min_foreground_samples=self._min_fg_samples,
-                              max_foreground_samples=self._max_fg_samples,
-                              min_percent_coverage=self._min_coverage)
+                              min_percent_coverage=self._min_coverage,
+                              min_foreground_ratio=self._min_fg_ratio)
 
     @override
     def load_image(self, idx: int) -> torch.Tensor:
@@ -365,9 +364,23 @@ class RandomROIDataset(ROIDataset):
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._annotations.dataset()[idx]
+        background = self._annotations.background()
         force_fg = torch.rand(1).item() < self._fg_oversample
-        if force_fg:
-            roi = self._foreground_guided_random_roi(idx)
-        else:
-            roi = self._random_roi(idx)
-        return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
+
+        max_attempts = 10
+        for _ in range(max_attempts):
+            if force_fg:
+                roi = self._foreground_guided_random_roi(idx)
+            else:
+                roi = self._random_roi(idx)
+
+            cropped_label = crop(label.unsqueeze(0), roi).squeeze(0)
+
+            if not force_fg:
+                break
+
+            fg_ratio = (cropped_label != background).float().mean().item()
+            if fg_ratio >= self._min_fg_ratio:
+                break
+
+        return crop(image.unsqueeze(0), roi).squeeze(0), cropped_label
