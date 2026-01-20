@@ -272,115 +272,191 @@ class ROIDataset(SupervisedDataset[list[int]]):
 
 
 class RandomROIDataset(ROIDataset):
-    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95,
-                 foreground_oversample_percentage: float = .33, min_foreground_samples: int = 10000,
-                 min_percent_coverage: float = .01, min_foreground_ratio: float = .01) -> None:
+    def __init__(self, annotations: InspectionAnnotations, batch_size: int = 2, *,
+                 percentile: float = .95,
+                 foreground_oversample_percentage: float = .33,
+                 min_foreground_samples: int = 500,
+                 max_foreground_samples: int = 10000,
+                 min_percent_coverage: float = .01,
+                 ignore_label: int = 0) -> None:
         super().__init__(annotations, percentile=percentile)
+        self._batch_size: int = batch_size
         self._fg_oversample: float = foreground_oversample_percentage
         self._min_fg_samples: int = min_foreground_samples
+        self._max_fg_samples: int = max_foreground_samples
         self._min_coverage: float = min_percent_coverage
-        self._min_fg_ratio: float = min_foreground_ratio
+        self._ignore_label: int = ignore_label
         self._fg_locations_cache: dict[int, dict[int, tuple[tuple[int, ...], ...]] | None] = {}
+        self._batch_counter: int = 0
 
     def _get_foreground_locations(self, idx: int) -> dict[int, tuple[tuple[int, ...], ...]] | None:
+        """
+        Precompute and cache foreground voxel locations for each class.
+        Matches nnU-Net's class_locations from preprocessing.
+        """
         if idx not in self._fg_locations_cache:
             _, label = self._annotations.dataset()[idx]
             background = self._annotations.background()
             class_ids = [c for c in label.unique().tolist() if c != background]
+
             if len(class_ids) == 0:
                 self._fg_locations_cache[idx] = None
             else:
                 class_locations: dict[int, tuple[tuple[int, ...], ...]] = {}
                 for class_id in class_ids:
+                    # Get spatial coordinates (skip channel dimension at index 0)
                     indices = (label == class_id).nonzero()[:, 1:]
                     if len(indices) == 0:
                         continue
                     elif len(indices) <= self._min_fg_samples:
                         class_locations[class_id] = tuple(tuple(coord.tolist()) for coord in indices)
                     else:
-                        # nnUNet logic: target = max(min(min_samples, total), coverage_requirement)
-                        target_samples = min(self._min_fg_samples, len(indices))
-                        target_samples = max(target_samples, int(np.ceil(len(indices) * self._min_coverage)))
+                        # Subsample to save memory (like nnU-Net preprocessing)
+                        target_samples = min(
+                            self._max_fg_samples,
+                            max(self._min_fg_samples, int(np.ceil(len(indices) * self._min_coverage)))
+                        )
                         sampled_idx = torch.randperm(len(indices))[:target_samples]
                         sampled = indices[sampled_idx]
                         class_locations[class_id] = tuple(tuple(coord.tolist()) for coord in sampled)
                 self._fg_locations_cache[idx] = class_locations if class_locations else None
         return self._fg_locations_cache[idx]
 
-    def _random_roi(self, idx: int) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
-        annotation = self._annotations[idx]
-        roi_shape = self._annotations.roi_shape(percentile=self._percentile)
-        roi = []
-        for dim_size, patch_size in zip(annotation.shape, roi_shape):
-            left = patch_size // 2
-            right = patch_size - left
-            min_center = left
-            max_center = dim_size - right
-            center = torch.randint(min_center, max_center + 1, (1,)).item()
-            roi.append(center - left)
-            roi.append(center + right)
-        return tuple(roi)
+    def _get_bbox(self, annotation: InspectionAnnotation, roi_shape: Shape,
+                  force_fg: bool, class_locations: dict | None) -> tuple[list[int], list[int]]:
+        """
+        Get bbox bounds (can be negative or exceed image bounds).
+        Exactly matches nnU-Net's get_bbox logic from base_data_loader.py:65-140
+        """
+        data_shape = annotation.shape
+        dim = len(data_shape)
 
-    def _foreground_guided_random_roi(self, idx: int) -> tuple[int, int, int, int] | tuple[
-        int, int, int, int, int, int]:
-        annotation = self._annotations[idx]
-        roi_shape = self._annotations.roi_shape(percentile=self._percentile)
-        class_locations = self._get_foreground_locations(idx)
+        # Calculate padding needed if image is smaller than patch
+        need_to_pad = [0] * dim
+        for d in range(dim):
+            if need_to_pad[d] + data_shape[d] < roi_shape[d]:
+                need_to_pad[d] = roi_shape[d] - data_shape[d]
 
-        if class_locations is None or len(class_locations) == 0:
-            return self._random_roi(idx)
+        # Define sampling bounds (can be negative - nnU-Net line 80-81)
+        lbs = [- need_to_pad[i] // 2 for i in range(dim)]
+        ubs = [data_shape[i] + need_to_pad[i] // 2 + need_to_pad[i] % 2 - roi_shape[i]
+               for i in range(dim)]
 
-        class_ids = list(class_locations.keys())
-        selected_class = class_ids[torch.randint(0, len(class_ids), (1,)).item()]
-        locations = class_locations[selected_class]
-        fg_idx = torch.randint(0, len(locations), (1,)).item()
-        fg_position = locations[fg_idx]
+        # Random sampling vs foreground-guided sampling
+        if not force_fg:
+            # Random crop (nnU-Net line 86)
+            bbox_lbs = [np.random.randint(lbs[i], ubs[i] + 1) for i in range(dim)]
+        else:
+            # Foreground-guided sampling (nnU-Net line 96-136)
+            if class_locations is None or len(class_locations) == 0:
+                # No foreground, fall back to random (nnU-Net line 135-136)
+                bbox_lbs = [np.random.randint(lbs[i], ubs[i] + 1) for i in range(dim)]
+            else:
+                # Get eligible classes with locations (nnU-Net line 103)
+                eligible_classes = [c for c in class_locations.keys() if len(class_locations[c]) > 0]
 
-        roi = []
-        for fg_pos, dim_size, patch_size in zip(fg_position, annotation.shape, roi_shape):
-            left = patch_size // 2
-            right = patch_size - left
-            center = max(left, min(fg_pos, dim_size - right))
-            roi.append(center - left)
-            roi.append(center + right)
-        return tuple(roi)
+                if len(eligible_classes) == 0:
+                    bbox_lbs = [np.random.randint(lbs[i], ubs[i] + 1) for i in range(dim)]
+                else:
+                    # Randomly select a class (nnU-Net line 121-122)
+                    selected_class = eligible_classes[np.random.choice(len(eligible_classes))]
+                    locations = class_locations[selected_class]
+
+                    # Randomly select a voxel from that class (nnU-Net line 129)
+                    selected_voxel = locations[np.random.choice(len(locations))]
+
+                    # Center patch around selected voxel, clamp to bounds (nnU-Net line 133)
+                    bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2)
+                                for i in range(dim)]
+
+        # Calculate upper bounds (nnU-Net line 138)
+        bbox_ubs = [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
+        return bbox_lbs, bbox_ubs
+
+    def _crop_and_pad(self, data: torch.Tensor, bbox_lbs: list[int], bbox_ubs: list[int],
+                      pad_value: int | float = 0) -> torch.Tensor:
+        """
+        Crop to bbox (which may be negative/exceed bounds) then pad to target size.
+        Matches nnU-Net's workflow from data_loader_3d.py:35-51
+        """
+        shape = data.shape[1:]  # Skip channel dimension
+        dim = len(shape)
+
+        # Clip bbox to valid range (nnU-Net line 35-36)
+        valid_bbox_lbs = [max(0, bbox_lbs[i]) for i in range(dim)]
+        valid_bbox_ubs = [min(shape[i], bbox_ubs[i]) for i in range(dim)]
+
+        # Crop to valid region (nnU-Net line 42-43)
+        slices = tuple([slice(0, data.shape[0])] +
+                       [slice(valid_bbox_lbs[i], valid_bbox_ubs[i]) for i in range(dim)])
+        cropped = data[slices]
+
+        # Calculate padding needed (nnU-Net line 48)
+        padding = [(-min(0, bbox_lbs[i]), max(bbox_ubs[i] - shape[i], 0)) for i in range(dim)]
+
+        # Convert to torch.nn.functional.pad format (reversed order, flattened)
+        padding_torch = []
+        for left, right in reversed(padding):
+            padding_torch.extend([left, right])
+
+        # Pad with constant value (nnU-Net line 50-51)
+        padded = nn.functional.pad(cropped, padding_torch, mode='constant', value=pad_value)
+        return padded
+
+    def _should_oversample_foreground(self) -> bool:
+        """
+        Batch-based oversampling decision.
+        Matches nnU-Net's _oversample_last_XX_percent from base_data_loader.py:46-50
+        """
+        sample_idx = self._batch_counter % self._batch_size
+        return not sample_idx < round(self._batch_size * (1 - self._fg_oversample))
 
     @override
     def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
-        return self.__class__(self._annotations, percentile=self._percentile,
-                              foreground_oversample_percentage=self._fg_oversample,
-                              min_foreground_samples=self._min_fg_samples,
-                              min_percent_coverage=self._min_coverage,
-                              min_foreground_ratio=self._min_fg_ratio)
+        return self.__class__(
+            self._annotations,
+            batch_size=self._batch_size,
+            percentile=self._percentile,
+            foreground_oversample_percentage=self._fg_oversample,
+            min_foreground_samples=self._min_fg_samples,
+            max_foreground_samples=self._max_fg_samples,
+            min_percent_coverage=self._min_coverage,
+            ignore_label=self._ignore_label
+        )
 
     @override
     def load_image(self, idx: int) -> torch.Tensor:
-        raise NotImplementedError("RandomROIDataset does not support single image loading")
+        raise NotImplementedError("NnUNetStyleDataset does not support single image loading")
 
     @override
     def load_label(self, idx: int) -> torch.Tensor:
-        raise NotImplementedError("RandomROIDataset does not support single label loading")
+        raise NotImplementedError("NnUNetStyleDataset does not support single label loading")
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        """
+        Load and process a single sample following nnU-Net's pipeline.
+        Matches generate_train_batch from data_loader_3d.py:10-73
+        """
+        # Load original data
         image, label = self._annotations.dataset()[idx]
-        background = self._annotations.background()
-        force_fg = torch.rand(1).item() < self._fg_oversample
+        annotation = self._annotations[idx]
+        roi_shape = self._annotations.roi_shape(percentile=self._percentile)
 
-        max_attempts = 10
-        for _ in range(max_attempts):
-            if force_fg:
-                roi = self._foreground_guided_random_roi(idx)
-            else:
-                roi = self._random_roi(idx)
+        # Determine if this sample needs foreground (batch-based)
+        force_fg = self._should_oversample_foreground()
+        self._batch_counter += 1
 
-            cropped_label = crop(label.unsqueeze(0), roi).squeeze(0)
+        # Get foreground locations if needed
+        class_locations = self._get_foreground_locations(idx) if force_fg else None
 
-            if not force_fg:
-                break
+        # Get bbox (can be negative or exceed bounds)
+        bbox_lbs, bbox_ubs = self._get_bbox(annotation, roi_shape, force_fg, class_locations)
 
-            fg_ratio = (cropped_label != background).float().mean().item()
-            if fg_ratio >= self._min_fg_ratio:
-                break
+        # Crop and pad with appropriate values
+        # Image: pad with 0 (nnU-Net line 50)
+        cropped_image = self._crop_and_pad(image, bbox_lbs, bbox_ubs, pad_value=0)
+        # Segmentation: pad with ignore_label -1 (nnU-Net line 51)
+        cropped_label = self._crop_and_pad(label, bbox_lbs, bbox_ubs, pad_value=self._ignore_label)
 
-        return crop(image.unsqueeze(0), roi).squeeze(0), cropped_label
+        return cropped_image, cropped_label

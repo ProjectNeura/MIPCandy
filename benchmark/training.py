@@ -2,14 +2,13 @@ from os import removedirs
 from os.path import exists
 from typing import override
 
-from monai.transforms import Compose, Resized
+from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
 from benchmark.data import DataTest, FoldedDataTest
-from benchmark.transforms import training_transforms, validation_transforms
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
-from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    RandomROIDataset, PadTo, MONAITransform, load_inspection_annotations
+from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, PadTo, \
+    MONAITransform, load_inspection_annotations, RandomROIDataset
 
 
 class TrainingTest(DataTest):
@@ -39,12 +38,12 @@ class TrainingTest(DataTest):
     def set_up(self) -> None:
         self.set_up_datasets()
         train, val = self["train_dataset"], self["val_dataset"]
-        train.set_transform(JointTransform(transform=Compose([
-            train.transform().transform, training_transforms()
-        ])))
-        val.set_transform(JointTransform(transform=Compose([
-            val.transform().transform, validation_transforms()
-        ])))
+        # train.set_transform(JointTransform(transform=Compose([
+        #     train.transform().transform, training_transforms()
+        # ])))
+        # val.set_transform(JointTransform(transform=Compose([
+        #     val.transform().transform, validation_transforms()
+        # ])))
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False, pin_memory=True)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
