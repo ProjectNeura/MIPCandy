@@ -9,7 +9,7 @@ from benchmark.data import DataTest, FoldedDataTest
 from benchmark.transforms import training_transforms, validation_transforms
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    ROIDataset, PadTo, MONAITransform, load_inspection_annotations
+    RandomROIDataset, PadTo, MONAITransform, load_inspection_annotations
 
 
 class TrainingTest(DataTest):
@@ -31,7 +31,7 @@ class TrainingTest(DataTest):
             annotations = inspect(self["dataset"])
             annotations.save(path)
         annotations.set_roi_shape(self.resize)
-        dataset = ROIDataset(annotations)
+        dataset = RandomROIDataset(annotations)
         dataset.preload(f"{self.output_folder}/roiPreloaded")
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 
