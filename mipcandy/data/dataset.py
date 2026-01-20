@@ -175,7 +175,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def construct_new(self, images: D, labels: D) -> Self:
         raise NotImplementedError
 
-    def preload(self, output_folder: str | PathLike[str]) -> None:
+    def preload(self, output_folder: str | PathLike[str], *, do_transform: bool = False) -> None:
         if self._preloaded:
             return
         images_path = f"{output_folder}/images"
@@ -185,10 +185,12 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             makedirs(labels_path)
             nd = int(log10(len(self))) + 1
             for idx in range(len(self)):
-                image, label = self.load(idx)
+                image, label = self[idx] if do_transform else self.load(idx)
                 idx = str(idx).zfill(nd)
                 fast_save(image, f"{images_path}/{idx}.pt")
                 fast_save(label, f"{labels_path}/{idx}.pt")
+        if do_transform:
+            self._transform = None
         self._preloaded = output_folder
 
     def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
