@@ -1,5 +1,8 @@
+from os import makedirs
 from time import time
 from typing import override, Literal
+
+from rich.progress import Progress
 
 from benchmark.prototype import UnitTest
 from mipcandy import NNUNetDataset, do_sliding_window, visualize3d, revert_sliding_window, JointTransform, inspect, \
@@ -48,10 +51,18 @@ class RandomROIDatasetTest(DataTest):
     def execute(self) -> None:
         annotations = inspect(self["dataset"])
         dataset = RandomROIDataset(annotations)
-        print(len(dataset))
-        image, label = self["dataset"][0]
-        image_roi, label_roi = dataset[0]
-        visualize3d(image, title="image raw")
-        visualize3d(label, title="label raw", is_label=True)
-        visualize3d(image_roi, title="image roi")
-        visualize3d(label_roi, title="label roi", is_label=True)
+        o = f"{self.output_folder}/RandomROIPreviews"
+        makedirs(o, exist_ok=True)
+        makedirs(f"{o}/images", exist_ok=True)
+        makedirs(f"{o}/labels", exist_ok=True)
+        makedirs(f"{o}/labelROIs", exist_ok=True)
+        makedirs(f"{o}/labelROIs", exist_ok=True)
+        with Progress() as progress:
+            task = progress.add_task("Generating Previews...", total=len(dataset))
+            for idx, (image_roi, label_roi) in enumerate(dataset):
+                image, label = self["dataset"][idx]
+                visualize3d(image, title="image raw", screenshot_as=f"{o}/images/{idx}.png")
+                visualize3d(label, title="label raw", is_label=True, screenshot_as=f"{o}/labels/{idx}.png")
+                visualize3d(image_roi, title="image roi", screenshot_as=f"{o}/labelROIs/{idx}.png")
+                visualize3d(label_roi, title="label roi", is_label=True, screenshot_as=f"{o}/labelROIs/{idx}.png")
+                progress.update(task, advance=1)
