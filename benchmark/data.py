@@ -62,7 +62,7 @@ class RandomROIDatasetTest(DataTest):
             for idx, (image_roi, label_roi) in enumerate(dataset):
                 image, label = self["dataset"][idx]
                 visualize3d(image, title="image raw", screenshot_as=f"{o}/images/{idx}.png")
-                visualize3d(label, title="label raw", is_label=True, screenshot_as=f"{o}/labels/{idx}.png")
+                visualize3d(label.int(), title="label raw", is_label=True, screenshot_as=f"{o}/labels/{idx}.png")
                 visualize3d(image_roi, title="image roi", screenshot_as=f"{o}/labelROIs/{idx}.png")
-                visualize3d(label_roi, title="label roi", is_label=True, screenshot_as=f"{o}/labelROIs/{idx}.png")
+                visualize3d(label_roi.int(), title="label roi", is_label=True, screenshot_as=f"{o}/labelROIs/{idx}.png")
                 progress.update(task, advance=1)
