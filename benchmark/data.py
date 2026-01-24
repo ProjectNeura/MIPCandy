@@ -55,7 +55,7 @@ class RandomROIDatasetTest(DataTest):
         makedirs(o, exist_ok=True)
         makedirs(f"{o}/images", exist_ok=True)
         makedirs(f"{o}/labels", exist_ok=True)
-        makedirs(f"{o}/labelROIs", exist_ok=True)
+        makedirs(f"{o}/imageROIs", exist_ok=True)
         makedirs(f"{o}/labelROIs", exist_ok=True)
         with Progress() as progress:
             task = progress.add_task("Generating Previews...", total=len(dataset))
@@ -63,6 +63,6 @@ class RandomROIDatasetTest(DataTest):
                 image, label = self["dataset"][idx]
                 visualize3d(image, title="image raw", screenshot_as=f"{o}/images/{idx}.png")
                 visualize3d(label.int(), title="label raw", is_label=True, screenshot_as=f"{o}/labels/{idx}.png")
-                visualize3d(image_roi, title="image roi", screenshot_as=f"{o}/labelROIs/{idx}.png")
+                visualize3d(image_roi, title="image roi", screenshot_as=f"{o}/imageROIs/{idx}.png")
                 visualize3d(label_roi.int(), title="label roi", is_label=True, screenshot_as=f"{o}/labelROIs/{idx}.png")
                 progress.update(task, advance=1)
