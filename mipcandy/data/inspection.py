@@ -180,17 +180,20 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
                     raise ValueError(f"ROI shape {roi_shape} exceeds minimum image shape ({min(heights)}, {min(widths)})")
         self._roi_shape = roi_shape
 
-    def roi_shape(self, *, percentile: float = .95) -> Shape:
+    def roi_shape(self, *, clamp: bool = True, percentile: float = .95) -> Shape:
         if self._roi_shape:
             return self._roi_shape
         sfs = self.statistical_foreground_shape(percentile=percentile)
-        if len(sfs) == 2:
-            sfs = (None, *sfs)
-        depths, heights, widths = self.shapes()
-        roi_shape = (min(min(heights), sfs[1]), min(min(widths), sfs[2]))
-        if depths:
-            roi_shape = (min(min(depths), sfs[0]),) + roi_shape
-        self._roi_shape = roi_shape
+        if clamp:
+            if len(sfs) == 2:
+                sfs = (None, *sfs)
+            depths, heights, widths = self.shapes()
+            roi_shape = (min(min(heights), sfs[1]), min(min(widths), sfs[2]))
+            if depths:
+                roi_shape = (min(min(depths), sfs[0]),) + roi_shape
+            self._roi_shape = roi_shape
+        else:
+            self._roi_shape = sfs
         return self._roi_shape
 
     def roi(self, i: int, *, percentile: float = .95) -> tuple[int, int, int, int] | tuple[
