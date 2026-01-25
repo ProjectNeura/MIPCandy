@@ -38,7 +38,7 @@ def do_sliding_window(x: torch.Tensor, window_shape: Shape, *, overlap: float = 
         pad_before = pad_total // 2
         pad_after = pad_total - pad_before
         padding_values.extend([pad_before, pad_after])
-    x = nn.functional.pad(x, padding_values, mode='constant', value=0)
+    x = nn.functional.pad(x, padding_values, mode="constant", value=0)
     if ndim == 2:
         x = x.unfold(1, window_shape[0], stride[0]).unfold(2, window_shape[1], stride[1])
         c, n_h, n_w, win_h, win_w = x.shape
