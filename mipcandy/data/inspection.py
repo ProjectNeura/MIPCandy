@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict
 from json import dump, load
+from math import ceil
 from os import PathLike
 from random import randint, choice
 from typing import Sequence, override, Callable, Self, Any
@@ -305,13 +306,17 @@ def crop_and_pad(x: torch.Tensor, bbox_lbs: list[int], bbox_ubs: list[int], *,
 
 class RandomROIDataset(ROIDataset):
     def __init__(self, annotations: InspectionAnnotations, batch_size: int, *, oversample_rate: float = .33,
-                 clamp: bool = False, percentile: float = .5) -> None:
+                 clamp: bool = False, percentile: float = .5, min_factor: int = 16) -> None:
         super().__init__(annotations, clamp=clamp, percentile=percentile)
         sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
+        sfs = [ceil(s / min_factor) * min_factor for s in sfs]
         self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
             min(sfs[0], 256), min(sfs[1], 256), min(sfs[2], 256))
         self._batch_size: int = batch_size
         self._oversample_rate: float = oversample_rate
+
+    def roi_shape(self) -> Shape:
+        return self._roi_shape
 
     @override
     def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:

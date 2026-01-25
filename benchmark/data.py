@@ -50,7 +50,8 @@ class RandomROIDatasetTest(DataTest):
     @override
     def execute(self) -> None:
         annotations = inspect(self["dataset"])
-        dataset = RandomROIDataset(annotations)
+        dataset = RandomROIDataset(annotations, 2)
+        print(dataset.roi_shape())
         o = f"{self.output_folder}/RandomROIPreviews"
         makedirs(o, exist_ok=True)
         makedirs(f"{o}/images", exist_ok=True)
