@@ -349,9 +349,8 @@ class RandomROIDataset(ROIDataset):
             else:
                 selected_class = choice(annotation.class_ids)
                 locations = annotation.class_locations[selected_class]
-                selected_voxel = locations[np.random.choice(len(locations))]
-                bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2)
-                            for i in range(dim)]
+                selected_voxel = choice(locations)
+                bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
 
     def oversample_foreground(self, idx: int) -> bool:
