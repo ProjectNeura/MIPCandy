@@ -354,9 +354,14 @@ class RandomROIDataset(ROIDataset):
                 bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
 
+    # def oversample_foreground(self, idx: int) -> bool:
+    #     return idx % self._batch_size >= round(self._batch_size * (1 - self._oversample_rate))
+
+    # def oversample_foreground(self, _: int) -> bool:
+    #     return randint(0, 99) <= self._oversample_rate * 100
+
     def oversample_foreground(self, idx: int) -> bool:
-        sample_idx = idx % self._batch_size
-        return not sample_idx < round(self._batch_size * (1 - self._oversample_rate))
+        return idx >= round(len(self) * (1 - self._oversample_rate))
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
