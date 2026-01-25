@@ -320,7 +320,7 @@ class RandomROIDataset(ROIDataset):
 
     def random_roi(self, idx: int, force_foreground: bool) -> tuple[list[int], list[int]]:
         annotation = self._annotations[idx]
-        class_locations = annotation.class_bboxes
+        class_bboxes = annotation.class_bboxes
         roi_shape = self._roi_shape
         dim = len(annotation.shape)
         lbs = [0] * dim
@@ -328,13 +328,11 @@ class RandomROIDataset(ROIDataset):
         if not force_foreground:
             bbox_lbs = [randint(lbs[i], ubs[i] + 1) for i in range(dim)]
         else:
-            eligible_classes = list(class_locations.keys())
-            if len(eligible_classes) == 0:
+            if len(annotation.class_ids) == 0:
                 bbox_lbs = [randint(lbs[j], ubs[j] + 1) for j in range(dim)]
             else:
-                selected_class = choice(eligible_classes)
-                bbox = class_locations[selected_class]
-                print(bbox)
+                selected_class = choice(annotation.class_ids)
+                bbox = class_bboxes[selected_class]
                 bbox_lbs = [max(lbs[j], randint(bbox[j * 2], bbox[j * 2 + 1]) - roi_shape[j] // 2) for j in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
 
