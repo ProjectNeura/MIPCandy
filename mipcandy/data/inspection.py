@@ -31,6 +31,7 @@ class InspectionAnnotation(object):
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     class_ids: tuple[int, ...]
     class_bboxes: dict[int, tuple[int, int, int, int] | tuple[int, int, int, int, int, int]]
+    class_locations: dict[int, tuple[tuple[int, int] | tuple[int, int, int], ...]]
     spacing: Shape | None = None
 
     def foreground_shape(self) -> Shape:
@@ -241,7 +242,8 @@ def bbox_from_indices(indices: torch.Tensor) -> tuple[int, int, int, int]:
     return bbox
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
+def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int = 10000,
+            console: Console = Console()) -> InspectionAnnotations:
     r = []
     with torch.no_grad(), Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
@@ -251,11 +253,21 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console
             indices = (label != background).nonzero()
             foreground_bbox = bbox_from_indices(indices)
             class_ids = label.unique().tolist()
+            class_ids.remove(background)
             class_bboxes = {}
+            class_locations = {}
             for class_id in class_ids:
                 indices = (label == class_id).nonzero()
                 class_bboxes[class_id] = bbox_from_indices(indices)
-            r.append(InspectionAnnotation(tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_bboxes))
+                indices = indices[:, 1:]
+                if len(indices) > max_samples:
+                    target_samples = min(max_samples, len(indices))
+                    sampled_idx = torch.randperm(len(indices))[:target_samples]
+                    indices = indices[sampled_idx]
+                class_locations[class_id] = [tuple(coord.tolist()) for coord in indices]
+            r.append(InspectionAnnotation(
+                tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_bboxes, class_locations
+            ))
     return InspectionAnnotations(dataset, background, *r)
 
 
@@ -311,7 +323,7 @@ class RandomROIDataset(ROIDataset):
         sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
         sfs = [ceil(s / min_factor) * min_factor for s in sfs]
         self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
-            min(sfs[0], 256), min(sfs[1], 256), min(sfs[2], 256))
+            min(sfs[0], 128), min(sfs[1], 128), min(sfs[2], 128))
         self._batch_size: int = batch_size
         self._oversample_rate: float = oversample_rate
 
@@ -325,7 +337,6 @@ class RandomROIDataset(ROIDataset):
 
     def random_roi(self, idx: int, force_foreground: bool) -> tuple[list[int], list[int]]:
         annotation = self._annotations[idx]
-        class_bboxes = annotation.class_bboxes
         roi_shape = self._roi_shape
         dim = len(annotation.shape)
         lbs = [0] * dim
@@ -337,8 +348,10 @@ class RandomROIDataset(ROIDataset):
                 bbox_lbs = [randint(lbs[j], ubs[j] + 1) for j in range(dim)]
             else:
                 selected_class = choice(annotation.class_ids)
-                bbox = class_bboxes[selected_class]
-                bbox_lbs = [max(lbs[j], randint(bbox[j * 2], bbox[j * 2 + 1]) - roi_shape[j] // 2) for j in range(dim)]
+                locations = annotation.class_locations[selected_class]
+                selected_voxel = locations[np.random.choice(len(locations))]
+                bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2)
+                            for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
 
     def oversample_foreground(self, idx: int) -> bool:
