@@ -225,11 +225,21 @@ def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
     return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
 
 
+def _str_indices_to_int_indices(obj: dict[str, Any]) -> dict[int, Any]:
+    return {int(k): v for k, v in obj.items()}
+
+
+def parse_inspection_annotation(obj: dict[str, Any]) -> InspectionAnnotation:
+    obj["class_boxes"] = _str_indices_to_int_indices(obj["class_boxes"])
+    obj["class_locations"] = _str_indices_to_int_indices(obj["class_locations"])
+    return InspectionAnnotation(**obj)
+
+
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
     return InspectionAnnotations(dataset, obj["background"], *(
-        InspectionAnnotation(**row) for row in obj["annotations"]
+        parse_inspection_annotation(row) for row in obj["annotations"]
     ))
 
 
@@ -248,7 +258,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
     with torch.no_grad(), Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
         for idx in range(len(dataset)):
-            label = dataset.label(idx)
+            label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
             indices = (label != background).nonzero()
             foreground_bbox = bbox_from_indices(indices)
@@ -323,7 +333,7 @@ class RandomROIDataset(ROIDataset):
         sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
         sfs = [ceil(s / min_factor) * min_factor for s in sfs]
         self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
-            min(sfs[0], 128), min(sfs[1], 128), min(sfs[2], 128))
+            min(sfs[0], 160), min(sfs[1], 160), min(sfs[2], 160))
         self._batch_size: int = batch_size
         self._oversample_rate: float = oversample_rate
 

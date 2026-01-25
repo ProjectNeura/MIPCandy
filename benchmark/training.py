@@ -20,13 +20,12 @@ class TrainingTest(DataTest):
 
     def set_up_datasets(self) -> None:
         super().set_up()
-        path = f"{self.input_folder}/training_test.json"
+        path = f"{self.output_folder}/training_test.json"
         if exists(path):
             annotations = load_inspection_annotations(path, self["dataset"])
         else:
             annotations = inspect(self["dataset"])
             annotations.save(path)
-        annotations.set_roi_shape(self.resize)
         dataset = RandomROIDataset(annotations, 2)
         dataset.preload(f"{self.output_folder}/roiPreloaded")
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
