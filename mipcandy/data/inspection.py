@@ -339,13 +339,14 @@ class RandomROIDataset(ROIDataset):
         annotation = self._annotations[idx]
         roi_shape = self._roi_shape
         dim = len(annotation.shape)
-        lbs = [0] * dim
-        ubs = [annotation.shape[j] - roi_shape[j] for j in range(dim)]
+        need_to_pad = [max(0, roi_shape[i] - annotation.shape[i]) for i in range(dim)]
+        lbs = [-need_to_pad[i] // 2 for i in range(dim)]
+        ubs = [annotation.shape[i] + need_to_pad[i] // 2 + need_to_pad[i] % 2 - roi_shape[i] for i in range(dim)]
         if not force_foreground:
-            bbox_lbs = [randint(lbs[i], ubs[i] + 1) for i in range(dim)]
+            bbox_lbs = [randint(lbs[i], ubs[i]) for i in range(dim)]
         else:
             if len(annotation.class_ids) == 0:
-                bbox_lbs = [randint(lbs[j], ubs[j] + 1) for j in range(dim)]
+                bbox_lbs = [randint(lbs[j], ubs[j]) for j in range(dim)]
             else:
                 selected_class = choice(annotation.class_ids)
                 locations = annotation.class_locations[selected_class]
