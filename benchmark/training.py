@@ -2,13 +2,14 @@ from os import removedirs
 from os.path import exists
 from typing import override
 
-from monai.transforms import Resized
+from monai.transforms import Resized, Compose
 from torch.utils.data import DataLoader
 
 from benchmark.data import DataTest, FoldedDataTest
+from benchmark.transforms import training_transforms, validation_transforms
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
-from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, PadTo, \
-    MONAITransform, load_inspection_annotations, RandomROIDataset
+from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
+    load_inspection_annotations, RandomROIDataset
 
 
 class TrainingTest(DataTest):
@@ -19,10 +20,6 @@ class TrainingTest(DataTest):
 
     def set_up_datasets(self) -> None:
         super().set_up()
-        self["dataset"].device(device="cpu")
-        self["dataset"].set_transform(
-            JointTransform(transform=MONAITransform(PadTo(self.resize, batch=False)))
-        )
         path = f"{self.input_folder}/training_test.json"
         if exists(path):
             annotations = load_inspection_annotations(path, self["dataset"])
@@ -30,7 +27,7 @@ class TrainingTest(DataTest):
             annotations = inspect(self["dataset"])
             annotations.save(path)
         annotations.set_roi_shape(self.resize)
-        dataset = RandomROIDataset(annotations)
+        dataset = RandomROIDataset(annotations, 2)
         dataset.preload(f"{self.output_folder}/roiPreloaded")
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 
@@ -38,12 +35,12 @@ class TrainingTest(DataTest):
     def set_up(self) -> None:
         self.set_up_datasets()
         train, val = self["train_dataset"], self["val_dataset"]
-        # train.set_transform(JointTransform(transform=Compose([
-        #     train.transform().transform, training_transforms()
-        # ])))
-        # val.set_transform(JointTransform(transform=Compose([
-        #     val.transform().transform, validation_transforms()
-        # ])))
+        train.set_transform(JointTransform(transform=Compose([
+            train.transform().transform, training_transforms()
+        ])))
+        val.set_transform(JointTransform(transform=Compose([
+            val.transform().transform, validation_transforms()
+        ])))
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False, pin_memory=True)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
