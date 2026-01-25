@@ -2,14 +2,14 @@ from os import removedirs
 from os.path import exists
 from typing import override
 
-from monai.transforms import Resized, Compose
+from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
 from benchmark.data import DataTest, FoldedDataTest
 from benchmark.transforms import training_transforms, validation_transforms
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    load_inspection_annotations, RandomROIDataset
+    load_inspection_annotations, RandomROIDataset, Normalize
 
 
 class TrainingTest(DataTest):
@@ -34,14 +34,13 @@ class TrainingTest(DataTest):
     def set_up(self) -> None:
         self.set_up_datasets()
         train, val = self["train_dataset"], self["val_dataset"]
-        train.set_transform(JointTransform(transform=Compose([
-            train.transform().transform, training_transforms()
-        ])))
-        val.set_transform(JointTransform(transform=Compose([
-            val.transform().transform, validation_transforms()
-        ])))
+        train.set_transform(JointTransform(transform=training_transforms(),
+                                           image_only=Normalize(domain=(0, 1), strict=True)))
+        train.device(device="cpu")
+        val.set_transform(JointTransform(transform=validation_transforms(),
+                                         image_only=Normalize(domain=(0, 1), strict=True)))
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
-        val_dataloader = DataLoader(val, batch_size=1, shuffle=False, pin_memory=True)
+        val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
         trainer.num_classes = self.num_classes
         trainer.set_frontend(self.frontend)
@@ -71,7 +70,7 @@ class ResizeTrainingTest(FoldedDataTest):
         train_dataloader = DataLoader(self["train_dataset"], batch_size=2, shuffle=True)
         val_dataloader = DataLoader(self["val_dataset"], batch_size=1, shuffle=False)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
-                                       profiler=True, device=self.device)
+                               profiler=True, device=self.device)
         trainer.num_classes = self.num_classes
         trainer.set_frontend(self.frontend)
         self["trainer"] = trainer
@@ -103,7 +102,7 @@ class SlidingTrainingTest(TrainingTest, FoldedDataTest):
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True)
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
-                                       profiler=True, device=self.device)
+                               profiler=True, device=self.device)
         trainer.set_datasets(full_val, slided_val)
         trainer.num_classes = self.num_classes
         trainer.overlap = self.overlap

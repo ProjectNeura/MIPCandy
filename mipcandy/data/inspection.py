@@ -230,7 +230,7 @@ def _str_indices_to_int_indices(obj: dict[str, Any]) -> dict[int, Any]:
 
 
 def parse_inspection_annotation(obj: dict[str, Any]) -> InspectionAnnotation:
-    obj["class_boxes"] = _str_indices_to_int_indices(obj["class_boxes"])
+    obj["class_bboxes"] = _str_indices_to_int_indices(obj["class_bboxes"])
     obj["class_locations"] = _str_indices_to_int_indices(obj["class_locations"])
     return InspectionAnnotation(**obj)
 
@@ -261,6 +261,9 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
             indices = (label != background).nonzero()
+            if len(indices) == 0:
+                r.append(InspectionAnnotation(tuple(label.shape[1:]), (0, 0, 0, 0), (), {}, {}))
+                continue
             foreground_bbox = bbox_from_indices(indices)
             class_ids = label.unique().tolist()
             class_ids.remove(background)
