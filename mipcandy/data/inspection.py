@@ -293,8 +293,11 @@ class ROIDataset(SupervisedDataset[list[int]]):
         self._percentile: float = percentile
 
     @override
-    def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
-        return self.__class__(self._annotations, percentile=self._percentile)
+    def construct_new(self, images: list[int], labels: list[int]) -> Self:
+        new = self.__class__(self._annotations, percentile=self._percentile)
+        new._images = images
+        new._labels = labels
+        return new
 
     @override
     def load_image(self, idx: int) -> torch.Tensor:
@@ -344,9 +347,12 @@ class RandomROIDataset(ROIDataset):
         return self._roi_shape
 
     @override
-    def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
-        return self.__class__(self._annotations, self._batch_size, oversample_rate=self._oversample_rate,
-                              clamp=self._clamp, percentile=self._percentile)
+    def construct_new(self, images: list[int], labels: list[int]) -> Self:
+        new = self.__class__(self._annotations, self._batch_size, oversample_rate=self._oversample_rate,
+                             clamp=self._clamp, percentile=self._percentile)
+        new._images = images
+        new._labels = labels
+        return new
 
     def random_roi(self, idx: int, force_foreground: bool) -> tuple[list[int], list[int]]:
         annotation = self._annotations[idx]
