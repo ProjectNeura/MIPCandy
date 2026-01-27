@@ -61,18 +61,21 @@ def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Te
 
 
 def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1,
-                          include_background: bool = True) -> torch.Tensor:
+                          include_background: bool = True, batch: bool = True) -> torch.Tensor:
     _args_check(output, label)
-    axes = tuple(range(2, output.ndim))
-    intersection = (output * label).sum(dim=axes)
-    volume_sum = output.sum(dim=axes) + label.sum(dim=axes)
-    dice = (2 * intersection + smooth) / (volume_sum + smooth)
     if not include_background:
-        dice = dice[:, 1:]
-        volume_sum = volume_sum[:, 1:]
-    mask = volume_sum > smooth
-    if mask.any():
-        return dice[mask].mean()
+        output = output[:, 1:]
+        label = label[:, 1:]
+    axes = tuple(range(2, output.ndim))
+    with torch.no_grad():
+        label_sum = label.sum(axes)
+    intersection = (output * label).sum(axes)
+    output_sum = output.sum(axes) + label.sum(dim=axes)
+    if batch:
+        intersection = intersection.sum(0)
+        output_sum = output_sum.sum(0)
+        label_sum = label_sum.sum(0)
+    dice = (2 * intersection + smooth) / (torch.clip(label_sum + output_sum + smooth, 1e-8))
     return dice.mean()
 
 
