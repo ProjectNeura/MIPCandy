@@ -51,7 +51,7 @@ class DiceCELossWithLogits(nn.Module):
         metrics = {"soft dice": soft_dice.item(), "ce loss": ce.item()}
         c = self.lambda_ce * ce - self.lambda_soft_dice * soft_dice
         if self.validation_mode:
-            for i in range(self.num_classes):
+            for i in range(0 if self.include_background else 1, self.num_classes):
                 metrics[f"dice {i}"] = dice_similarity_coefficient_binary(masks == i, labels == i).item()
         return c, metrics
 
