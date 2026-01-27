@@ -35,7 +35,7 @@ class DiceCELossWithLogits(nn.Module):
         self.include_background: bool = include_background
         self.validation_mode: bool = False
 
-    def forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+    def _forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         if self.num_classes != 1 and labels.shape[1] == 1:
             d = labels.ndim - 2
             if d not in (1, 2, 3):
@@ -54,6 +54,13 @@ class DiceCELossWithLogits(nn.Module):
             for i in range(0 if self.include_background else 1, self.num_classes):
                 metrics[f"dice {i}"] = dice_similarity_coefficient_binary(masks == i, labels == i).item()
         return c, metrics
+
+    def forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        if not self.validation_mode:
+            return self._forward(masks, labels)
+        with torch.no_grad():
+            return self._forward(masks, labels)
+
 
 
 class DiceBCELossWithLogits(nn.Module):
