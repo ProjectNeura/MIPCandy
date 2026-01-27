@@ -40,12 +40,12 @@ class DiceCELossWithLogits(nn.Module):
             if d not in (1, 2, 3):
                 raise ValueError(f"Expected labels to be 1D, 2D, or 3D, got {d} spatial dimensions")
             with torch.no_grad():
-                logit_labels = convert_ids_to_logits(labels.int(), d, self.num_classes)
+                labels = convert_ids_to_logits(labels.int(), d, self.num_classes)
         else:
-            logit_labels = labels.float()
-        ce = nn.functional.cross_entropy(masks, labels[:, 0])
-        masks = masks.sigmoid()
-        soft_dice = soft_dice_coefficient(masks, logit_labels, smooth=self.smooth,
+            labels = labels.float()
+        ce = nn.functional.cross_entropy(masks, labels)
+        masks = masks.softmax(1)
+        soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth,
                                           include_background=self.include_background)
         c = self.lambda_ce * ce - self.lambda_soft_dice * soft_dice
         return c, {"soft dice": soft_dice.item(), "ce loss": ce.item()}
@@ -72,5 +72,5 @@ class DiceBCELossWithLogits(nn.Module):
         bce = nn.functional.binary_cross_entropy_with_logits(masks, labels)
         masks = masks.sigmoid()
         soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth, include_background=self.include_background)
-        c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - soft_dice)
+        c = self.lambda_bce * bce - self.lambda_soft_dice * soft_dice
         return c, {"soft dice": soft_dice.item(), "bce loss": bce.item()}
