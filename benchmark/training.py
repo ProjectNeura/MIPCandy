@@ -6,7 +6,6 @@ from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
 from benchmark.data import DataTest, FoldedDataTest
-from benchmark.transforms import training_transforms, validation_transforms
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
     load_inspection_annotations, RandomROIDataset, Normalize
@@ -26,19 +25,17 @@ class TrainingTest(DataTest):
         else:
             annotations = inspect(self["dataset"])
             annotations.save(path)
-        dataset = RandomROIDataset(annotations, 2)
-        dataset.preload(f"{self.output_folder}/roiPreloaded")
+        dataset = RandomROIDataset(annotations, 2, oversample_rate=0.66)  # Increase to 66% foreground
+        # dataset.preload(f"{self.output_folder}/roiPreloaded")
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 
     @override
     def set_up(self) -> None:
         self.set_up_datasets()
         train, val = self["train_dataset"], self["val_dataset"]
-        train.set_transform(JointTransform(transform=training_transforms(),
-                                           image_only=Normalize(domain=(0, 1), strict=True)))
+        train.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
         train.device(device="cpu")
-        val.set_transform(JointTransform(transform=validation_transforms(),
-                                         image_only=Normalize(domain=(0, 1), strict=True)))
+        val.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
@@ -49,7 +46,8 @@ class TrainingTest(DataTest):
     @override
     def execute(self) -> None:
         if not self._continue:
-            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}")
+            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}",
+                                         val_score_prediction=False)
         self["trainer"].recover_from(self._continue)
         return self["trainer"].continue_training(self.num_epochs)
 
