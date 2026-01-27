@@ -70,7 +70,7 @@ def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: 
     with torch.no_grad():
         label_sum = label.sum(axes)
     intersection = (output * label).sum(axes)
-    output_sum = output.sum(axes) + label.sum(dim=axes)
+    output_sum = output.sum(axes)
     if batch:
         intersection = intersection.sum(0)
         output_sum = output_sum.sum(0)
