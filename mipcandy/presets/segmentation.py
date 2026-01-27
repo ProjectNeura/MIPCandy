@@ -68,7 +68,11 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         float, dict[str, float], torch.Tensor]:
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
+        if hasattr(toolbox.criterion, "validation_mode"):
+            toolbox.criterion.validation_mode = True
         loss, metrics = toolbox.criterion(mask, label)
+        if hasattr(toolbox.criterion, "validation_mode"):
+            toolbox.criterion.validation_mode = False
         return -loss.item(), metrics, mask.squeeze(0)
 
 

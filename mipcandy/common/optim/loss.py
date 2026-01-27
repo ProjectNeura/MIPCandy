@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from mipcandy.data import convert_ids_to_logits
-from mipcandy.metrics import do_reduction, soft_dice_coefficient
+from mipcandy.metrics import do_reduction, soft_dice_coefficient, dice_similarity_coefficient_binary
 
 
 class FocalBCEWithLogits(nn.Module):
@@ -33,6 +33,7 @@ class DiceCELossWithLogits(nn.Module):
         self.lambda_soft_dice: float = lambda_soft_dice
         self.smooth: float = smooth
         self.include_background: bool = include_background
+        self.validation_mode: bool = False
 
     def forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         if self.num_classes != 1 and labels.shape[1] == 1:
@@ -47,8 +48,12 @@ class DiceCELossWithLogits(nn.Module):
         masks = masks.softmax(1)
         soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth,
                                           include_background=self.include_background)
+        metrics = {"soft dice": soft_dice.item(), "ce loss": ce.item()}
         c = self.lambda_ce * ce - self.lambda_soft_dice * soft_dice
-        return c, {"soft dice": soft_dice.item(), "ce loss": ce.item()}
+        if self.validation_mode:
+            for i in range(self.num_classes):
+                metrics[f"dice {i}"] = dice_similarity_coefficient_binary(masks == i, labels == i).item()
+        return c, metrics
 
 
 class DiceBCELossWithLogits(nn.Module):
