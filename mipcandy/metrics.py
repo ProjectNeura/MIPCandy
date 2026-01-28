@@ -61,11 +61,8 @@ def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Te
 
 
 def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1,
-                          include_background: bool = True, batch: bool = True) -> torch.Tensor:
+                          batch: bool = True) -> torch.Tensor:
     _args_check(output, label)
-    if not include_background:
-        output = output[:, 1:]
-        label = label[:, 1:]
     axes = tuple(range(2, output.ndim))
     with torch.no_grad():
         label_sum = label.sum(axes)
