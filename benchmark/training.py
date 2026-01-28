@@ -25,7 +25,7 @@ class TrainingTest(DataTest):
         else:
             annotations = inspect(self["dataset"])
             annotations.save(path)
-        dataset = RandomROIDataset(annotations, 2, oversample_rate=0.66)  # Increase to 66% foreground
+        dataset = RandomROIDataset(annotations, 2)
         # dataset.preload(f"{self.output_folder}/roiPreloaded")
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 
@@ -46,7 +46,7 @@ class TrainingTest(DataTest):
     @override
     def execute(self) -> None:
         if not self._continue:
-            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}",
+            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}", compile_model=False,
                                          val_score_prediction=False)
         self["trainer"].recover_from(self._continue)
         return self["trainer"].continue_training(self.num_epochs)
