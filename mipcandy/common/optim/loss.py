@@ -37,8 +37,7 @@ class _Loss(nn.Module):
             c, metrics = self._forward(masks, labels)
             masks = convert_logits_to_ids(masks)
             for i in range(0 if self.include_background else 1, self.num_classes):
-                metrics[f"dice {i}"] = dice_similarity_coefficient_binary(masks == i, labels == i,
-                                                                          if_empty=float("nan")).item()
+                metrics[f"dice {i}"] = dice_similarity_coefficient_binary(masks == i, labels == i).item()
             return c, metrics
 
 
