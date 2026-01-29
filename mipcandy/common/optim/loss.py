@@ -36,8 +36,12 @@ class _Loss(nn.Module):
         with torch.no_grad():
             c, metrics = self._forward(masks, labels)
             masks = convert_logits_to_ids(masks)
+            dice = 0
             for i in range(0 if self.include_background else 1, self.num_classes):
-                metrics[f"dice {i}"] = dice_similarity_coefficient_binary(masks == i, labels == i).item()
+                class_dice = dice_similarity_coefficient_binary(masks == i, labels == i).item()
+                dice += class_dice
+                metrics[f"dice {i}"] = class_dice
+            metrics["dice"] = dice / (self.num_classes - (0 if self.include_background else 1))
             return c, metrics
 
 
@@ -73,7 +77,7 @@ class DiceCELossWithLogits(_SegmentationLoss):
         masks = masks.softmax(1)
         soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth)
         metrics = {"soft dice": soft_dice.item(), "ce loss": ce.item()}
-        c = self.lambda_ce * ce - self.lambda_soft_dice * soft_dice
+        c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - soft_dice)
         return c, metrics
 
 
@@ -94,5 +98,5 @@ class DiceBCELossWithLogits(_SegmentationLoss):
         masks.sigmoid_()
         soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth)
         metrics = {"soft dice": soft_dice.item(), "bce loss": bce.item()}
-        c = self.lambda_bce * bce - self.lambda_soft_dice * soft_dice
+        c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - soft_dice)
         return c, metrics
