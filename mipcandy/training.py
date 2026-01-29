@@ -304,8 +304,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                      quality: float = .75) -> None:
         ...
 
-    def show_metrics(self, epoch: int, metrics: dict[str, list[float]], prefix: str, *,
-                     epochwise: bool = True, lookup_prefix: str = "") -> None:
+    def show_metrics(self, epoch: int, metrics: dict[str, list[float]], prefix: str, *, epochwise: bool = True,
+                     lookup_prefix: str = "", global_previous_index: int = -2) -> None:
         prefix = prefix.capitalize()
         table = Table(title=f"Epoch {epoch} {prefix}")
         table.add_column("Metric")
@@ -318,7 +318,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 mean = sum(values) / len(values)
                 value = f"{mean:.4f}"
                 m = f"{lookup_prefix}{metric}"
-                diff = f"{mean - self._metrics[m][-1]:+.4f}" if m in self._metrics else "N/A"
+                diff = f"{mean - self._metrics[m][global_previous_index]:+.4f}" if m in self._metrics else "N/A"
             else:
                 value = f"{values[-1]:.4f}"
                 diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
