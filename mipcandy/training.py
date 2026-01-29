@@ -109,11 +109,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
                      ema: bool) -> TrainerToolbox:
-        checkpoint = self.load_checkpoint(f"{self.experiment_folder()}/checkpoint_latest.pth")
-        if compile_model:
-            checkpoint = {k.replace("_orig_mod.", ""): v for k, v in checkpoint.items()}
         toolbox = self._build_toolbox(num_epochs, example_shape, compile_model, ema, model=self.load_model(
-            example_shape, compile_model, checkpoint=checkpoint
+            example_shape, compile_model, path=f"{self.experiment_folder()}/checkpoint_latest.pth"
         ))
         state_dicts = torch.load(f"{self.experiment_folder()}/state_dicts.pth")
         toolbox.optimizer.load_state_dict(state_dicts["optimizer"])
@@ -356,7 +353,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
         if compile_model:
-            criterion = torch.compile(criterion)
+            criterion = self.compile_model(criterion)
         return TrainerToolbox(model, optimizer, scheduler, criterion, self.build_ema(model) if ema else None)
 
     def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
@@ -461,7 +458,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 lr = toolbox.scheduler.get_last_lr()[0]
                 self.record("learning rate", lr)
                 self.show_metrics(epoch, metrics, "training")
-                self.save_checkpoint(toolbox.model.state_dict(), checkpoint_path("latest"))
+                self.save_model(toolbox.model, checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
                     self.log(f"Epoch {epoch} checkpoint saved")
