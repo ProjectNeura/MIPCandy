@@ -3,13 +3,12 @@ from typing import override
 from monai.networks.nets import DynUNet
 from torch import nn
 
-from mipcandy import SegmentationTrainer, SlidingTrainer, AmbiguousShape, DiceCELossWithLogits
+from mipcandy import SegmentationTrainer, SlidingTrainer, AmbiguousShape
 
 
 class UNetTrainer(SegmentationTrainer):
-    @override
-    def build_criterion(self) -> nn.Module:
-        return DiceCELossWithLogits(self.num_classes, include_background=False)
+    num_classes = 5
+    include_background: bool = False
 
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:

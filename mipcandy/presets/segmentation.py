@@ -5,7 +5,7 @@ import torch
 from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
 
-from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits
+from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits, DiceCELossWithLogits
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids, SupervisedDataset, \
     revert_sliding_window, SupervisedSWDataset, fast_save
 from mipcandy.training import Trainer, TrainerToolbox, try_append_all
@@ -45,7 +45,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
     @override
     def build_criterion(self) -> nn.Module:
-        return DiceBCELossWithLogits(self.num_classes, include_background=self.include_background)
+        if self.num_classes < 3:
+            return DiceBCELossWithLogits(include_background=self.include_background)
+        return DiceCELossWithLogits(self.num_classes, include_background=self.include_background)
 
     @override
     def build_optimizer(self, params: Params) -> optim.Optimizer:
@@ -73,6 +75,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         loss, metrics = toolbox.criterion(mask, label)
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = False
+        self.log(f"Metrics for case {idx}: {metrics}")
         return -loss.item(), metrics, mask.squeeze(0)
 
 
