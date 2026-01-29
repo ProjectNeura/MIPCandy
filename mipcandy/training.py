@@ -321,7 +321,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 value = f"{mean:.4f}"
                 m = f"{lookup_prefix}{metric}"
                 diff = f"{mean - self._metrics[m][global_previous_index]:+.4f}" if m in self._metrics and len(
-                    self._metrics[m]) >= global_previous_index else "N/A"
+                    self._metrics[m]) >= -global_previous_index else "N/A"
             else:
                 value = f"{values[-1]:.4f}"
                 diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
