@@ -45,7 +45,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
 
     @override
     def build_criterion(self) -> nn.Module:
-        if self.num_classes < 3:
+        if self.num_classes < 2:
             return DiceBCELossWithLogits(include_background=self.include_background)
         return DiceCELossWithLogits(self.num_classes, include_background=self.include_background)
 
