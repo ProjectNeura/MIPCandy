@@ -355,8 +355,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         optimizer = self.build_optimizer(model.parameters())
         scheduler = self.build_scheduler(optimizer, num_epochs)
         criterion = self.build_criterion().to(self._device)
-        if compile_model:
-            criterion = self.compile_model(criterion)
         return TrainerToolbox(model, optimizer, scheduler, criterion, self.build_ema(model) if ema else None)
 
     def build_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,

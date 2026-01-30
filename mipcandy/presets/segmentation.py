@@ -63,6 +63,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         masks = toolbox.model(images)
         loss, metrics = toolbox.criterion(masks, labels)
         loss.backward()
+        nn.utils.clip_grad_norm_(toolbox.model.parameters(), 12)
         return loss.item(), metrics
 
     @override
