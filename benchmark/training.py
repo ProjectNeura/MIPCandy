@@ -40,7 +40,6 @@ class TrainingTest(DataTest):
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
         trainer.num_classes = self.num_classes
-        trainer.debug_epoch = 80
         trainer.set_frontend(self.frontend)
         self["trainer"] = trainer
 
