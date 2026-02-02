@@ -285,14 +285,15 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
 
 
 class SimpleDataset(PathBasedUnsupervisedDataset):
-    def __init__(self, folder: str | PathLike[str], *, transform: Transform | None = None,
+    def __init__(self, folder: str | PathLike[str], is_label: bool, *, transform: Transform | None = None,
                  device: Device = "cpu") -> None:
         super().__init__(sorted(listdir(folder)), transform=transform, device=device)
         self._folder: str = folder
+        self._is_label: bool = is_label
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return self.do_load(f"{self._folder}/{self._images[idx]}", device=self._device)
+        return self.do_load(f"{self._folder}/{self._images[idx]}", is_label=self._is_label, device=self._device)
 
 
 class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta):
