@@ -1,6 +1,7 @@
 from abc import ABCMeta
-from typing import override, Callable
+from typing import override, Callable, Sequence, Any
 
+import numpy as np
 import torch
 from rich.progress import Progress, SpinnerColumn
 from torch import nn, optim
@@ -12,9 +13,49 @@ from mipcandy.training import Trainer, TrainerToolbox, try_append_all
 from mipcandy.types import Params, Shape
 
 
+class DeepSupervisionWrapper(nn.Module):
+    def __init__(self, loss: nn.Module, *, weight_factors: Sequence[float] | None = None) -> None:
+        super().__init__()
+        if weight_factors and all(x == 0 for x in weight_factors):
+            raise ValueError("At least one weight factor should be nonzero")
+        self.weight_factors: tuple[float, ...] = tuple(weight_factors)
+        self.loss: nn.Module = loss
+
+    @override
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name == "validation_mode" and hasattr(self.loss, "validation_mode"):
+            self.loss.validation_mode = value
+        super().__setattr__(name, value)
+
+    def forward(self, outputs: Sequence[torch.Tensor], targets: Sequence[torch.Tensor]) -> tuple[
+        torch.Tensor, dict[str, float]]:
+        if not self.weight_factors:
+            weights = (1.0,) * len(outputs)
+        else:
+            weights = self.weight_factors
+        total_loss = torch.zeros(1)
+        combined_metrics = {}
+        for i, (output, target) in enumerate(zip(outputs, targets)):
+            if weights[i] == 0:
+                continue
+            loss, metrics = self.loss(output, target)
+            total_loss += weights[i] * loss
+            for key, value in metrics.items():
+                metric_key = f"{key}_ds{i}" if len(outputs) > 1 else key
+                combined_metrics[metric_key] = value
+        if combined_metrics:
+            main_loss_key = next(iter(combined_metrics.keys())).replace("_ds0", "")
+            if f"{main_loss_key}_ds0" in combined_metrics:
+                combined_metrics[main_loss_key] = combined_metrics[f"{main_loss_key}_ds0"]
+        return total_loss, combined_metrics
+
+
 class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     num_classes: int = 1
     include_background: bool = True
+    deep_supervision: bool = False
+    deep_supervision_scales: Sequence[float] | None = None
+    deep_supervision_weights: Sequence[float] | None = None
 
     def _save_preview(self, x: torch.Tensor, title: str, quality: float, *, is_label: bool = False) -> None:
         path = f"{self.experiment_folder()}/{title} (preview).png"
@@ -46,8 +87,17 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def build_criterion(self) -> nn.Module:
         if self.num_classes < 2:
-            return DiceBCELossWithLogits(include_background=self.include_background)
-        return DiceCELossWithLogits(self.num_classes, include_background=self.include_background)
+            loss = DiceBCELossWithLogits(include_background=self.include_background)
+        else:
+            loss = DiceCELossWithLogits(self.num_classes, include_background=self.include_background)
+        if self.deep_supervision:
+            if not self.deep_supervision_weights and self.deep_supervision_scales:
+                weights = np.array([1 / (2 ** i) for i in range(len(self.deep_supervision_scales))])
+                weights = weights / weights.sum()
+                self.deep_supervision_weights = tuple(weights.tolist())
+            loss = DeepSupervisionWrapper(loss, weight_factors=self.deep_supervision_weights)
+            self.log(f"Deep supervision enabled with weights: {self.deep_supervision_weights}")
+        return loss
 
     @override
     def build_optimizer(self, params: Params) -> optim.Optimizer:
@@ -60,24 +110,59 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
-        masks = toolbox.model(images)
-        loss, metrics = toolbox.criterion(masks, labels)
+        outputs = toolbox.model(images)
+        if self.deep_supervision and outputs.ndim == labels.ndim + 1:
+            num_outputs = outputs.shape[1]
+            masks_list = [outputs[:, i] for i in range(num_outputs)]
+            targets = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in masks_list])
+            loss, metrics = toolbox.criterion(masks_list, targets)
+        elif self.deep_supervision and isinstance(outputs, (list, tuple)):
+            targets = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in outputs])
+            loss, metrics = toolbox.criterion(outputs, targets)
+        else:
+            loss, metrics = toolbox.criterion(outputs, labels)
         loss.backward()
         nn.utils.clip_grad_norm_(toolbox.model.parameters(), 12)
         return loss.item(), metrics
+
+    @staticmethod
+    def prepare_deep_supervision_targets(labels: torch.Tensor, output_shapes: list[tuple[int, ...]]) -> list[
+        torch.Tensor]:
+        targets = []
+        for shape in output_shapes:
+            if labels.shape[2:] == shape:
+                targets.append(labels)
+            else:
+                downsampled = nn.functional.interpolate(labels.float(), shape,
+                                                        mode="nearest-exact" if labels.ndim == 4 else "nearest")
+                targets.append(downsampled if labels.dtype == torch.float32 else downsampled.to(labels.dtype))
+        return targets
 
     @override
     def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
         image, label = image.unsqueeze(0), label.unsqueeze(0)
-        mask = (toolbox.ema if toolbox.ema else toolbox.model)(image)
+        output = (toolbox.ema if toolbox.ema else toolbox.model)(image)
+        # (B, N, C, H, W, D) with the highest resolution is at index 0
+        if self.deep_supervision and output.ndim == label.ndim + 1:
+            mask_for_loss = output[:, 0]
+            mask_output = output[:, 0]
+        elif self.deep_supervision and isinstance(output, (list, tuple)):
+            mask_for_loss = output[0]
+            mask_output = output[0]
+        else:
+            mask_for_loss = output
+            mask_output = output
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = True
-        loss, metrics = toolbox.criterion(mask, label)
+        if self.deep_supervision and isinstance(toolbox.criterion, DeepSupervisionWrapper):
+            loss, metrics = toolbox.criterion([mask_for_loss], [label])
+        else:
+            loss, metrics = toolbox.criterion(mask_for_loss, label)
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = False
         self.log(f"Metrics for case {idx}: {metrics}")
-        return -loss.item(), metrics, mask.squeeze(0)
+        return -loss.item(), metrics, mask_output.squeeze(0)
 
 
 class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
@@ -159,6 +244,16 @@ class SlidingTrainer(SegmentationTrainer, metaclass=ABCMeta):
         for i in range(0, num_windows, self.window_batch_size):
             end = min(i + self.window_batch_size, num_windows)
             outputs = model(images.case(idx, part=slice(i, end)).to(self._device))
+
+            # For deep supervision, only use the highest resolution output
+            # DynUNet stacks as (B, N, C, H, W, D), extract first output at dim 1
+            if self.deep_supervision and outputs.ndim == 6:  # 6D tensor for 3D images with deep supervision
+                outputs = outputs[:, 0]  # Extract (B, C, H, W, D)
+            elif self.deep_supervision and outputs.ndim == 5:  # 5D tensor for 2D images with deep supervision
+                outputs = outputs[:, 0]  # Extract (B, C, H, W)
+            elif self.deep_supervision and isinstance(outputs, (list, tuple)):
+                outputs = outputs[0]
+
             if canvas is None:
                 canvas = torch.empty((num_windows, *outputs.shape[1:]), dtype=outputs.dtype, device=self._device)
             canvas[i:end] = outputs
