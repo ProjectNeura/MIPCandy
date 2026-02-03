@@ -33,7 +33,7 @@ class DeepSupervisionWrapper(nn.Module):
             weights = (1.0,) * len(outputs)
         else:
             weights = self.weight_factors
-        total_loss = torch.zeros(1)
+        total_loss = torch.tensor(0, device=outputs[0].device, dtype=outputs[0].dtype)
         combined_metrics = {}
         for i, (output, target) in enumerate(zip(outputs, targets)):
             if weights[i] == 0:
