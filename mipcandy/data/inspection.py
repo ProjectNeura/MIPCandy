@@ -365,6 +365,7 @@ class RandomROIDataset(ROIDataset):
                              clamp=self._clamp, percentile=self._percentile)
         new._images = images
         new._labels = labels
+        new._roi_shape = self._roi_shape
         return new
 
     def random_roi(self, idx: int, force_foreground: bool) -> tuple[list[int], list[int]]:
