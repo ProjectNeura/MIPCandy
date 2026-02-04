@@ -2,8 +2,8 @@ from dataclasses import dataclass, asdict
 from json import dump, load
 from math import ceil
 from os import PathLike
-from random import randint, choice, choices
-from typing import Sequence, override, Callable, Self, Any
+from random import randint, choice
+from typing import Sequence, override, Callable, Self, Any, Literal
 
 import numpy as np
 import torch
@@ -240,11 +240,11 @@ def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDa
     ))
 
 
-def bbox_from_indices(indices: torch.Tensor) -> tuple[int, int, int, int]:
+def bbox_from_indices(indices: torch.Tensor, num_dim: Literal[2, 3]) -> tuple[int, int, int, int]:
     mins = indices.min(dim=0)[0].tolist()
     maxs = indices.max(dim=0)[0].tolist()
     bbox = (mins[1], maxs[1] + 1, mins[2], maxs[2] + 1)
-    if indices.ndim > 3:
+    if num_dim == 3:
         bbox += (mins[3], maxs[3] + 1)
     return bbox
 
@@ -257,11 +257,15 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
         for idx in range(len(dataset)):
             label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
+            ndim = label.ndim - 1
             indices = (label != background).nonzero()
             if len(indices) == 0:
                 r.append(InspectionAnnotation(tuple(label.shape[1:]), (0, 0, 0, 0), (), {}, {}))
+                r.append(InspectionAnnotation(
+                    tuple(label.shape[1:]), (0, 0, 0, 0) if ndim == 2 else (0, 0, 0, 0, 0, 0), (), {}, {}, {})
+                )
                 continue
-            foreground_bbox = bbox_from_indices(indices)
+            foreground_bbox = bbox_from_indices(indices, ndim)
             class_ids = label.unique().tolist()
             if background in class_ids:
                 class_ids.remove(background)
@@ -271,7 +275,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             for class_id in class_ids:
                 indices = (label == class_id).nonzero()
                 class_counts[class_id] = indices.sum().item()
-                class_bboxes[class_id] = bbox_from_indices(indices)
+                class_bboxes[class_id] = bbox_from_indices(indices, ndim)
                 indices = indices[:, 1:]
                 if len(indices) > max_samples:
                     target_samples = min(max_samples, len(indices))
