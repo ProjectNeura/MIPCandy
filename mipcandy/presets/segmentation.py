@@ -112,8 +112,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         str, float]]:
         outputs = toolbox.model(images)
         if self.deep_supervision and outputs.ndim == labels.ndim + 1:
-            num_outputs = outputs.shape[1]
-            masks_list = [outputs[:, i] for i in range(num_outputs)]
+            masks_list = list(torch.unbind(outputs, dim=1))
             targets = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in masks_list])
             loss, metrics = toolbox.criterion(masks_list, targets)
         elif self.deep_supervision and isinstance(outputs, (list, tuple)):
