@@ -260,7 +260,6 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             ndim = label.ndim - 1
             indices = (label != background).nonzero()
             if len(indices) == 0:
-                r.append(InspectionAnnotation(tuple(label.shape[1:]), (0, 0, 0, 0), (), {}, {}))
                 r.append(InspectionAnnotation(
                     tuple(label.shape[1:]), (0, 0, 0, 0) if ndim == 2 else (0, 0, 0, 0, 0, 0), (), {}, {}, {})
                 )
@@ -386,8 +385,7 @@ class RandomROIDataset(ROIDataset):
                 bbox_lbs = [randint(lbs[j], ubs[j]) for j in range(dim)]
             else:
                 classes = list(annotation.class_locations.keys())
-                weights = [1 / len(annotation.class_locations[c]) for c in classes]
-                selected_class = choices(classes, weights=weights, k=1)[0]
+                selected_class = choice(classes)
                 selected_voxel = choice(annotation.class_locations[selected_class])
                 bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
