@@ -144,5 +144,4 @@ class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
         return self.compile_model(model) if compile_model else model
 
     def save_model(self, model: nn.Module, path: str | PathLike[str]) -> None:
-        model.compile()
         self.save_checkpoint(model, path)
