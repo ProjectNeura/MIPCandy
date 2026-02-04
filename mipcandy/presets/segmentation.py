@@ -22,6 +22,10 @@ class DeepSupervisionWrapper(nn.Module):
         self.loss: nn.Module = loss
 
     @override
+    def __getattr__(self, item: str) -> Any:
+        return self.loss.validation_mode if item == "validation_mode" else super().__getattr__(item)
+
+    @override
     def __setattr__(self, name: str, value: Any) -> None:
         if name == "validation_mode" and hasattr(self.loss, "validation_mode"):
             self.loss.validation_mode = value
