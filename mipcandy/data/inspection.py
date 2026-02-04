@@ -30,6 +30,7 @@ class InspectionAnnotation(object):
     shape: AmbiguousShape
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
     class_ids: tuple[int, ...]
+    class_counts: dict[int, int]
     class_bboxes: dict[int, tuple[int, int, int, int] | tuple[int, int, int, int, int, int]]
     class_locations: dict[int, tuple[tuple[int, int] | tuple[int, int, int], ...]]
     spacing: Shape | None = None
@@ -264,10 +265,12 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             class_ids = label.unique().tolist()
             if background in class_ids:
                 class_ids.remove(background)
+            class_counts = {}
             class_bboxes = {}
             class_locations = {}
             for class_id in class_ids:
                 indices = (label == class_id).nonzero()
+                class_counts[class_id] = indices.sum().item()
                 class_bboxes[class_id] = bbox_from_indices(indices)
                 indices = indices[:, 1:]
                 if len(indices) > max_samples:
@@ -276,7 +279,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                     indices = indices[sampled_idx]
                 class_locations[class_id] = [tuple(coord.tolist()) for coord in indices]
             r.append(InspectionAnnotation(
-                tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_bboxes, class_locations
+                tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_counts, class_bboxes, class_locations
             ))
     return InspectionAnnotations(dataset, background, *r)
 
