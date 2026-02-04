@@ -52,7 +52,6 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         self._shapes: tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape] | None = None
         self._foreground_shapes: tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape] | None = None
         self._statistical_foreground_shape: Shape | None = None
-        self._foreground_heatmap: torch.Tensor | None = None
         self._center_of_foregrounds: tuple[int, int] | tuple[int, int, int] | None = None
         self._foreground_offsets: tuple[int, int] | tuple[int, int, int] | None = None
         self._roi_shape: Shape | None = None
@@ -128,8 +127,6 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), bbox).squeeze(0), crop(label.unsqueeze(0), bbox).squeeze(0)
 
     def foreground_heatmap(self) -> torch.Tensor:
-        if self._foreground_heatmap:
-            return self._foreground_heatmap
         depths, heights, widths = self.foreground_shapes()
         max_shape = (max(depths), max(heights), max(widths)) if depths else (max(heights), max(widths))
         accumulated_label = torch.zeros((1, *max_shape), device=self._dataset.device())
@@ -146,8 +143,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             accumulated_label += nn.functional.pad(
                 crop((label != self._background).unsqueeze(0), annotation.foreground_bbox), paddings
             ).squeeze(0)
-        self._foreground_heatmap = accumulated_label.squeeze(0).detach()
-        return self._foreground_heatmap
+        return accumulated_label.squeeze(0).detach()
 
     def center_of_foregrounds(self) -> tuple[int, int] | tuple[int, int, int]:
         if self._center_of_foregrounds:
