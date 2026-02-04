@@ -2,7 +2,7 @@ from dataclasses import dataclass, asdict
 from json import dump, load
 from math import ceil
 from os import PathLike
-from random import randint, choice
+from random import randint, choice, choices
 from typing import Sequence, override, Callable, Self, Any
 
 import numpy as np
@@ -247,7 +247,7 @@ def bbox_from_indices(indices: torch.Tensor) -> tuple[int, int, int, int]:
     mins = indices.min(dim=0)[0].tolist()
     maxs = indices.max(dim=0)[0].tolist()
     bbox = (mins[1], maxs[1] + 1, mins[2], maxs[2] + 1)
-    if indices.ndim != 3:
+    if indices.ndim > 3:
         bbox += (mins[3], maxs[3] + 1)
     return bbox
 
@@ -266,7 +266,8 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                 continue
             foreground_bbox = bbox_from_indices(indices)
             class_ids = label.unique().tolist()
-            class_ids.remove(background)
+            if background in class_ids:
+                class_ids.remove(background)
             class_bboxes = {}
             class_locations = {}
             for class_id in class_ids:
@@ -380,20 +381,15 @@ class RandomROIDataset(ROIDataset):
             if len(annotation.class_ids) == 0:
                 bbox_lbs = [randint(lbs[j], ubs[j]) for j in range(dim)]
             else:
-                selected_class = choice(annotation.class_ids)
-                locations = annotation.class_locations[selected_class]
-                selected_voxel = choice(locations)
+                classes = list(annotation.class_locations.keys())
+                weights = [1 / len(annotation.class_locations[c]) for c in classes]
+                selected_class = choices(classes, weights=weights, k=1)[0]
+                selected_voxel = choice(annotation.class_locations[selected_class])
                 bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
 
     def oversample_foreground(self, idx: int) -> bool:
         return idx % self._batch_size >= round(self._batch_size * (1 - self._oversample_rate))
-
-    # def oversample_foreground(self, _: int) -> bool:
-    #     return randint(0, 99) <= self._oversample_rate * 100
-
-    # def oversample_foreground(self, idx: int) -> bool:
-    #     return idx >= round(len(self) * (1 - self._oversample_rate))
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
