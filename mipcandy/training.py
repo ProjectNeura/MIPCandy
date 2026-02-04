@@ -444,6 +444,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
                                              sanity_check_result.num_macs, sanity_check_result.num_params, num_epochs,
                                              early_stop_tolerance)
+        del sanity_check_result, template_model, example_input
+        self.empty_cache()
         try:
             for epoch in range(self._tracker.epoch, self._tracker.epoch + num_epochs):
                 if early_stop_tolerance == -1:
