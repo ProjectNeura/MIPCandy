@@ -273,7 +273,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             class_locations = {}
             for class_id in class_ids:
                 indices = (label == class_id).nonzero()
-                class_counts[class_id] = indices.sum().item()
+                class_counts[class_id] = len(indices)
                 class_bboxes[class_id] = bbox_from_indices(indices, ndim)
                 indices = indices[:, 1:]
                 if len(indices) > max_samples:
