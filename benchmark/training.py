@@ -20,6 +20,7 @@ class TrainingTest(DataTest):
     def set_up_datasets(self) -> None:
         super().set_up()
         path = f"{self.output_folder}/training_test.json"
+        self["dataset"].device(device="cpu")
         if exists(path):
             annotations = load_inspection_annotations(path, self["dataset"])
         else:
@@ -34,10 +35,10 @@ class TrainingTest(DataTest):
         train, val = self["train_dataset"], self["val_dataset"]
         val.preload(f"{self.output_folder}/valPreloaded")
         train.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
-        train.device(device="cpu")
         val.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
-        train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True)
-        val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
+        train_dataloader = DataLoader(train, batch_size=2, shuffle=False, pin_memory=True, prefetch_factor=2,
+                                      num_workers=2, persistent_workers=True)
+        val_dataloader = DataLoader(val, batch_size=1, shuffle=False, pin_memory=True)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)
         trainer.num_classes = self.num_classes
         trainer.set_frontend(self.frontend)

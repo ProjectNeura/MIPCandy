@@ -15,7 +15,8 @@ class UNetTrainer(SegmentationTrainer):
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
         return DynUNet(3, example_shape[0], self.num_classes, [3, 3, 3, 3, 3, 3], [1, 2, 2, 2, 2, [1, 2, 2]],
-                       [2, 2, 2, 2, [1, 2, 2]], [32, 64, 128, 256, 320, 320])
+                       [2, 2, 2, 2, [1, 2, 2]], [32, 64, 128, 256, 320, 320], deep_supervision=True,
+                       deep_supr_num=2)
 
 
 class UNetSlidingTrainer(UNetTrainer, SlidingTrainer):
