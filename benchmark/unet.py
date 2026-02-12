@@ -8,6 +8,8 @@ from mipcandy import SegmentationTrainer, SlidingTrainer, AmbiguousShape
 
 class UNetTrainer(SegmentationTrainer):
     num_classes = 5
+    deep_supervision = True
+    deep_supervision_scales = [1, 2, 4]
     include_background: bool = False
 
     @override
