@@ -335,19 +335,19 @@ def crop_and_pad(x: torch.Tensor, bbox_lbs: list[int], bbox_ubs: list[int], *,
 
 
 class RandomROIDataset(ROIDataset):
-    def __init__(self, annotations: InspectionAnnotations, batch_size: int, *, arbitrary_num_cases: int | None = None,
-                 oversample_rate: float = .33, clamp: bool = False, percentile: float = .5,
+    def __init__(self, annotations: InspectionAnnotations, batch_size: int, *, num_patches_per_case: int = 1,
+                 oversample_rate: float = .67, clamp: bool = False, percentile: float = .5,
                  min_factor: int = 16) -> None:
         super().__init__(annotations, clamp=clamp, percentile=percentile)
+        if num_patches_per_case > 1:
+            images = [idx for idx in self._images for _ in range(2)]
+            self._images, self._labels = images, images.copy()
         self._batch_size: int = batch_size
-        if arbitrary_num_cases:
-            self._images = [i % len(annotations) for i in range(arbitrary_num_cases)]
-            self._labels = self._images[:]
         self._oversample_rate: float = oversample_rate
         sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
         sfs = [ceil(s / min_factor) * min_factor for s in sfs]
         self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
-            min(sfs[0], 160), min(sfs[1], 160), min(sfs[2], 160))
+            min(sfs[0], 128), min(sfs[1], 128), min(sfs[2], 128))
 
     def convert_idx(self, idx: int) -> int:
         idx, idx2 = self._images[idx], self._labels[idx]
@@ -377,16 +377,15 @@ class RandomROIDataset(ROIDataset):
         need_to_pad = [max(0, roi_shape[i] - annotation.shape[i]) for i in range(dim)]
         lbs = [-need_to_pad[i] // 2 for i in range(dim)]
         ubs = [annotation.shape[i] + need_to_pad[i] // 2 + need_to_pad[i] % 2 - roi_shape[i] for i in range(dim)]
-        if not force_foreground:
-            bbox_lbs = [randint(lbs[i], ubs[i]) for i in range(dim)]
-        else:
+        if force_foreground:
             if len(annotation.class_ids) == 0:
                 bbox_lbs = [randint(lbs[j], ubs[j]) for j in range(dim)]
             else:
-                classes = list(annotation.class_locations.keys())
-                selected_class = choice(classes)
+                selected_class = choice(annotation.class_ids)
                 selected_voxel = choice(annotation.class_locations[selected_class])
                 bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
+        else:
+            bbox_lbs = [randint(lbs[i], ubs[i]) for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
 
     def oversample_foreground(self, idx: int) -> bool:
