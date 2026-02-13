@@ -271,16 +271,15 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             class_counts = {}
             class_bboxes = {}
             class_locations = {}
-            for class_id in class_ids:
+            for class_id in [background] + class_ids:
                 indices = (label == class_id).nonzero()
                 class_counts[class_id] = len(indices)
                 class_bboxes[class_id] = bbox_from_indices(indices, ndim)
-                indices = indices[:, 1:]
                 if len(indices) > max_samples:
                     target_samples = min(max_samples, len(indices))
                     sampled_idx = torch.randperm(len(indices))[:target_samples]
                     indices = indices[sampled_idx]
-                class_locations[class_id] = [tuple(coord.tolist()) for coord in indices]
+                class_locations[class_id] = [tuple(coord.tolist()[1:]) for coord in indices]
             r.append(InspectionAnnotation(
                 tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_counts, class_bboxes, class_locations
             ))
