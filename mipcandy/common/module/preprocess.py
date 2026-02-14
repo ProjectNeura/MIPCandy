@@ -138,16 +138,16 @@ class PadTo(Pad):
 
 class Normalize(nn.Module):
     def __init__(self, *, domain: tuple[float | None, float | None] = (0, None), strict: bool = False,
-                 method: Literal["linear", "intercept", "cut"] = "linear") -> None:
+                 method: Literal["linear", "intercept", "cut", "zscore"] = "linear") -> None:
         super().__init__()
         self._domain: tuple[float | None, float | None] = domain
         self._strict: bool = strict
-        self._method: Literal["linear", "intercept", "cut"] = method
+        self._method: Literal["linear", "intercept", "cut", "zscore"] = method
         self.requires_grad_(False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         left, right = self._domain
-        if left is None and right is None:
+        if left is None and right is None and self._method != "zscore":
             return x
         r_l, r_r = x.min(), x.max()
         match self._method:
@@ -178,6 +178,23 @@ class Normalize(nn.Module):
                 if right is not None:
                     x = x.clamp(max=right)
                 return x
+            case "zscore":
+                if left is not None or right is not None:
+                    raise ValueError("Method \"zscore\" cannot have fixed ends")
+                return (x - x.mean()) / max(x.std(), torch.tensor(1e-8, device=x.device))
+
+
+class CTNormalize(nn.Module):
+    def __init__(self, mean_intensity: float, std_intensity: float, lower_bound: float, upper_bound: float) -> None:
+        super().__init__()
+        self._mean_intensity: float = mean_intensity
+        self._std_intensity: float = std_intensity
+        self._lower_bound: float = lower_bound
+        self._upper_bound: float = upper_bound
+        self.requires_grad_(False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (x.clip(self._lower_bound, self._upper_bound) - self._mean_intensity) / max(self._std_intensity, 1e-8)
 
 
 class ColorizeLabel(nn.Module):
