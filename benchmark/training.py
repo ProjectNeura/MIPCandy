@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from benchmark.data import DataTest, FoldedDataTest
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    load_inspection_annotations, RandomROIDataset, Normalize
+    load_inspection_annotations, RandomROIDataset
 
 
 class TrainingTest(DataTest):
@@ -26,7 +26,8 @@ class TrainingTest(DataTest):
         else:
             annotations = inspect(self["dataset"])
             annotations.save(path)
-        dataset = RandomROIDataset(annotations, 2)
+        dataset = RandomROIDataset(annotations, 2, num_patches_per_case=2)
+        dataset.roi_shape(roi_shape=(128, 128, 128))
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 
     @override
@@ -34,9 +35,9 @@ class TrainingTest(DataTest):
         self.set_up_datasets()
         train, val = self["train_dataset"], self["val_dataset"]
         val.preload(f"{self.output_folder}/valPreloaded")
-        train.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
-        val.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
-        train_dataloader = DataLoader(train, batch_size=2, shuffle=False, pin_memory=True, prefetch_factor=2,
+        # train.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
+        # val.set_transform(JointTransform(image_only=Normalize(domain=(0, 1), strict=True)))
+        train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True, prefetch_factor=2,
                                       num_workers=2, persistent_workers=True)
         val_dataloader = DataLoader(val, batch_size=1, shuffle=False, pin_memory=True)
         trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, device=self.device)

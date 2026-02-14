@@ -123,6 +123,15 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             targets = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in outputs])
             loss, metrics = toolbox.criterion(outputs, targets)
         else:
+            with torch.no_grad():
+                print("labels unique (sample):", labels.unique())
+                binc = torch.bincount(labels.flatten(), minlength=self.num_classes)
+                print("label class distribution:", (binc / binc.sum()).cpu().tolist())
+                preds = outputs.argmax(1)
+                print("preds unique", preds.unique())
+                binc_p = torch.bincount(preds.flatten(), minlength=self.num_classes)
+                print("pred class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
+                print("=====" * 10)
             loss, metrics = toolbox.criterion(outputs, labels)
         loss.backward()
         nn.utils.clip_grad_norm_(toolbox.model.parameters(), 12)
