@@ -72,9 +72,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
-        output = output.sigmoid()
+        output = output.sigmoid() if self.num_classes < 2 else output.softmax(0)
         if output.shape[0] != 1:
-            output = convert_logits_to_ids(output.unsqueeze(0)).squeeze(0).int()
+            output = convert_logits_to_ids(output, channel_dim=0).int()
         self._save_preview(image, "input", quality)
         self._save_preview(label.int(), "label", quality, is_label=True)
         self._save_preview(output, "prediction", quality, is_label=True)
@@ -127,7 +127,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
                 print("labels unique (sample):", labels.unique())
                 binc = torch.bincount(labels.flatten(), minlength=self.num_classes)
                 print("label class distribution:", (binc / binc.sum()).cpu().tolist())
-                preds = outputs.argmax(1)
+                preds = outputs.softmax(1)
+                preds = convert_logits_to_ids(preds)
                 print("preds unique", preds.unique())
                 binc_p = torch.bincount(preds.flatten(), minlength=self.num_classes)
                 print("pred class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
