@@ -13,6 +13,12 @@ from mipcandy.training import Trainer, TrainerToolbox, try_append_all
 from mipcandy.types import Params, Shape
 
 
+def print_stats_of_class_ids(x: torch.Tensor, name: str, num_classes: int) -> None:
+    print(f"{name} unique", x.unique())
+    binc_p = torch.bincount(x.flatten(), minlength=num_classes)
+    print(f"{name} class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
+
+
 class DeepSupervisionWrapper(nn.Module):
     def __init__(self, loss: nn.Module, *, weight_factors: Sequence[float] | None = None) -> None:
         super().__init__()
@@ -124,14 +130,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             loss, metrics = toolbox.criterion(outputs, targets)
         else:
             with torch.no_grad():
-                print("labels unique (sample):", labels.unique())
-                binc = torch.bincount(labels.flatten(), minlength=self.num_classes)
-                print("label class distribution:", (binc / binc.sum()).cpu().tolist())
+                print_stats_of_class_ids(labels, "label", self.num_classes)
                 preds = outputs.softmax(1)
                 preds = convert_logits_to_ids(preds)
-                print("preds unique", preds.unique())
-                binc_p = torch.bincount(preds.flatten(), minlength=self.num_classes)
-                print("pred class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
+                print_stats_of_class_ids(preds, "prediction", self.num_classes)
                 print("=====" * 10)
             loss, metrics = toolbox.criterion(outputs, labels)
         loss.backward()
