@@ -46,9 +46,11 @@ class InspectionAnnotation(object):
 
 
 class InspectionAnnotations(Sequence[InspectionAnnotation]):
-    def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation) -> None:
+    def __init__(self, dataset: SupervisedDataset, background: int, intensity_stats: tuple[float, float, float, float],
+                 *annotations: InspectionAnnotation) -> None:
         self._dataset: SupervisedDataset = dataset
         self._background: int = background
+        self._intensity_stats: tuple[float, float, float, float] = intensity_stats
         self._annotations: tuple[InspectionAnnotation, ...] = annotations
         self._shapes: tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape] | None = None
         self._foreground_shapes: tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape] | None = None
@@ -56,13 +58,18 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         self._center_of_foregrounds: tuple[int, int] | tuple[int, int, int] | None = None
         self._foreground_offsets: tuple[int, int] | tuple[int, int, int] | None = None
         self._roi_shape: Shape | None = None
-        self._intensity_stats: tuple[float, float, float, float] | None = None
 
     def dataset(self) -> SupervisedDataset:
         return self._dataset
 
     def background(self) -> int:
         return self._background
+
+    def intensity_stats(self) -> tuple[float, float, float, float]:
+        """
+        :return: mean, std, 0.5th percentile, 99.5th percentile
+        """
+        return self._intensity_stats
 
     def annotations(self) -> tuple[InspectionAnnotation, ...]:
         return self._annotations
@@ -222,26 +229,6 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         roi = self.roi(i, clamp=clamp, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
-    def intensity_stats(self) -> tuple[float, float, float, float]:
-        """
-        :return: (mean, std, 5th percentile, 95th percentile)
-        """
-        if self._intensity_stats:
-            return self._intensity_stats
-        foreground_voxels = []
-        for i in range(len(self._dataset)):
-            image, label = self._dataset.image(i), self._dataset.label(i)
-            fg = image[label != self._background]
-            if len(fg) > 0:
-                foreground_voxels.append(fg)
-        all_fg = torch.cat(foreground_voxels)
-        all_fg_np = all_fg.numpy()
-        self._intensity_stats = (
-            all_fg.mean().item(), all_fg.std().item(), float(np.percentile(all_fg_np, 0.5)),
-            float(np.percentile(all_fg_np, 99.5))
-        )
-        return self._intensity_stats
-
 
 def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
     return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
@@ -260,10 +247,9 @@ def parse_inspection_annotation(obj: dict[str, Any]) -> InspectionAnnotation:
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
-    annotations = InspectionAnnotations(dataset, obj["background"], *(
+    annotations = InspectionAnnotations(dataset, obj["background"], obj["intensity_stats"], *(
         parse_inspection_annotation(row) for row in obj["annotations"]
     ))
-    annotations._intensity_stats = obj["intensity_stats"]
     return annotations
 
 
@@ -281,6 +267,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
     r = []
     with torch.no_grad(), Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
+        foreground_voxels = []
         for idx in range(len(dataset)):
             label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
@@ -310,7 +297,15 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             r.append(InspectionAnnotation(
                 tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_counts, class_bboxes, class_locations
             ))
-    return InspectionAnnotations(dataset, background, *r)
+            image = dataset.image(idx)
+            fg = image[label != background]
+            if len(fg) > 0:
+                foreground_voxels.append(fg)
+        all_fg = torch.cat(foreground_voxels)
+        all_fg_np = all_fg.numpy()
+        intensity_stats = (all_fg.mean().item(), all_fg.std().item(), float(np.percentile(all_fg_np, 0.5)),
+                           float(np.percentile(all_fg_np, 99.5)))
+    return InspectionAnnotations(dataset, background, intensity_stats, *r)
 
 
 class ROIDataset(SupervisedDataset[list[int]]):
