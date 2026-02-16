@@ -148,9 +148,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             if labels.shape[2:] == shape:
                 targets.append(labels)
             else:
-                downsampled = nn.functional.interpolate(labels.float(), shape,
+                downsampled = nn.functional.interpolate(labels, shape,
                                                         mode="nearest-exact" if labels.ndim == 4 else "nearest")
-                targets.append(downsampled if labels.dtype == torch.float32 else downsampled.to(labels.dtype))
+                targets.append(downsampled)
         return targets
 
     @override
