@@ -56,6 +56,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         self._center_of_foregrounds: tuple[int, int] | tuple[int, int, int] | None = None
         self._foreground_offsets: tuple[int, int] | tuple[int, int, int] | None = None
         self._roi_shape: Shape | None = None
+        self._intensity_stats: tuple[float, float, float, float] | None = None
 
     def dataset(self) -> SupervisedDataset:
         return self._dataset
@@ -216,6 +217,25 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         image, label = self._dataset[i]
         roi = self.roi(i, clamp=clamp, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
+
+    def intensity_stats(self) -> tuple[float, float, float, float]:
+        """
+        :return: (mean, std, 5th percentile, 95th percentile)
+        """
+        if self._intensity_stats:
+            return self._intensity_stats
+        foreground_voxels = []
+        for image, label in self._dataset:
+            fg = image[label != self._background]
+            if len(fg) > 0:
+                foreground_voxels.append(fg)
+        all_fg = torch.cat(foreground_voxels)
+        all_fg_np = all_fg.numpy()
+        self._intensity_stats = (
+            all_fg.mean().item(), all_fg.std().item(), float(np.percentile(all_fg_np, 0.5)),
+            float(np.percentile(all_fg_np, 99.5))
+        )
+        return self._intensity_stats
 
 
 def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
