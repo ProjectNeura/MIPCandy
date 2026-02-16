@@ -121,21 +121,11 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         outputs = toolbox.model(images)
-        if self.deep_supervision and outputs.ndim == labels.ndim + 1:
-            masks_list = list(torch.unbind(outputs, dim=1))
-            targets = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in masks_list])
-            loss, metrics = toolbox.criterion(masks_list, targets)
-        elif self.deep_supervision and isinstance(outputs, (list, tuple)):
-            targets = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in outputs])
-            loss, metrics = toolbox.criterion(outputs, targets)
-        else:
-            with torch.no_grad():
-                print_stats_of_class_ids(labels, "label", self.num_classes)
-                preds = outputs.softmax(1)
-                preds = convert_logits_to_ids(preds)
-                print_stats_of_class_ids(preds, "prediction", self.num_classes)
-                print("=====" * 10)
-            loss, metrics = toolbox.criterion(outputs, labels)
+        if self.deep_supervision:
+            if outputs.ndim == labels.ndim + 1:
+                outputs = list(torch.unbind(outputs, dim=1))
+            labels = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in outputs])
+        loss, metrics = toolbox.criterion(outputs, labels)
         loss.backward()
         nn.utils.clip_grad_norm_(toolbox.model.parameters(), 12)
         return loss.item(), metrics
