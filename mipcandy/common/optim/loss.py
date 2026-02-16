@@ -69,9 +69,9 @@ class DiceCELossWithLogits(_SegmentationLoss):
         self.smooth: float = smooth
 
     def _forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
-        labels = self.logitfy(labels)
         ce = nn.functional.cross_entropy(masks, labels)
         masks = masks.softmax(1)
+        labels = self.logitfy(labels)
         if not self.include_background:
             masks = masks[:, 1:]
             labels = labels[:, 1:]
