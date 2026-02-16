@@ -14,21 +14,21 @@ class UNetTrainer(SegmentationTrainer):
 
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
-        kernels = [[3, 3, 3]] * 6
-        strides = [[1, 1, 1], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2], [2, 2, 2]]
-        filters = [32, 64, 128, 256, 512, 1024]
+        kernel_size = [[3, 3, 3]] * 5
+        strides = [[1, 1, 1]] + [[2, 2, 2]] * 4
         return DynUNet(
             spatial_dims=3,
             in_channels=example_shape[0],
             out_channels=self.num_classes,
-            kernel_size=kernels,
+            kernel_size=kernel_size,
             strides=strides,
-            upsample_kernel_size=strides[1:],
-            filters=filters,
-            norm_name="INSTANCE",
-            deep_supervision=self.deep_supervision,
+            upsample_kernel_size=strides,
+            filters=[32, 64, 128, 256, 320],
+            norm_name=("INSTANCE", {"affine": True}),
+            act_name=("leakyrelu", {"inplace": True, "negative_slope": 0.01}),
+            deep_supervision=True,
             deep_supr_num=2,
-            res_block=True
+            res_block=True,
         )
 
 
