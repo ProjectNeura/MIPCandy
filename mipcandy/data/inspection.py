@@ -117,7 +117,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         return self._statistical_foreground_shape
 
     def crop_foreground(self, i: int, *, expand_ratio: float = 1) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._dataset[i]
+        image, label = self._dataset.image(i), self._dataset.label(i)
         annotation = self._annotations[i]
         bbox = list(annotation.foreground_bbox)
         shape = annotation.foreground_shape()
@@ -132,7 +132,8 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         depths, heights, widths = self.foreground_shapes()
         max_shape = (max(depths), max(heights), max(widths)) if depths else (max(heights), max(widths))
         accumulated_label = torch.zeros((1, *max_shape), device=self._dataset.device())
-        for i, (_, label) in enumerate(self._dataset):
+        for i in range(len(self._dataset)):
+            label = self._dataset.label(i)
             annotation = self._annotations[i]
             paddings = [0, 0, 0, 0]
             shape = annotation.foreground_shape()
@@ -214,7 +215,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         return tuple(roi)
 
     def crop_roi(self, i: int, *, clamp: bool = True, percentile: float = .95) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._dataset[i]
+        image, label = self._dataset.image(i), self._dataset.label(i)
         roi = self.roi(i, clamp=clamp, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
@@ -225,7 +226,8 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         if self._intensity_stats:
             return self._intensity_stats
         foreground_voxels = []
-        for image, label in self._dataset:
+        for i in range(len(self._dataset)):
+            image, label = self._dataset.image(i), self._dataset.label(i)
             fg = image[label != self._background]
             if len(fg) > 0:
                 foreground_voxels.append(fg)
