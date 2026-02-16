@@ -7,6 +7,12 @@ from mipcandy.data import convert_ids_to_logits, convert_logits_to_ids
 from mipcandy.metrics import do_reduction, soft_dice_coefficient, dice_similarity_coefficient_binary
 
 
+def print_stats_of_class_ids(x: torch.Tensor, name: str, num_classes: int) -> None:
+    print(f"{name} unique", x.unique())
+    binc_p = torch.bincount(x.flatten(), minlength=num_classes)
+    print(f"{name} class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
+
+
 class FocalBCEWithLogits(nn.Module):
     def __init__(self, alpha: float, gamma: float, *, reduction: Literal["mean", "sum", "none"] = "mean") -> None:
         super().__init__()
@@ -30,15 +36,15 @@ class _Loss(nn.Module):
         self.validation_mode: bool = False
         self.include_background: bool = include_background
 
-    def forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+    def forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         if not self.validation_mode:
-            return self._forward(masks, labels)
+            return self._forward(outputs, labels)
         with torch.no_grad():
-            c, metrics = self._forward(masks, labels)
-            masks = convert_logits_to_ids(masks)
+            c, metrics = self._forward(outputs, labels)
+            outputs = convert_logits_to_ids(outputs)
             dice = 0
             for i in range(0 if self.include_background else 1, self.num_classes):
-                class_dice = dice_similarity_coefficient_binary(masks == i, labels == i).item()
+                class_dice = dice_similarity_coefficient_binary(outputs == i, labels == i).item()
                 dice += class_dice
                 metrics[f"dice {i}"] = class_dice
             metrics["dice"] = dice / (self.num_classes - (0 if self.include_background else 1))
@@ -70,14 +76,19 @@ class DiceCELossWithLogits(_SegmentationLoss):
         self.smooth: float = smooth
         self.min_percentage_per_class: float | None = min_percentage_per_class
 
-    def _forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
-        ce = nn.functional.cross_entropy(masks, labels[:, 0].long())
-        masks = masks.softmax(1)
+    def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        ce = nn.functional.cross_entropy(outputs, labels[:, 0].long())
+        outputs = outputs.softmax(1)
         labels = self.logitfy(labels)
+        with torch.no_grad():
+            print_stats_of_class_ids(labels, "label", self.num_classes)
+            outputs = convert_logits_to_ids(outputs)
+            print_stats_of_class_ids(outputs, "prediction", self.num_classes)
+            print("=====" * 10)
         if not self.include_background:
-            masks = masks[:, 1:]
+            outputs = outputs[:, 1:]
             labels = labels[:, 1:]
-        soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth,
+        soft_dice = soft_dice_coefficient(outputs, labels, smooth=self.smooth,
                                           min_percentage_per_class=self.min_percentage_per_class)
         metrics = {"soft dice": soft_dice.item(), "ce loss": ce.item()}
         c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - soft_dice)
@@ -94,13 +105,13 @@ class DiceBCELossWithLogits(_SegmentationLoss):
         self.smooth: float = smooth
         self.min_percentage_per_class: float | None = min_percentage_per_class
 
-    def _forward(self, masks: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
-        masks = masks.sigmoid()
-        bce = nn.functional.binary_cross_entropy(masks, labels)
+    def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        outputs = outputs.sigmoid()
+        bce = nn.functional.binary_cross_entropy(outputs, labels)
         if not self.include_background:
-            masks = masks[:, 1:]
+            outputs = outputs[:, 1:]
             labels = labels[:, 1:]
-        soft_dice = soft_dice_coefficient(masks, labels, smooth=self.smooth,
+        soft_dice = soft_dice_coefficient(outputs, labels, smooth=self.smooth,
                                           min_percentage_per_class=self.min_percentage_per_class)
         metrics = {"soft dice": soft_dice.item(), "bce loss": bce.item()}
         c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - soft_dice)

@@ -13,12 +13,6 @@ from mipcandy.training import Trainer, TrainerToolbox, try_append_all
 from mipcandy.types import Params, Shape
 
 
-def print_stats_of_class_ids(x: torch.Tensor, name: str, num_classes: int) -> None:
-    print(f"{name} unique", x.unique())
-    binc_p = torch.bincount(x.flatten(), minlength=num_classes)
-    print(f"{name} class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
-
-
 class DeepSupervisionWrapper(nn.Module):
     def __init__(self, loss: nn.Module, *, weight_factors: Sequence[float] | None = None) -> None:
         super().__init__()
