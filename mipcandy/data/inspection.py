@@ -77,7 +77,10 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
 
     def save(self, path: str | PathLike[str]) -> None:
         with open(path, "w") as f:
-            dump({"background": self._background, "annotations": [asdict(a) for a in self._annotations]}, f)
+            dump({
+                "background": self._background, "intensity_stats": self._intensity_stats,
+                "annotations": [asdict(a) for a in self._annotations]
+            }, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], AmbiguousShape]) -> tuple[
         AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
@@ -257,9 +260,11 @@ def parse_inspection_annotation(obj: dict[str, Any]) -> InspectionAnnotation:
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
-    return InspectionAnnotations(dataset, obj["background"], *(
+    annotations = InspectionAnnotations(dataset, obj["background"], *(
         parse_inspection_annotation(row) for row in obj["annotations"]
     ))
+    annotations._intensity_stats = obj["intensity_stats"]
+    return annotations
 
 
 def bbox_from_indices(indices: torch.Tensor, num_dim: Literal[2, 3]) -> tuple[int, int, int, int]:
