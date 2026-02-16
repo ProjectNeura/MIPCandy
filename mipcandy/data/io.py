@@ -36,10 +36,11 @@ def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None
 
 
 def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spacing: bool = False,
-               device: Device = "cpu") -> torch.Tensor:
+               target_iso: float | None = None, device: Device = "cpu") -> torch.Tensor:
     file = SpITK.ReadImage(path)
     if align_spacing:
-        file = resample_to_isotropic(file, interpolator=SpITK.sitkNearestNeighbor if is_label else SpITK.sitkBSpline)
+        file = resample_to_isotropic(file, target_iso=target_iso,
+                                     interpolator=SpITK.sitkNearestNeighbor if is_label else SpITK.sitkBSpline)
     img = torch.tensor(SpITK.GetArrayFromImage(file), dtype=torch.long if is_label else torch.float, device=device)
     if path.endswith(".nii.gz") or path.endswith(".nii") or path.endswith(".mha"):
         img = ensure_num_dimensions(img, 4, append_before=False).permute(3, 0, 1, 2)
