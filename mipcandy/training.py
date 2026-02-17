@@ -306,6 +306,15 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     def show_metrics(self, epoch: int, metrics: dict[str, list[float]], prefix: str, *, epochwise: bool = True,
                      lookup_prefix: str = "", global_previous_index: int = -2) -> None:
+        """
+        :param epoch: the current epoch number
+        :param metrics: the metrics to show
+        :param prefix: the prefix to use for the table title
+        :param epochwise: whether the metrics are for one epoch (so that previous values are in `self._metrics`) or for all
+            epochs (so that previous values are contained in :param: metrics itself)
+        :param lookup_prefix: the prefix to use for the lookup in `self._metrics`
+        :param global_previous_index: the index of the previous epoch in `self._metrics`
+        """
         prefix = prefix.capitalize()
         table = Table(title=f"Epoch {epoch} {prefix}")
         table.add_column("Metric")
@@ -327,8 +336,22 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
             table.add_row(metric, value, span, diff)
             self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
-        console = Console()
-        console.print(table)
+        self._console.print(table)
+
+    def show_metrics_per_case(self, epoch: int, metrics: dict[str, list[float]]) -> None:
+        table = Table(title=f"Epoch {epoch} Metrics per Case")
+        table.add_column("Case ID")
+        num_cases = 0
+        for metric_name in metrics.keys():
+            this_num_cases = len(metrics[metric_name])
+            if not num_cases:
+                num_cases = this_num_cases
+            if this_num_cases != num_cases:
+                raise ValueError(f"Expected {num_cases} cases for metric {metric_name}, got {this_num_cases}")
+            table.add_column(metric_name, style="green")
+        for i in range(num_cases):
+            table.add_row(f"{i + 1}", *(f"{metrics[metric_name][i]:.4f}" for metric_name in metrics.keys()))
+        self._console.print(table)
 
     # Builder interfaces
 
@@ -482,6 +505,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     etc = self.etc(epoch, num_epochs, target_epoch=target_epoch)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
+                self.show_metrics_per_case(epoch, metrics)
                 self.show_metrics(epoch, metrics, "validation", lookup_prefix="val ")
                 if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))

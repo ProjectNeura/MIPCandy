@@ -139,10 +139,14 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
                 targets.append(downsampled)
         return targets
 
-    def log_stats_of_class_ids(self, ids: torch.Tensor, name: str) -> None:
+    def class_percentages(self, ids: torch.Tensor) -> dict[int, float]:
         bin_count = torch.bincount(ids.flatten(), minlength=self.num_classes)
-        self.log(f"{name} unique values: {ids.unique()}")
-        self.log(f"{name} class distribution: {(bin_count / bin_count.sum()).cpu().tolist()}")
+        distribution = (bin_count / bin_count.sum()).cpu().tolist()
+        return dict(enumerate(distribution))
+
+    @staticmethod
+    def format_class_percentages(percentages: dict[int, float], prefix: str) -> dict[str, float]:
+        return {f"% {prefix} class {class_id}": percentage for class_id, percentage in percentages.items()}
 
     @override
     def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
@@ -167,7 +171,11 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             loss, metrics = toolbox.criterion(mask_for_loss, label)
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = False
-        self.log(f"Metrics for case {idx}: {metrics}")
-        self.log_stats_of_class_ids(label, "Label")
-        self.log_stats_of_class_ids(convert_logits_to_ids(self.apply_non_linearity(mask_output, 1)), "Output")
+        label_percentages = self.class_percentages(label)
+        metrics.update(self.format_class_percentages(label_percentages, "label"))
+        output_logits = self.apply_non_linearity(mask_output, 1)
+        output_percentages = self.class_percentages(
+            output_logits.round() if self.num_classes < 2 else convert_logits_to_ids(output_logits)
+        )
+        metrics.update(self.format_class_percentages(output_percentages, "output"))
         return -loss.item(), metrics, mask_output.squeeze(0)
