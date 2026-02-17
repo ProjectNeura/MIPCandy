@@ -3,7 +3,7 @@ from typing import override
 from monai.networks.nets import DynUNet
 from torch import nn
 
-from mipcandy import SegmentationTrainer, SlidingTrainer, AmbiguousShape
+from mipcandy import SegmentationTrainer, AmbiguousShape
 
 
 class UNetTrainer(SegmentationTrainer):
@@ -30,7 +30,3 @@ class UNetTrainer(SegmentationTrainer):
             deep_supr_num=2,
             res_block=True,
         )
-
-
-class UNetSlidingTrainer(UNetTrainer, SlidingTrainer):
-    pass

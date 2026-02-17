@@ -1,12 +1,10 @@
 from os import makedirs
-from time import time
 from typing import override, Literal
 
 from rich.progress import Progress
 
 from benchmark.prototype import UnitTest
-from mipcandy import NNUNetDataset, do_sliding_window, visualize3d, revert_sliding_window, JointTransform, inspect, \
-    RandomROIDataset
+from mipcandy import NNUNetDataset, visualize3d, JointTransform, inspect, RandomROIDataset
 
 
 class DataTest(UnitTest):
@@ -27,23 +25,6 @@ class FoldedDataTest(DataTest):
     def set_up(self) -> None:
         super().set_up()
         self["train_dataset"], self["val_dataset"] = self["dataset"].fold(fold=self.fold)
-
-
-class SlidingWindowTest(DataTest):
-    @override
-    def execute(self) -> None:
-        image, _ = self["dataset"][0]
-        print(image.shape)
-        visualize3d(image, title="raw")
-        t0 = time()
-        windows, layout, pad = do_sliding_window(image, (128, 128, 128))
-        print(f"took {time() - t0:.2f}s")
-        print(windows[0].shape, layout)
-        t0 = time()
-        recon = revert_sliding_window(windows, layout, pad)
-        print(f"took {time() - t0:.2f}s")
-        print(recon.shape)
-        visualize3d(recon, title="reconstructed")
 
 
 class RandomROIDatasetTest(DataTest):

@@ -6,9 +6,9 @@ from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
 from benchmark.data import DataTest, FoldedDataTest
-from benchmark.unet import UNetTrainer, UNetSlidingTrainer
-from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
-    load_inspection_annotations, RandomROIDataset, CTNormalize
+from benchmark.unet import UNetTrainer
+from mipcandy import SegmentationTrainer, Shape, JointTransform, inspect, load_inspection_annotations, \
+    RandomROIDataset, CTNormalize
 
 
 class TrainingTest(DataTest):
@@ -80,40 +80,6 @@ class ResizeTrainingTest(FoldedDataTest):
     @override
     def execute(self) -> None:
         self["trainer"].train(self.num_epochs, note=f"Resize Training test {self.resize}")
-
-    @override
-    def clean_up(self) -> None:
-        removedirs(self["trainer"].experiment_folder())
-
-
-class SlidingTrainingTest(TrainingTest, FoldedDataTest):
-    trainer: type[SegmentationTrainer] = UNetSlidingTrainer
-    window_shape: Shape = (128, 128, 128)
-    overlap: float = .5
-
-    @override
-    def set_up(self) -> None:
-        self.set_up_datasets()
-        train, val = self["train_dataset"], self["val_dataset"]
-        FoldedDataTest.set_up(self)
-        full_val = self["val_dataset"]
-        path = f"{self.output_folder}/val_slided"
-        if not exists(path):
-            slide_dataset(full_val, path, self.window_shape, overlap=self.overlap)
-        slided_val = SupervisedSWDataset(path)
-        train_dataloader = DataLoader(train, batch_size=2, shuffle=True)
-        val_dataloader = DataLoader(val, batch_size=1, shuffle=False)
-        trainer = self.trainer(self.output_folder, train_dataloader, val_dataloader, recoverable=False,
-                               profiler=True, device=self.device)
-        trainer.set_datasets(full_val, slided_val)
-        trainer.num_classes = self.num_classes
-        trainer.overlap = self.overlap
-        trainer.set_frontend(self.frontend)
-        self["trainer"] = trainer
-
-    @override
-    def execute(self) -> None:
-        self["trainer"].train(self.num_epochs, note="Training test with sliding window")
 
     @override
     def clean_up(self) -> None:

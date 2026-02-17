@@ -67,10 +67,13 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             visualize3d(x, title=title, max_volume=int(quality * 1e6), is_label=is_label, blocking=True,
                         screenshot_as=path)
 
+    def apply_non_linearity(self, x: torch.Tensor, channel_dim: int) -> torch.Tensor:
+        return x.sigmoid() if self.num_classes < 2 else x.softmax(channel_dim)
+
     @override
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
-        output = output.sigmoid() if self.num_classes < 2 else output.softmax(0)
+        output = self.apply_non_linearity(output, 0)
         if output.shape[0] != 1:
             output = convert_logits_to_ids(output, channel_dim=0).int()
         self._save_preview(image, "input", quality)
@@ -137,9 +140,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return targets
 
     def log_stats_of_class_ids(self, ids: torch.Tensor, name: str) -> None:
-        binc_p = torch.bincount(ids.flatten(), minlength=self.num_classes)
+        bin_count = torch.bincount(ids.flatten(), minlength=self.num_classes)
         self.log(f"{name} unique values: {ids.unique()}")
-        self.log(f"{name} class distribution: {(binc_p / binc_p.sum()).cpu().tolist()}")
+        self.log(f"{name} class distribution: {(bin_count / bin_count.sum()).cpu().tolist()}")
 
     @override
     def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
@@ -166,5 +169,5 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             toolbox.criterion.validation_mode = False
         self.log(f"Metrics for case {idx}: {metrics}")
         self.log_stats_of_class_ids(label, "Label")
-        self.log_stats_of_class_ids(mask_output, "Output")
+        self.log_stats_of_class_ids(convert_logits_to_ids(self.apply_non_linearity(mask_output, 1)), "Output")
         return -loss.item(), metrics, mask_output.squeeze(0)
