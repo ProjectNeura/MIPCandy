@@ -91,9 +91,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def build_criterion(self) -> nn.Module:
         if self.num_classes < 2:
-            loss = DiceBCELossWithLogits(include_background=self.include_background)
+            loss = DiceBCELossWithLogits(include_background=self.include_background, min_percentage_per_class=1e-5)
         else:
-            loss = DiceCELossWithLogits(self.num_classes, include_background=self.include_background)
+            loss = DiceCELossWithLogits(self.num_classes, include_background=self.include_background,
+                                        min_percentage_per_class=1e-5)
         if self.deep_supervision:
             if not self.deep_supervision_weights and self.deep_supervision_scales:
                 weights = np.array([1 / (2 ** i) for i in range(len(self.deep_supervision_scales))])

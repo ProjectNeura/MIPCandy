@@ -358,7 +358,7 @@ def crop_and_pad(x: torch.Tensor, bbox_lbs: list[int], bbox_ubs: list[int], *,
 
 class RandomROIDataset(ROIDataset):
     def __init__(self, annotations: InspectionAnnotations, batch_size: int, *, num_patches_per_case: int = 1,
-                 oversample_rate: float = .67, clamp: bool = False, percentile: float = .5,
+                 oversample_rate: float = .33, clamp: bool = False, percentile: float = .5,
                  min_factor: int = 16) -> None:
         super().__init__(annotations, clamp=clamp, percentile=percentile)
         if num_patches_per_case > 1:

@@ -6,7 +6,6 @@ from monai.transforms import Resized
 from torch.utils.data import DataLoader
 
 from benchmark.data import DataTest, FoldedDataTest
-from benchmark.transforms import TrainingAugmentation
 from benchmark.unet import UNetTrainer, UNetSlidingTrainer
 from mipcandy import SegmentationTrainer, slide_dataset, Shape, SupervisedSWDataset, JointTransform, inspect, \
     load_inspection_annotations, RandomROIDataset, CTNormalize
@@ -27,7 +26,7 @@ class TrainingTest(DataTest):
         else:
             annotations = inspect(self["dataset"])
             annotations.save(path)
-        dataset = RandomROIDataset(annotations, 2, num_patches_per_case=2)
+        dataset = RandomROIDataset(annotations, 2, num_patches_per_case=3)
         dataset.roi_shape(roi_shape=(128, 128, 128))
         self["annotations"] = annotations
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
@@ -38,7 +37,7 @@ class TrainingTest(DataTest):
         train, val = self["train_dataset"], self["val_dataset"]
         val.preload(f"{self.output_folder}/valPreloaded")
         ct_normalization = CTNormalize(*self["annotations"].intensity_stats())
-        train.set_transform(JointTransform(transform=TrainingAugmentation(), image_only=ct_normalization))
+        train.set_transform(JointTransform(image_only=ct_normalization))
         val.set_transform(JointTransform(image_only=ct_normalization))
         train_dataloader = DataLoader(train, batch_size=2, shuffle=True, pin_memory=True, prefetch_factor=2,
                                       num_workers=2, persistent_workers=True)
@@ -51,7 +50,7 @@ class TrainingTest(DataTest):
     @override
     def execute(self) -> None:
         if not self._continue:
-            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}", compile_model=False,
+            return self["trainer"].train(self.num_epochs, note=f"Training test {self.resize}", compile_model=True,
                                          val_score_prediction=False)
         self["trainer"].recover_from(self._continue)
         return self["trainer"].continue_training(self.num_epochs)
