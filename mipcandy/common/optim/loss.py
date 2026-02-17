@@ -79,12 +79,12 @@ class DiceCELossWithLogits(_SegmentationLoss):
     def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         ce = nn.functional.cross_entropy(outputs, labels[:, 0].long())
         outputs = outputs.softmax(1)
-        labels = self.logitfy(labels)
         with torch.no_grad():
             print_stats_of_class_ids(labels, "label", self.num_classes)
-            outputs = convert_logits_to_ids(outputs)
-            print_stats_of_class_ids(outputs, "prediction", self.num_classes)
+            preds = convert_logits_to_ids(outputs)
+            print_stats_of_class_ids(preds, "prediction", self.num_classes)
             print("=====" * 10)
+        labels = self.logitfy(labels)
         if not self.include_background:
             outputs = outputs[:, 1:]
             labels = labels[:, 1:]
