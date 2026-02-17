@@ -7,12 +7,6 @@ from mipcandy.data import convert_ids_to_logits, convert_logits_to_ids
 from mipcandy.metrics import do_reduction, soft_dice_coefficient, dice_similarity_coefficient_binary
 
 
-def print_stats_of_class_ids(x: torch.Tensor, name: str, num_classes: int) -> None:
-    print(f"{name} unique", x.unique())
-    binc_p = torch.bincount(x.flatten(), minlength=num_classes)
-    print(f"{name} class distribution:", (binc_p / binc_p.sum()).cpu().tolist())
-
-
 class FocalBCEWithLogits(nn.Module):
     def __init__(self, alpha: float, gamma: float, *, reduction: Literal["mean", "sum", "none"] = "mean") -> None:
         super().__init__()
@@ -79,11 +73,6 @@ class DiceCELossWithLogits(_SegmentationLoss):
     def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         ce = nn.functional.cross_entropy(outputs, labels[:, 0].long())
         outputs = outputs.softmax(1)
-        with torch.no_grad():
-            print_stats_of_class_ids(labels, "label", self.num_classes)
-            preds = convert_logits_to_ids(outputs)
-            print_stats_of_class_ids(preds, "prediction", self.num_classes)
-            print("=====" * 10)
         labels = self.logitfy(labels)
         if not self.include_background:
             outputs = outputs[:, 1:]

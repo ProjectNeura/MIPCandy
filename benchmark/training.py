@@ -27,7 +27,7 @@ class TrainingTest(DataTest):
             annotations = inspect(self["dataset"])
             annotations.save(path)
         dataset = RandomROIDataset(annotations, 2, num_patches_per_case=3)
-        dataset.roi_shape(roi_shape=(128, 128, 128))
+        dataset.roi_shape(roi_shape=(80, 160, 160))
         self["annotations"] = annotations
         self["train_dataset"], self["val_dataset"] = dataset.fold(fold=0)
 

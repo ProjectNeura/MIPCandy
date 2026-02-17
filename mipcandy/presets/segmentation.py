@@ -138,6 +138,11 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
                 targets.append(downsampled)
         return targets
 
+    def log_stats_of_class_ids(self, ids: torch.Tensor, name: str) -> None:
+        binc_p = torch.bincount(ids.flatten(), minlength=self.num_classes)
+        self.log(f"{name} unique values: {ids.unique()}")
+        self.log(f"{name} class distribution: {(binc_p / binc_p.sum()).cpu().tolist()}")
+
     @override
     def validate_case(self, idx: int, image: torch.Tensor, label: torch.Tensor, toolbox: TrainerToolbox) -> tuple[
         float, dict[str, float], torch.Tensor]:
@@ -162,6 +167,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = False
         self.log(f"Metrics for case {idx}: {metrics}")
+        self.log_stats_of_class_ids(label, "Label")
+        self.log_stats_of_class_ids(mask_output, "Output")
         return -loss.item(), metrics, mask_output.squeeze(0)
 
 
