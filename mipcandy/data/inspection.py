@@ -362,7 +362,7 @@ class RandomROIDataset(ROIDataset):
                  min_factor: int = 16) -> None:
         super().__init__(annotations, clamp=clamp, percentile=percentile)
         if num_patches_per_case > 1:
-            images = [idx for idx in self._images for _ in range(2)]
+            images = [idx for idx in self._images for _ in range(num_patches_per_case)]
             self._images, self._labels = images, images.copy()
         self._batch_size: int = batch_size
         self._oversample_rate: float = oversample_rate
