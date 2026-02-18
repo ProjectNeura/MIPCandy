@@ -1,7 +1,6 @@
 from typing import Literal
 
 import torch
-from torch import nn
 
 from mipcandy.common import Normalize
 
@@ -15,7 +14,11 @@ def convert_ids_to_logits(ids: torch.Tensor, d: Literal[1, 2, 3], num_classes: i
             ids = ids.squeeze(1)
         else:
             raise ValueError(f"`ids` should be {d} dimensional or {d + 1} dimensional with single channel")
-    return nn.functional.one_hot(ids.long(), num_classes).movedim(-1, 1).contiguous().float()
+    shape = list(ids.shape)
+    shape.insert(1, num_classes)
+    logits = torch.zeros(shape, device=ids.device, dtype=torch.float32)
+    logits.scatter_(1, ids.unsqueeze(1).long(), 1)
+    return logits
 
 
 def convert_logits_to_ids(logits: torch.Tensor, *, channel_dim: int = 1) -> torch.Tensor:
