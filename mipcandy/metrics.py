@@ -75,7 +75,7 @@ def dice_similarity_coefficient_with_logits(outputs: torch.Tensor, labels: torch
     fp = (outputs * (1 - labels)).sum(axes)
     fn = ((1 - outputs) * labels).sum(axes)
     volume_sum = 2 * tp + fp + fn
-    if volume_sum == 0:
+    if (volume_sum == 0).any():
         return torch.tensor(if_empty, dtype=torch.float)
     return 2 * tp / volume_sum
 
