@@ -35,9 +35,10 @@ class SanityCheckResult(object):
 def sanity_check(model: nn.Module, input_shape: Sequence[int], *, device: Device | None = None) -> SanityCheckResult:
     if device is None:
         device = auto_device()
-    num_macs, num_params, layer_stats = model_complexity_info(model, input_shape)
-    if num_macs is None or num_params is None:
-        raise RuntimeError("Failed to validate model")
-    outputs = model.to(device).eval()(torch.randn(1, *input_shape, device=device))
+    with torch.no_grad():
+        num_macs, num_params, layer_stats = model_complexity_info(model, input_shape)
+        if num_macs is None or num_params is None:
+            raise RuntimeError("Failed to validate model")
+        outputs = model.to(device).eval()(torch.randn(1, *input_shape, device=device))
     return SanityCheckResult(num_macs, num_params, layer_stats, (
         outputs[0] if isinstance(outputs, tuple) else outputs).squeeze(0))

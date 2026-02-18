@@ -1,6 +1,7 @@
 from abc import ABCMeta, abstractmethod
 from json import dump
-from os import PathLike, listdir, makedirs, rmdir
+from math import log10
+from os import PathLike, listdir, makedirs
 from os.path import exists
 from random import choices
 from shutil import copy2
@@ -8,6 +9,7 @@ from typing import Literal, override, Self, Sequence, TypeVar, Generic, Any
 
 import torch
 from pandas import DataFrame
+from torch import nn
 from torch.utils.data import Dataset
 
 from mipcandy.data.io import fast_save, fast_load, load_image
@@ -66,6 +68,8 @@ class _AbstractDataset(Dataset, Loader, HasDevice, Generic[T], Sequence[T], meta
 
     @override
     def __getitem__(self, idx: int) -> T:
+        if idx >= len(self):
+            raise IndexError(f"Index {idx} out of range [0, {len(self)})")
         return self.load(idx)
 
 
@@ -80,7 +84,8 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
     def __init__(self, images: D, *, transform: Transform | None = None, device: Device = "cpu") -> None:
         super().__init__(device)
         self._images: D = images
-        self._transform: Transform | None = transform.to(device) if transform else None
+        self._transform: Transform | None = None
+        self.set_transform(transform)
 
     @override
     def __len__(self) -> int:
@@ -88,10 +93,16 @@ class UnsupervisedDataset(_AbstractDataset[torch.Tensor], Generic[D], metaclass=
 
     @override
     def __getitem__(self, idx: int) -> torch.Tensor:
-        item = super().__getitem__(idx).to(self._device)
+        item = super().__getitem__(idx).to(self._device, non_blocking=True)
         if self._transform:
             item = self._transform(item)
         return item.as_tensor() if hasattr(item, "as_tensor") else item
+
+    def transform(self) -> Transform | None:
+        return self._transform
+
+    def set_transform(self, transform: Transform | None) -> None:
+        self._transform = transform.to(self._device) if isinstance(transform, nn.Module) else transform
 
 
 class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Generic[D], metaclass=ABCMeta):
@@ -106,24 +117,81 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             raise ValueError(f"Unmatched number of images {len(images)} and labels {len(labels)}")
         self._images: D = images
         self._labels: D = labels
-        self._transform: JointTransform | None = transform.to(device) if transform else None
+        self._transform: JointTransform | None = None
+        self.set_transform(transform)
+        self._preloaded: str = ""
+
+    def _nd(self) -> int:
+        return int(log10(len(self))) + 1
 
     @override
     def __len__(self) -> int:
         return len(self._images)
 
+    @abstractmethod
+    def load_image(self, idx: int) -> torch.Tensor:
+        raise NotImplementedError
+
+    @abstractmethod
+    def load_label(self, idx: int) -> torch.Tensor:
+        raise NotImplementedError
+
+    @override
+    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.load_image(idx), self.load_label(idx)
+
     @override
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = super().__getitem__(idx)
-        image, label = image.to(self._device), label.to(self._device)
+        if self._preloaded:
+            if idx >= len(self):
+                raise IndexError(f"Index {idx} out of range [0, {len(self)})")
+            idx = str(idx).zfill(self._nd())
+            image, label = fast_load(f"{self._preloaded}/images/{idx}.pt"), fast_load(
+                f"{self._preloaded}/labels/{idx}.pt")
+        else:
+            image, label = super().__getitem__(idx)
+        image, label = image.to(self._device, non_blocking=True), label.to(self._device, non_blocking=True)
         if self._transform:
             image, label = self._transform(image, label)
         return image.as_tensor() if hasattr(image, "as_tensor") else image, label.as_tensor() if hasattr(
             label, "as_tensor") else label
 
+    def image(self, idx: int) -> torch.Tensor:
+        return self.load_image(idx)
+
+    def label(self, idx: int) -> torch.Tensor:
+        return self.load_label(idx)
+
+    def transform(self) -> JointTransform | None:
+        return self._transform
+
+    def set_transform(self, transform: JointTransform | None) -> None:
+        self._transform = transform.to(self._device) if transform else None
+
+    def _construct_new(self, images: D, labels: D) -> Self:
+        new = self.construct_new(images, labels)
+        return new
+
     @abstractmethod
     def construct_new(self, images: D, labels: D) -> Self:
         raise NotImplementedError
+
+    def preload(self, output_folder: str | PathLike[str], *, do_transform: bool = False) -> None:
+        if self._preloaded:
+            return
+        images_path = f"{output_folder}/images"
+        labels_path = f"{output_folder}/labels"
+        if not exists(images_path) and not exists(labels_path):
+            makedirs(images_path)
+            makedirs(labels_path)
+            for idx in range(len(self)):
+                image, label = self[idx] if do_transform else self.load(idx)
+                idx = str(idx).zfill(self._nd())
+                fast_save(image, f"{images_path}/{idx}.pt")
+                fast_save(label, f"{labels_path}/{idx}.pt")
+        if do_transform:
+            self._transform = None
+        self._preloaded = output_folder
 
     def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
         Self, Self]:
@@ -139,7 +207,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             else:
                 images_train.append(self._images[i])
                 labels_train.append(self._labels[i])
-        return self.construct_new(images_train, labels_train), self.construct_new(images_val, labels_val)
+        return self._construct_new(images_train, labels_train), self._construct_new(images_val, labels_val)
 
 
 class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
@@ -158,8 +226,12 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         super().__init__(images, labels, transform=transform, device=device)
 
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self._images[idx], self._labels[idx]
+    def load_image(self, idx: int) -> torch.Tensor:
+        return self._images[idx]
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        return self._labels[idx]
 
     @override
     def construct_new(self, images: UnsupervisedDataset, labels: UnsupervisedDataset) -> Self:
@@ -213,14 +285,15 @@ class PathBasedUnsupervisedDataset(UnsupervisedDataset[list[str]], metaclass=ABC
 
 
 class SimpleDataset(PathBasedUnsupervisedDataset):
-    def __init__(self, folder: str | PathLike[str], *, transform: Transform | None = None,
+    def __init__(self, folder: str | PathLike[str], is_label: bool, *, transform: Transform | None = None,
                  device: Device = "cpu") -> None:
         super().__init__(sorted(listdir(folder)), transform=transform, device=device)
         self._folder: str = folder
+        self._is_label: bool = is_label
 
     @override
     def load(self, idx: int) -> torch.Tensor:
-        return self.do_load(f"{self._folder}/{self._images[idx]}", device=self._device)
+        return self.do_load(f"{self._folder}/{self._images[idx]}", is_label=self._is_label, device=self._device)
 
 
 class PathBasedSupervisedDataset(SupervisedDataset[list[str]], metaclass=ABCMeta):
@@ -277,24 +350,20 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         makedirs(folder, exist_ok=True)
 
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        if self._split.endswith("Preloaded"):
-            return (
-                TensorLoader.do_load(f"{self._folder}/images{self._split}/{self._images[idx]}.pt", device=self._device),
-                TensorLoader.do_load(f"{self._folder}/labels{self._split}/{self._labels[idx]}.pt", is_label=True,
-                                     device=self._device)
-            )
-        image = torch.cat([self.do_load(
+    def load_image(self, idx: int) -> torch.Tensor:
+        return torch.cat([self.do_load(
             f"{self._folder}/images{self._split}/{path}", align_spacing=self._align_spacing, device=self._device
         ) for path in self._multimodal_images[idx]]) if self._multimodal_images else self.do_load(
             f"{self._folder}/images{self._split}/{self._images[idx]}", align_spacing=self._align_spacing,
             device=self._device
         )
-        label = self.do_load(
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        return self.do_load(
             f"{self._folder}/labels{self._split}/{self._labels[idx]}", is_label=True, align_spacing=self._align_spacing,
             device=self._device
         )
-        return image, label
 
     def save(self, split: str | Literal["Tr", "Ts"], *, target_folder: str | PathLike[str] | None = None) -> None:
         target_base = target_folder if target_folder else self._folder
@@ -308,20 +377,6 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._split = split
         self._folded = False
 
-    def preload(self) -> None:
-        images_path = f"{self._folder}/images{self._split}Preloaded"
-        labels_path = f"{self._folder}/labels{self._split}Preloaded"
-        if not exists(images_path) or not exists(labels_path):
-            rmdir(images_path)
-            rmdir(labels_path)
-            makedirs(images_path)
-            makedirs(images_path)
-            for idx in range(len(self)):
-                image, label = self.load(idx)
-                fast_save(image, f"{images_path}/{self._images[idx]}.pt")
-                fast_save(label, f"{labels_path}/{self._labels[idx]}.pt")
-        self._split += "Preloaded"
-
     @override
     def construct_new(self, images: list[str], labels: list[str]) -> Self:
         if self._folded:
@@ -334,22 +389,39 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         return new
 
 
-class BinarizedDataset(SupervisedDataset[D]):
-    def __init__(self, base: SupervisedDataset[D], positive_ids: tuple[int, ...], *,
+class BinarizedDataset(SupervisedDataset[tuple[None]]):
+    def __init__(self, base: SupervisedDataset, positive_ids: tuple[int, ...], *,
                  transform: JointTransform | None = None, device: Device = "cpu") -> None:
-        super().__init__(base._images, base._labels, transform=transform, device=device)
-        self._base: SupervisedDataset[D] = base
+        super().__init__((None,), (None,), transform=transform, device=device)
+        self._base: SupervisedDataset = base
         self._positive_ids: tuple[int, ...] = positive_ids
 
     @override
-    def construct_new(self, images: D, labels: D) -> Self:
+    def __len__(self) -> int:
+        return len(self._base)
+
+    @override
+    def construct_new(self, images: tuple[None], labels: tuple[None]) -> Self:
         raise NotImplementedError
 
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._base.load(idx)
+    def load_image(self, idx: int) -> torch.Tensor:
+        return self._base.load_image(idx)
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        label = self._base.load_label(idx)
         for pid in self._positive_ids:
             label[label == pid] = -1
         label[label > 0] = 0
         label[label == -1] = 1
-        return image, label
+        return label
+
+    @override
+    def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
+        Self, Self]:
+        train, val = self._base.fold(fold=fold, picker=picker)
+        return (
+            self.__class__(train, self._positive_ids, transform=self._transform, device=self._device),
+            self.__class__(val, self._positive_ids, transform=self._transform, device=self._device)
+        )

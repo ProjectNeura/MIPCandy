@@ -1,7 +1,9 @@
 from abc import ABCMeta, abstractmethod
-from typing import Any, Generator, Self, Mapping
+from os import PathLike
+from typing import Any, Generator, Self, override
 
 import torch
+from safetensors.torch import save_model, load_model
 from torch import nn
 
 from mipcandy.types import Device, AmbiguousShape
@@ -50,15 +52,14 @@ class HasDevice(object):
     def device(self, *, device: Device | None = None) -> None | Device:
         if device is None:
             return self._device
-        else:
-            self._device = device
+        self._device = device
 
 
 def auto_device() -> Device:
     if torch.cuda.is_available():
         return f"cuda:{max(range(torch.cuda.device_count()),
                            key=lambda i: torch.cuda.memory_reserved(i) - torch.cuda.memory_allocated(i))}"
-    if torch.backends.mps.is_available():
+    if torch.mps.is_available():
         return "mps"
     return "cpu"
 
@@ -96,24 +97,49 @@ class WithPaddingModule(HasDevice):
         return self._restoring_module
 
 
-class WithNetwork(HasDevice, metaclass=ABCMeta):
+class WithCheckpoint(object, metaclass=ABCMeta):
+    @abstractmethod
+    def load_checkpoint(self, model: nn.Module, path: str | PathLike[str]) -> nn.Module:
+        raise NotImplementedError
+
+    @abstractmethod
+    def save_checkpoint(self, model: nn.Module, path: str | PathLike[str]) -> None:
+        raise NotImplementedError
+
+
+class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
     def __init__(self, device: Device) -> None:
         super().__init__(device)
+
+    @override
+    def load_checkpoint(self, model: nn.Module, path: str | PathLike[str]) -> nn.Module:
+        load_model(model, path)
+        return model
+
+    @override
+    def save_checkpoint(self, model: nn.Module, path: str | PathLike[str]) -> None:
+        save_model(getattr(model, "_orig_mod") if hasattr(model, "_orig_mod") else model, path)
 
     @abstractmethod
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
         raise NotImplementedError
 
-    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, checkpoint: Mapping[str, Any]) -> nn.Module:
+    @staticmethod
+    def compile_model(model: nn.Module) -> nn.Module:
+        return torch.compile(model)
+
+    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, path: str | PathLike[str]) -> nn.Module:
         """
         Internally exposed interface for overriding. Use `load_model()` instead.
         """
-        network = self.build_network(example_shape)
-        network.load_state_dict(checkpoint)
-        return network
+        model = self.build_network(example_shape)
+        return self.load_checkpoint(model, path)
 
     def load_model(self, example_shape: AmbiguousShape, compile_model: bool, *,
-                   checkpoint: Mapping[str, Any] | None = None) -> nn.Module:
-        model = (self.build_network_from_checkpoint(example_shape, checkpoint) if checkpoint else self.build_network(
-            example_shape)).to(self._device)
-        return torch.compile(model) if compile_model else model
+                   path: str | PathLike[str] | None = None) -> nn.Module:
+        m = (self.build_network_from_checkpoint(example_shape, path) if path else self.build_network(example_shape)).to(
+            self._device)
+        return self.compile_model(m) if compile_model else m
+
+    def save_model(self, model: nn.Module, path: str | PathLike[str]) -> None:
+        self.save_checkpoint(model, path)

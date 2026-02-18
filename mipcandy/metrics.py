@@ -60,14 +60,28 @@ def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Te
     return apply_multiclass_to_binary(dice_similarity_coefficient_binary, output, label, num_classes, if_empty)
 
 
-def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *,
-                          smooth: float = 1e-5, include_background: bool = True) -> torch.Tensor:
+def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1, batch: bool = True,
+                          min_percentage_per_class: float | None = None) -> torch.Tensor:
     _args_check(output, label)
     axes = tuple(range(2, output.ndim))
-    intersection = (output * label).sum(dim=axes)
-    dice = (2 * intersection + smooth) / (output.sum(dim=axes) + label.sum(dim=axes) + smooth)
-    if not include_background:
-        dice = dice[:, 1:]
+    with torch.no_grad():
+        label_sum = label.sum(axes)
+    intersection = (output * label).sum(axes)
+    output_sum = output.sum(axes)
+    if batch:
+        intersection = intersection.sum(0)
+        output_sum = output_sum.sum(0)
+        label_sum = label_sum.sum(0)
+    dice = (2 * intersection + smooth) / (torch.clip(label_sum + output_sum + smooth, 1e-8))
+    if min_percentage_per_class:
+        total = label_sum.sum()
+        if total == 0:
+            return torch.tensor(1, device=output.device, dtype=output.dtype)
+        min_voxels = total * min_percentage_per_class
+        valid = label_sum >= min_voxels
+        if valid.any():
+            return dice[valid].mean()
+        return torch.tensor(1, device=output.device, dtype=output.dtype)
     return dice.mean()
 
 

@@ -1,5 +1,5 @@
 from abc import ABCMeta, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime
 from hashlib import md5
 from json import load, dump
@@ -9,7 +9,7 @@ from random import seed as random_seed, randint
 from shutil import copy
 from threading import Lock
 from time import time
-from typing import Sequence, override, Callable, Self
+from typing import Sequence, override, Self
 
 import numpy as np
 import torch
@@ -23,8 +23,10 @@ from torch.utils.data import DataLoader
 
 from mipcandy.common import quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
+from mipcandy.data import fast_save, fast_load, empty_cache
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
+from mipcandy.profiler import Profiler
 from mipcandy.sanity_check import sanity_check
 from mipcandy.types import Params, Setting, AmbiguousShape
 
@@ -54,13 +56,13 @@ class TrainerToolbox(object):
 class TrainerTracker(object):
     epoch: int = 0
     best_score: float = float("-inf")
-    worst_case: tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None = None  # (image, label, output)
+    worst_case: int | None = None
 
 
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *, recoverable: bool = True,
-                 device: torch.device | str = "cpu", console: Console = Console()) -> None:
+                 profiler: bool = False, device: torch.device | str = "cpu", console: Console = Console()) -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
         self._trainer_folder: str = trainer_folder
@@ -71,10 +73,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._unrecoverable: bool | None = not recoverable  # None if the trainer is recovered
         self._console: Console = console
         self._metrics: dict[str, list[float]] = {}
-        self._epoch_metrics: dict[str, list[float]] = {}
         self._frontend: Frontend = Frontend({})
         self._lock: Lock = Lock()
         self._tracker: TrainerTracker = TrainerTracker()
+        self._profiler: Profiler | None = None
+        self._use_profiler: bool = profiler
 
     # Recovery methods (PR #108 at https://github.com/ProjectNeura/MIPCandy/pull/108)
 
@@ -82,19 +85,23 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                                      **training_arguments) -> None:
         if self._unrecoverable:
             return
-        torch.save(toolbox.optimizer.state_dict(), f"{self.experiment_folder()}/optimizer.pth")
-        torch.save(toolbox.scheduler.state_dict(), f"{self.experiment_folder()}/scheduler.pth")
-        torch.save(toolbox.criterion.state_dict(), f"{self.experiment_folder()}/criterion.pth")
-        torch.save(tracker, f"{self.experiment_folder()}/tracker.pt")
-        with open(f"{self.experiment_folder()}/training_arguments.json", "w") as f:
-            dump(training_arguments, f)
+        torch.save({
+            "optimizer": toolbox.optimizer.state_dict(),
+            "scheduler": toolbox.scheduler.state_dict(),
+            "criterion": toolbox.criterion.state_dict()
+        }, f"{self.experiment_folder()}/state_dicts.pth")
+        with open(f"{self.experiment_folder()}/state_orb.json", "w") as f:
+            dump({"tracker": asdict(tracker), "training_arguments": training_arguments}, f)
+
+    def load_state_orb(self) -> dict[str, dict[str, Setting]]:
+        with open(f"{self.experiment_folder()}/state_orb.json") as f:
+            return load(f)
 
     def load_tracker(self) -> TrainerTracker:
-        return torch.load(f"{self.experiment_folder()}/tracker.pt", weights_only=False)
+        return TrainerTracker(**self.load_state_orb()["tracker"])
 
     def load_training_arguments(self) -> dict[str, Setting]:
-        with open(f"{self.experiment_folder()}/training_arguments.json") as f:
-            return load(f)
+        return self.load_state_orb()["training_arguments"]
 
     def load_metrics(self) -> dict[str, list[float]]:
         df = read_csv(f"{self.experiment_folder()}/metrics.csv", index_col="epoch")
@@ -103,11 +110,12 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def load_toolbox(self, num_epochs: int, example_shape: AmbiguousShape, compile_model: bool,
                      ema: bool) -> TrainerToolbox:
         toolbox = self._build_toolbox(num_epochs, example_shape, compile_model, ema, model=self.load_model(
-            example_shape, compile_model, checkpoint=torch.load(f"{self.experiment_folder()}/checkpoint_latest.pth")
+            example_shape, compile_model, path=f"{self.experiment_folder()}/checkpoint_latest.pth"
         ))
-        toolbox.optimizer.load_state_dict(torch.load(f"{self.experiment_folder()}/optimizer.pth"))
-        toolbox.scheduler.load_state_dict(torch.load(f"{self.experiment_folder()}/scheduler.pth"))
-        toolbox.criterion.load_state_dict(torch.load(f"{self.experiment_folder()}/criterion.pth"))
+        state_dicts = torch.load(f"{self.experiment_folder()}/state_dicts.pth")
+        toolbox.optimizer.load_state_dict(state_dicts["optimizer"])
+        toolbox.scheduler.load_state_dict(state_dicts["scheduler"])
+        toolbox.criterion.load_state_dict(state_dicts["criterion"])
         return toolbox
 
     def recover_from(self, experiment_id: str) -> Self:
@@ -224,7 +232,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         with open(f"{experiment_folder}/logs.txt", "w") as f:
             f.write(f"File created by FightTumor, copyright (C) {t.year} Project Neura. All rights reserved\n")
         self.log(f"Experiment (ID {self._experiment_id}) created at {t}")
-        self.log(f"Trainer: {self.__class__.__name__}")
+        self.log(f"Trainer: {self._trainer_variant}")
+        if self._use_profiler:
+            gpus = (self._device,) if torch.device(self._device).type == "cuda" else ()
+            self._profiler = Profiler(self._trainer_variant, f"{experiment_folder}/profiler.txt", gpus=gpus)
 
     # Logging utilities
 
@@ -238,19 +249,19 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self._console.print(msg)
 
     def record(self, metric: str, value: float) -> None:
-        try_append(value, self._epoch_metrics, metric)
-
-    def _record(self, metric: str, value: float) -> None:
         try_append(value, self._metrics, metric)
 
-    def record_all(self, metrics: dict[str, float]) -> None:
-        try_append_all(metrics, self._epoch_metrics)
+    def record_all(self, metrics: dict[str, list[float]]) -> None:
+        try_append_all({k: sum(v) / len(v) for k, v in metrics.items()}, self._metrics)
 
-    def _bump_metrics(self) -> None:
-        for metric, values in self._epoch_metrics.items():
-            epoch_overall = sum(values) / len(values)
-            try_append(epoch_overall, self._metrics, metric)
-        self._epoch_metrics.clear()
+    def record_profiler(self) -> None:
+        if self._profiler:
+            self._profiler.record(stack_trace_offset=2)
+
+    def record_profiler_linebreak(self, message: str) -> None:
+        if self._profiler:
+            self._profiler.line_break(message)
+            self.log(f"[PROFILER] {message}")
 
     def save_metrics(self) -> None:
         df = DataFrame(self._metrics)
@@ -293,10 +304,17 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                      quality: float = .75) -> None:
         ...
 
-    def show_metrics(self, epoch: int, *, metrics: dict[str, list[float]] | None = None, prefix: str = "training",
-                     epochwise: bool = True, skip: Callable[[str, list[float]], bool] | None = None) -> None:
-        if not metrics:
-            metrics = self._metrics
+    def show_metrics(self, epoch: int, metrics: dict[str, list[float]], prefix: str, *, epochwise: bool = True,
+                     lookup_prefix: str = "", global_previous_index: int = -2) -> None:
+        """
+        :param epoch: the current epoch number
+        :param metrics: the metrics to show
+        :param prefix: the prefix to use for the table title
+        :param epochwise: whether the metrics are for one epoch (so that previous values are in `self._metrics`) or for all
+            epochs (so that previous values are contained in :param: metrics itself)
+        :param lookup_prefix: the prefix to use for the lookup in `self._metrics`
+        :param global_previous_index: the index of the previous epoch in `self._metrics`
+        """
         prefix = prefix.capitalize()
         table = Table(title=f"Epoch {epoch} {prefix}")
         table.add_column("Metric")
@@ -304,20 +322,36 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         table.add_column("Span", style="cyan")
         table.add_column("Diff", style="magenta")
         for metric, values in metrics.items():
-            if skip and skip(metric, values):
-                continue
             span = f"[{min(values):.4f}, {max(values):.4f}]"
             if epochwise:
-                value = f"{values[-1]:.4f}"
-                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
-            else:
+                if global_previous_index >= 0:
+                    raise ValueError("`global_previous_index` must be negative`")
                 mean = sum(values) / len(values)
                 value = f"{mean:.4f}"
-                diff = f"{mean - self._metrics[metric][-1]:+.4f}" if metric in self._metrics else "N/A"
+                m = f"{lookup_prefix}{metric}"
+                diff = f"{mean - self._metrics[m][global_previous_index]:+.4f}" if m in self._metrics and len(
+                    self._metrics[m]) >= -global_previous_index else "N/A"
+            else:
+                value = f"{values[-1]:.4f}"
+                diff = f"{values[-1] - values[-2]:+.4f}" if len(values) > 1 else "N/A"
             table.add_row(metric, value, span, diff)
             self.log(f"{prefix} {metric}: {value} @{span} ({diff})")
-        console = Console()
-        console.print(table)
+        self._console.print(table)
+
+    def show_metrics_per_case(self, epoch: int, metrics: dict[str, list[float]]) -> None:
+        table = Table(title=f"Epoch {epoch} Metrics per Case")
+        table.add_column("Case ID")
+        num_cases = 0
+        for metric_name in metrics.keys():
+            this_num_cases = len(metrics[metric_name])
+            if not num_cases:
+                num_cases = this_num_cases
+            if this_num_cases != num_cases:
+                raise ValueError(f"Expected {num_cases} cases for metric {metric_name}, got {this_num_cases}")
+            table.add_column(metric_name, style="green")
+        for i in range(num_cases):
+            table.add_row(f"{i + 1}", *(f"{metrics[metric_name][i]:.4f}" for metric_name in metrics.keys()))
+        self._console.print(table)
 
     # Builder interfaces
 
@@ -350,6 +384,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                       ema: bool) -> TrainerToolbox:
         return self._build_toolbox(num_epochs, example_shape, compile_model, ema)
 
+    # Performance
+
+    def empty_cache(self) -> None:
+        empty_cache(self._device)
+
     # Training methods
 
     @abstractmethod
@@ -367,23 +406,30 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             toolbox.ema.update_parameters(toolbox.model)
         return loss, metrics
 
-    def train_epoch(self, epoch: int, toolbox: TrainerToolbox) -> None:
+    def train_epoch(self, toolbox: TrainerToolbox) -> dict[str, list[float]]:
+        self.record_profiler_linebreak(f"Epoch {self._tracker.epoch} training")
+        self.record_profiler()
+        self.record_profiler_linebreak("Emptying cache")
+        self.empty_cache()
+        self.record_profiler()
         toolbox.model.train()
         if toolbox.ema:
             toolbox.ema.train()
+        metrics = {}
         with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=self._console) as progress:
-            task = progress.add_task(f"Epoch {epoch}", total=len(self._dataloader))
+            task = progress.add_task(f"Epoch {self._tracker.epoch}", total=len(self._dataloader))
             for images, labels in self._dataloader:
-                images, labels = images.to(self._device), labels.to(self._device)
+                images, labels = images.to(self._device, non_blocking=True), labels.to(self._device, non_blocking=True)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     images, labels = padding_module(images), padding_module(labels)
-                progress.update(task, description=f"Training epoch {epoch} {tuple(images.shape)}")
-                loss, metrics = self.train_batch(images, labels, toolbox)
-                self.record("combined loss", loss)
-                self.record_all(metrics)
-                progress.update(task, advance=1, description=f"Training epoch {epoch} ({loss:.4f})")
-        self._bump_metrics()
+                progress.update(task, description=f"Training epoch {self._tracker.epoch} {tuple(images.shape)}")
+                loss, batch_metrics = self.train_batch(images, labels, toolbox)
+                try_append(loss, metrics, "combined loss")
+                try_append_all(batch_metrics, metrics)
+                progress.update(task, advance=1, description=f"Training epoch {self._tracker.epoch} ({loss:.4f})")
+                self.record_profiler()
+        return metrics
 
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
               ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
@@ -396,6 +442,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         if seed is None:
             seed = randint(0, 100)
         self.set_seed(seed)
+        self.record_profiler()
+        self.record_profiler_linebreak("Sanity check")
         example_input = self.get_example_input().to(self._device).unsqueeze(0)
         padding_module = self.get_padding_module()
         if padding_module:
@@ -409,6 +457,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         sanity_check_result = sanity_check(template_model, example_shape, device=self._device)
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
+        self.record_profiler()
         self.log("Building toolbox...")
         toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
             num_epochs, example_shape, compile_model, ema
@@ -418,6 +467,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
                                              sanity_check_result.num_macs, sanity_check_result.num_params, num_epochs,
                                              early_stop_tolerance)
+        del sanity_check_result, template_model, example_input
+        self.empty_cache()
         try:
             for epoch in range(self._tracker.epoch, self._tracker.epoch + num_epochs):
                 if early_stop_tolerance == -1:
@@ -428,18 +479,20 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self._tracker.epoch = epoch
                 # Training
                 t0 = time()
-                self.train_epoch(epoch, toolbox)
+                metrics = self.train_epoch(toolbox)
+                self.record_all(metrics)
                 lr = toolbox.scheduler.get_last_lr()[0]
-                self._record("learning rate", lr)
-                self.show_metrics(epoch, skip=lambda m, _: m.startswith("val ") or m == "epoch duration")
-                torch.save(toolbox.model.state_dict(), checkpoint_path("latest"))
+                self.record("learning rate", lr)
+                self.show_metrics(epoch, metrics, "training")
+                self.save_model(toolbox.model, checkpoint_path("latest"))
                 if epoch % (num_epochs / num_checkpoints) == 0:
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
                     self.log(f"Epoch {epoch} checkpoint saved")
                 self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
                 # Validation
                 score, metrics = self.validate(toolbox)
-                self._record("val score", score)
+                self.record_all({f"val {k}": v for k, v in metrics.items()})
+                self.record("val score", score)
                 msg = f"Validation score: {score:.4f}"
                 if epoch > 1:
                     msg += f" ({score - self._metrics["val score"][-2]:+.4f})"
@@ -452,7 +505,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     etc = self.etc(epoch, num_epochs, target_epoch=target_epoch)
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
-                self.show_metrics(epoch, metrics=metrics, prefix="validation", epochwise=False)
+                self.show_metrics_per_case(epoch, metrics)
+                self.show_metrics(epoch, metrics, "validation", lookup_prefix="val ")
                 if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
                     self.log(f"======== Best checkpoint updated ({self._tracker.best_score:.4f} -> {
@@ -460,11 +514,15 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     self._tracker.best_score = score
                     early_stop_tolerance = es_tolerance
                     if save_preview:
-                        self.save_preview(*self._tracker.worst_case, quality=preview_quality)
+                        self.save_preview(
+                            fast_load(f"{self.experiment_folder()}/worst_input.pt"),
+                            fast_load(f"{self.experiment_folder()}/worst_label.pt"),
+                            fast_load(f"{self.experiment_folder()}/worst_output.pt"), quality=preview_quality
+                        )
                 else:
                     early_stop_tolerance -= 1
                 epoch_duration = time() - t0
-                self._record("epoch duration", epoch_duration)
+                self.record("epoch duration", epoch_duration)
                 self.log(f"Epoch {epoch} completed in {epoch_duration:.1f} seconds")
                 self.log(f"=============== Best Validation Score {self._tracker.best_score:.4f} ===============")
                 self.save_metrics()
@@ -503,6 +561,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def validate(self, toolbox: TrainerToolbox) -> tuple[float, dict[str, list[float]]]:
         if self._validation_dataloader.batch_size != 1:
             raise RuntimeError("Validation dataloader should have batch size 1")
+        self.record_profiler_linebreak(f"Validating epoch {self._tracker.epoch}")
+        self.record_profiler()
+        self.record_profiler_linebreak("Emptying cache")
+        self.empty_cache()
+        self.record_profiler()
         toolbox.model.eval()
         if toolbox.ema:
             toolbox.ema.eval()
@@ -514,22 +577,26 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 *Progress.get_default_columns(), SpinnerColumn(), console=self._console
         ) as progress:
             task = progress.add_task(f"Validating", total=num_cases)
-            idx = 0
-            for image, label in self._validation_dataloader:
-                image, label = image.to(self._device), label.to(self._device)
+            for idx, (image, label) in enumerate(self._validation_dataloader):
+                image, label = image.to(self._device, non_blocking=True), label.to(self._device, non_blocking=True)
                 padding_module = self.get_padding_module()
                 if padding_module:
                     image, label = padding_module(image), padding_module(label)
                 image, label = image.squeeze(0), label.squeeze(0)
-                progress.update(task, description=f"Validating {tuple(image.shape)}")
+                progress.update(task,
+                                description=f"Validating epoch {self._tracker.epoch} case {idx} {tuple(image.shape)}")
                 case_score, case_metrics, output = self.validate_case(idx, image, label, toolbox)
                 score += case_score
                 if case_score < worst_score:
-                    self._tracker.worst_case = (image, label, output)
+                    self._tracker.worst_case = idx
+                    fast_save(image, f"{self.experiment_folder()}/worst_input.pt")
+                    fast_save(label, f"{self.experiment_folder()}/worst_label.pt")
+                    fast_save(output, f"{self.experiment_folder()}/worst_output.pt")
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
-                progress.update(task, advance=1, description=f"Validating case {idx} ({case_score:.4f})")
-                idx += 1
+                progress.update(task, advance=1,
+                                description=f"Validating epoch {self._tracker.epoch} case {idx} ({case_score:.4f})")
+                self.record_profiler()
         return score / num_cases, metrics
 
     def __call__(self, *args, **kwargs) -> None:
@@ -537,4 +604,4 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     @override
     def __str__(self) -> str:
-        return f"{self.__class__.__name__} {self._experiment_id}"
+        return f"{self._trainer_variant} {self._experiment_id}"

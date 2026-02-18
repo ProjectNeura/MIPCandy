@@ -1,3 +1,4 @@
+from gc import collect
 from math import floor
 from os import PathLike
 
@@ -11,7 +12,7 @@ from mipcandy.types import Device
 
 
 def fast_save(x: torch.Tensor, path: str | PathLike[str]) -> None:
-    save_file({"payload": x}, path)
+    save_file({"payload": x if x.is_contiguous() else x.contiguous()}, path)
 
 
 def fast_load(path: str | PathLike[str], *, device: Device = "cpu") -> torch.Tensor:
@@ -35,11 +36,12 @@ def resample_to_isotropic(image: SpITK.Image, *, target_iso: float | None = None
 
 
 def load_image(path: str | PathLike[str], *, is_label: bool = False, align_spacing: bool = False,
-               device: Device = "cpu") -> torch.Tensor:
+               target_iso: float | None = None, device: Device = "cpu") -> torch.Tensor:
     file = SpITK.ReadImage(path)
     if align_spacing:
-        file = resample_to_isotropic(file, interpolator=SpITK.sitkNearestNeighbor if is_label else SpITK.sitkBSpline)
-    img = torch.tensor(SpITK.GetArrayFromImage(file), dtype=torch.float, device=device)
+        file = resample_to_isotropic(file, target_iso=target_iso,
+                                     interpolator=SpITK.sitkNearestNeighbor if is_label else SpITK.sitkBSpline)
+    img = torch.tensor(SpITK.GetArrayFromImage(file), dtype=torch.long if is_label else torch.float, device=device)
     if path.endswith(".nii.gz") or path.endswith(".nii") or path.endswith(".mha"):
         img = ensure_num_dimensions(img, 4, append_before=False).permute(3, 0, 1, 2)
         return img.squeeze(1) if img.shape[1] == 1 else img
@@ -56,3 +58,13 @@ def save_image(image: torch.Tensor, path: str | PathLike[str]) -> None:
         image = auto_convert(ensure_num_dimensions(image, 3)).to(torch.uint8).permute(1, 2, 0)
         return SpITK.WriteImage(SpITK.GetImageFromArray(image.detach().cpu().numpy(), isVector=True), path)
     raise NotImplementedError(f"Unsupported file type: {path}")
+
+
+def empty_cache(device: Device) -> None:
+    match torch.device(device).type:
+        case "cpu":
+            collect()
+        case "cuda":
+            torch.cuda.empty_cache()
+        case "mps":
+            torch.mps.empty_cache()

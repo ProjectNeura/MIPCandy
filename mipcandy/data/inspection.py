@@ -1,7 +1,9 @@
 from dataclasses import dataclass, asdict
 from json import dump, load
+from math import ceil
 from os import PathLike
-from typing import Sequence, override, Callable, Self, Any
+from random import randint, choice
+from typing import Sequence, override, Callable, Self, Any, Literal
 
 import numpy as np
 import torch
@@ -11,8 +13,7 @@ from torch import nn
 
 from mipcandy.data.dataset import SupervisedDataset
 from mipcandy.data.geometric import crop
-from mipcandy.layer import HasDevice
-from mipcandy.types import Device, Shape, AmbiguousShape
+from mipcandy.types import Shape, AmbiguousShape
 
 
 def format_bbox(bbox: Sequence[int]) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
@@ -28,7 +29,11 @@ def format_bbox(bbox: Sequence[int]) -> tuple[int, int, int, int] | tuple[int, i
 class InspectionAnnotation(object):
     shape: AmbiguousShape
     foreground_bbox: tuple[int, int, int, int] | tuple[int, int, int, int, int, int]
-    ids: tuple[int, ...]
+    class_ids: tuple[int, ...]
+    class_counts: dict[int, int]
+    class_bboxes: dict[int, tuple[int, int, int, int] | tuple[int, int, int, int, int, int]]
+    class_locations: dict[int, tuple[tuple[int, int] | tuple[int, int, int], ...]]
+    spacing: Shape | None = None
 
     def foreground_shape(self) -> Shape:
         r = (self.foreground_bbox[1] - self.foreground_bbox[0], self.foreground_bbox[3] - self.foreground_bbox[2])
@@ -39,21 +44,17 @@ class InspectionAnnotation(object):
              round((self.foreground_bbox[3] + self.foreground_bbox[2]) * .5))
         return r if len(self.shape) == 2 else r + (round((self.foreground_bbox[5] + self.foreground_bbox[4]) * .5),)
 
-    def to_dict(self) -> dict[str, tuple[int, ...]]:
-        return asdict(self)
 
-
-class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
-    def __init__(self, dataset: SupervisedDataset, background: int, *annotations: InspectionAnnotation,
-                 device: Device = "cpu") -> None:
-        super().__init__(device)
+class InspectionAnnotations(Sequence[InspectionAnnotation]):
+    def __init__(self, dataset: SupervisedDataset, background: int, intensity_stats: tuple[float, float, float, float],
+                 *annotations: InspectionAnnotation) -> None:
         self._dataset: SupervisedDataset = dataset
         self._background: int = background
+        self._intensity_stats: tuple[float, float, float, float] = intensity_stats
         self._annotations: tuple[InspectionAnnotation, ...] = annotations
         self._shapes: tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape] | None = None
         self._foreground_shapes: tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape] | None = None
         self._statistical_foreground_shape: Shape | None = None
-        self._foreground_heatmap: torch.Tensor | None = None
         self._center_of_foregrounds: tuple[int, int] | tuple[int, int, int] | None = None
         self._foreground_offsets: tuple[int, int] | tuple[int, int, int] | None = None
         self._roi_shape: Shape | None = None
@@ -63,6 +64,12 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
 
     def background(self) -> int:
         return self._background
+
+    def intensity_stats(self) -> tuple[float, float, float, float]:
+        """
+        :return: mean, std, 0.5th percentile, 99.5th percentile
+        """
+        return self._intensity_stats
 
     def annotations(self) -> tuple[InspectionAnnotation, ...]:
         return self._annotations
@@ -77,7 +84,10 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
 
     def save(self, path: str | PathLike[str]) -> None:
         with open(path, "w") as f:
-            dump({"background": self._background, "annotations": [a.to_dict() for a in self._annotations]}, f)
+            dump({
+                "background": self._background, "intensity_stats": self._intensity_stats,
+                "annotations": [asdict(a) for a in self._annotations]
+            }, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], AmbiguousShape]) -> tuple[
         AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
@@ -117,7 +127,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return self._statistical_foreground_shape
 
     def crop_foreground(self, i: int, *, expand_ratio: float = 1) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._dataset[i]
+        image, label = self._dataset.image(i), self._dataset.label(i)
         annotation = self._annotations[i]
         bbox = list(annotation.foreground_bbox)
         shape = annotation.foreground_shape()
@@ -129,12 +139,11 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
         return crop(image.unsqueeze(0), bbox).squeeze(0), crop(label.unsqueeze(0), bbox).squeeze(0)
 
     def foreground_heatmap(self) -> torch.Tensor:
-        if self._foreground_heatmap:
-            return self._foreground_heatmap
         depths, heights, widths = self.foreground_shapes()
         max_shape = (max(depths), max(heights), max(widths)) if depths else (max(heights), max(widths))
-        accumulated_label = torch.zeros((1, *max_shape), device=self._device)
-        for i, (_, label) in enumerate(self._dataset):
+        accumulated_label = torch.zeros((1, *max_shape), device=self._dataset.device())
+        for i in range(len(self._dataset)):
+            label = self._dataset.label(i)
             annotation = self._annotations[i]
             paddings = [0, 0, 0, 0]
             shape = annotation.foreground_shape()
@@ -147,8 +156,7 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             accumulated_label += nn.functional.pad(
                 crop((label != self._background).unsqueeze(0), annotation.foreground_bbox), paddings
             ).squeeze(0)
-        self._foreground_heatmap = accumulated_label.squeeze(0)
-        return self._foreground_heatmap
+        return accumulated_label.squeeze(0).detach()
 
     def center_of_foregrounds(self) -> tuple[int, int] | tuple[int, int, int]:
         if self._center_of_foregrounds:
@@ -177,29 +185,34 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             depths, heights, widths = self.shapes()
             if depths:
                 if roi_shape[0] > min(depths) or roi_shape[1] > min(heights) or roi_shape[2] > min(widths):
-                    raise ValueError(f"ROI shape {roi_shape} exceeds minimum image shape ({min(depths)}, {min(heights)}, {min(widths)})")
+                    raise ValueError(
+                        f"ROI shape {roi_shape} exceeds minimum image shape ({min(depths)}, {min(heights)}, {min(widths)})")
             else:
                 if roi_shape[0] > min(heights) or roi_shape[1] > min(widths):
-                    raise ValueError(f"ROI shape {roi_shape} exceeds minimum image shape ({min(heights)}, {min(widths)})")
+                    raise ValueError(
+                        f"ROI shape {roi_shape} exceeds minimum image shape ({min(heights)}, {min(widths)})")
         self._roi_shape = roi_shape
 
-    def roi_shape(self, *, percentile: float = .95) -> Shape:
+    def roi_shape(self, *, clamp: bool = True, percentile: float = .95) -> Shape:
         if self._roi_shape:
             return self._roi_shape
         sfs = self.statistical_foreground_shape(percentile=percentile)
-        if len(sfs) == 2:
-            sfs = (None, *sfs)
-        depths, heights, widths = self.shapes()
-        roi_shape = (min(min(heights), sfs[1]), min(min(widths), sfs[2]))
-        if depths:
-            roi_shape = (min(min(depths), sfs[0]),) + roi_shape
-        self._roi_shape = roi_shape
+        if clamp:
+            if len(sfs) == 2:
+                sfs = (None, *sfs)
+            depths, heights, widths = self.shapes()
+            roi_shape = (min(min(heights), sfs[1]), min(min(widths), sfs[2]))
+            if depths:
+                roi_shape = (min(min(depths), sfs[0]),) + roi_shape
+            self._roi_shape = roi_shape
+        else:
+            self._roi_shape = sfs
         return self._roi_shape
 
-    def roi(self, i: int, *, percentile: float = .95) -> tuple[int, int, int, int] | tuple[
+    def roi(self, i: int, *, clamp: bool = True, percentile: float = .95) -> tuple[int, int, int, int] | tuple[
         int, int, int, int, int, int]:
         annotation = self._annotations[i]
-        roi_shape = self.roi_shape(percentile=percentile)
+        roi_shape = self.roi_shape(clamp=clamp, percentile=percentile)
         offsets = self.center_of_foregrounds_offsets()
         center = annotation.center_of_foreground()
         roi = []
@@ -211,9 +224,9 @@ class InspectionAnnotations(HasDevice, Sequence[InspectionAnnotation]):
             roi.append(position + offset + right)
         return tuple(roi)
 
-    def crop_roi(self, i: int, *, percentile: float = .95) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._dataset[i]
-        roi = self.roi(i, percentile=percentile)
+    def crop_roi(self, i: int, *, clamp: bool = True, percentile: float = .95) -> tuple[torch.Tensor, torch.Tensor]:
+        image, label = self._dataset.image(i), self._dataset.label(i)
+        roi = self.roi(i, clamp=clamp, percentile=percentile)
         return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
 
 
@@ -221,126 +234,191 @@ def _lists_to_tuples(pairs: Sequence[tuple[str, Any]]) -> dict[str, Any]:
     return {k: tuple(v) if isinstance(v, list) else v for k, v in pairs}
 
 
+def _str_indices_to_int_indices(obj: dict[str, Any]) -> dict[int, Any]:
+    return {int(k): v for k, v in obj.items()}
+
+
+def parse_inspection_annotation(obj: dict[str, Any]) -> InspectionAnnotation:
+    obj["class_bboxes"] = _str_indices_to_int_indices(obj["class_bboxes"])
+    obj["class_locations"] = _str_indices_to_int_indices(obj["class_locations"])
+    return InspectionAnnotation(**obj)
+
+
 def load_inspection_annotations(path: str | PathLike[str], dataset: SupervisedDataset) -> InspectionAnnotations:
     with open(path) as f:
         obj = load(f, object_pairs_hook=_lists_to_tuples)
-    return InspectionAnnotations(dataset, obj["background"], *(
-        InspectionAnnotation(**row) for row in obj["annotations"]
+    annotations = InspectionAnnotations(dataset, obj["background"], obj["intensity_stats"], *(
+        parse_inspection_annotation(row) for row in obj["annotations"]
     ))
+    return annotations
 
 
-def inspect(dataset: SupervisedDataset, *, background: int = 0, console: Console = Console()) -> InspectionAnnotations:
+def bbox_from_indices(indices: torch.Tensor, num_dim: Literal[2, 3]) -> tuple[int, int, int, int]:
+    mins = indices.min(dim=0)[0].tolist()
+    maxs = indices.max(dim=0)[0].tolist()
+    bbox = (mins[1], maxs[1] + 1, mins[2], maxs[2] + 1)
+    if num_dim == 3:
+        bbox += (mins[3], maxs[3] + 1)
+    return bbox
+
+
+def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int = 10000,
+            console: Console = Console()) -> InspectionAnnotations:
     r = []
-    with Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
+    with torch.no_grad(), Progress(*Progress.get_default_columns(), SpinnerColumn(), console=console) as progress:
         task = progress.add_task("Inspecting dataset...", total=len(dataset))
-        for _, label in dataset:
+        foreground_voxels = []
+        for idx in range(len(dataset)):
+            label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
+            ndim = label.ndim - 1
             indices = (label != background).nonzero()
-            mins = indices.min(dim=0)[0].tolist()
-            maxs = indices.max(dim=0)[0].tolist()
-            bbox = (mins[1], maxs[1] + 1, mins[2], maxs[2] + 1)
+            if len(indices) == 0:
+                r.append(InspectionAnnotation(
+                    tuple(label.shape[1:]), (0, 0, 0, 0) if ndim == 2 else (0, 0, 0, 0, 0, 0), (), {}, {}, {})
+                )
+                continue
+            foreground_bbox = bbox_from_indices(indices, ndim)
+            class_ids = label.unique().tolist()
+            class_counts = {}
+            class_bboxes = {}
+            class_locations = {}
+            for class_id in class_ids:
+                indices = (label == class_id).nonzero()
+                class_counts[class_id] = len(indices)
+                class_bboxes[class_id] = bbox_from_indices(indices, ndim)
+                if len(indices) > max_samples:
+                    target_samples = min(max_samples, len(indices))
+                    sampled_idx = torch.randperm(len(indices))[:target_samples]
+                    indices = indices[sampled_idx]
+                class_locations[class_id] = [tuple(coord.tolist()[1:]) for coord in indices]
             r.append(InspectionAnnotation(
-                label.shape[1:], bbox if label.ndim == 3 else bbox + (mins[3], maxs[3] + 1), tuple(label.unique())
+                tuple(label.shape[1:]), foreground_bbox, tuple(
+                    class_id for class_id in class_ids if class_id != background
+                ), class_counts, class_bboxes, class_locations
             ))
-    return InspectionAnnotations(dataset, background, *r, device=dataset.device())
+            image = dataset.image(idx)
+            fg_mask = label != background
+            if image.shape[0] > 1:
+                fg_mask = fg_mask.expand_as(image)
+            fg = image[fg_mask]
+            if len(fg) > 0:
+                foreground_voxels.append(fg)
+        if len(foreground_voxels) == 0:
+            raise ValueError("No foreground voxels found in dataset")
+        all_fg = torch.cat(foreground_voxels)
+        all_fg_np = all_fg.cpu().numpy()
+        intensity_stats = (all_fg.mean().item(), all_fg.std().item(), float(np.percentile(all_fg_np, 0.5)),
+                           float(np.percentile(all_fg_np, 99.5)))
+    return InspectionAnnotations(dataset, background, intensity_stats, *r)
 
 
 class ROIDataset(SupervisedDataset[list[int]]):
-    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95) -> None:
-        super().__init__(list(range(len(annotations))), list(range(len(annotations))))
+    def __init__(self, annotations: InspectionAnnotations, *, clamp: bool = True, percentile: float = .95) -> None:
+        super().__init__(list(range(len(annotations))), list(range(len(annotations))),
+                         transform=annotations.dataset().transform(), device=annotations.dataset().device())
         self._annotations: InspectionAnnotations = annotations
+        self._clamp: bool = clamp
         self._percentile: float = percentile
 
     @override
-    def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
-        return self.__class__(self._annotations, percentile=self._percentile)
+    def construct_new(self, images: list[int], labels: list[int]) -> Self:
+        new = self.__class__(self._annotations, percentile=self._percentile)
+        new._images = images
+        new._labels = labels
+        return new
+
+    @override
+    def load_image(self, idx: int) -> torch.Tensor:
+        raise NotImplementedError
+
+    @override
+    def load_label(self, idx: int) -> torch.Tensor:
+        raise NotImplementedError
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         i = self._images[idx]
         if i != self._labels[idx]:
             raise ValueError(f"Image {i} and label {self._labels[idx]} indices do not match")
-        return self._annotations.crop_roi(i, percentile=self._percentile)
+        with torch.no_grad():
+            return self._annotations.crop_roi(i, clamp=self._clamp, percentile=self._percentile)
+
+
+def crop_and_pad(x: torch.Tensor, bbox_lbs: list[int], bbox_ubs: list[int], *,
+                 pad_value: int | float = 0) -> torch.Tensor:
+    shape = x.shape[1:]
+    dim = len(shape)
+    valid_bbox_lbs = [max(0, bbox_lbs[i]) for i in range(dim)]
+    valid_bbox_ubs = [min(shape[i], bbox_ubs[i]) for i in range(dim)]
+    slices = tuple([slice(0, x.shape[0])] + [slice(valid_bbox_lbs[i], valid_bbox_ubs[i]) for i in range(dim)])
+    cropped = x[slices]
+    padding = [(-min(0, bbox_lbs[i]), max(bbox_ubs[i] - shape[i], 0)) for i in range(dim)]
+    padding_torch = []
+    for left, right in reversed(padding):
+        padding_torch.extend([left, right])
+    padded = nn.functional.pad(cropped, padding_torch, mode="constant", value=pad_value)
+    return padded
 
 
 class RandomROIDataset(ROIDataset):
-    def __init__(self, annotations: InspectionAnnotations, *, percentile: float = .95,
-                 foreground_oversample_percentage: float = .33, min_foreground_samples: int = 500,
-                 max_foreground_samples: int = 10000, min_percent_coverage: float = .01) -> None:
-        super().__init__(annotations, percentile=percentile)
-        self._fg_oversample: float = foreground_oversample_percentage
-        self._min_fg_samples: int = min_foreground_samples
-        self._max_fg_samples: int = max_foreground_samples
-        self._min_coverage: float = min_percent_coverage
-        self._fg_locations_cache: dict[int, tuple[tuple[int, ...], ...] | None] = {}
+    def __init__(self, annotations: InspectionAnnotations, batch_size: int, *, num_patches_per_case: int = 1,
+                 oversample_rate: float = .33, clamp: bool = False, percentile: float = .5,
+                 min_factor: int = 16) -> None:
+        super().__init__(annotations, clamp=clamp, percentile=percentile)
+        if num_patches_per_case > 1:
+            images = [idx for idx in self._images for _ in range(num_patches_per_case)]
+            self._images, self._labels = images, images.copy()
+        self._batch_size: int = batch_size
+        self._oversample_rate: float = oversample_rate
+        sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
+        sfs = [ceil(s / min_factor) * min_factor for s in sfs]
+        self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
+            min(sfs[0], 128), min(sfs[1], 128), min(sfs[2], 128))
 
-    def _get_foreground_locations(self, idx: int) -> tuple[tuple[int, ...], ...] | None:
-        if idx not in self._fg_locations_cache:
-            _, label = self._annotations.dataset()[idx]
-            indices = (label != self._annotations.background()).nonzero()[:, 1:]
-            if len(indices) == 0:
-                self._fg_locations_cache[idx] = None
-            elif len(indices) <= self._min_fg_samples:
-                self._fg_locations_cache[idx] = tuple(tuple(coord.tolist()) for coord in indices)
-            else:
-                target_samples = min(
-                    self._max_fg_samples,
-                    max(self._min_fg_samples, int(np.ceil(len(indices) * self._min_coverage)))
-                )
-                sampled_idx = torch.randperm(len(indices))[:target_samples]
-                sampled = indices[sampled_idx]
-                self._fg_locations_cache[idx] = tuple(tuple(coord.tolist()) for coord in sampled)
-        return self._fg_locations_cache[idx]
+    def convert_idx(self, idx: int) -> int:
+        idx, idx2 = self._images[idx], self._labels[idx]
+        if idx != idx2:
+            raise ValueError(f"Image {idx} and label {idx2} indices do not match")
+        return idx
 
-    def _random_roi(self, idx: int) -> tuple[int, int, int, int] | tuple[int, int, int, int, int, int]:
-        annotation = self._annotations[idx]
-        roi_shape = self._annotations.roi_shape(percentile=self._percentile)
-        roi = []
-        for dim_size, patch_size in zip(annotation.shape, roi_shape):
-            left = patch_size // 2
-            right = patch_size - left
-            min_center = left
-            max_center = dim_size - right
-            center = torch.randint(min_center, max_center + 1, (1,)).item()
-            roi.append(center - left)
-            roi.append(center + right)
-        return tuple(roi)
-
-    def _foreground_guided_random_roi(self, idx: int) -> tuple[int, int, int, int] | tuple[
-        int, int, int, int, int, int]:
-        annotation = self._annotations[idx]
-        roi_shape = self._annotations.roi_shape(percentile=self._percentile)
-        foreground_locations = self._get_foreground_locations(idx)
-
-        if foreground_locations is None or len(foreground_locations) == 0:
-            return self._random_roi(idx)
-
-        fg_idx = torch.randint(0, len(foreground_locations), (1,)).item()
-        fg_position = foreground_locations[fg_idx]
-
-        roi = []
-        for fg_pos, dim_size, patch_size in zip(fg_position, annotation.shape, roi_shape):
-            left = patch_size // 2
-            right = patch_size - left
-            center = max(left, min(fg_pos, dim_size - right))
-            roi.append(center - left)
-            roi.append(center + right)
-        return tuple(roi)
+    def roi_shape(self, *, roi_shape: Shape | None = None) -> None | Shape:
+        if not roi_shape:
+            return self._roi_shape
+        self._roi_shape = roi_shape
 
     @override
-    def construct_new(self, images: list[torch.Tensor], labels: list[torch.Tensor]) -> Self:
-        return self.__class__(self._annotations, percentile=self._percentile,
-                              foreground_oversample_percentage=self._fg_oversample,
-                              min_foreground_samples=self._min_fg_samples,
-                              max_foreground_samples=self._max_fg_samples,
-                              min_percent_coverage=self._min_coverage)
+    def construct_new(self, images: list[int], labels: list[int]) -> Self:
+        new = self.__class__(self._annotations, self._batch_size, oversample_rate=self._oversample_rate,
+                             clamp=self._clamp, percentile=self._percentile)
+        new._images = images
+        new._labels = labels
+        new._roi_shape = self._roi_shape
+        return new
+
+    def random_roi(self, idx: int, force_foreground: bool) -> tuple[list[int], list[int]]:
+        idx = self.convert_idx(idx)
+        annotation = self._annotations[idx]
+        roi_shape = self._roi_shape
+        dim = len(annotation.shape)
+        need_to_pad = [max(0, roi_shape[i] - annotation.shape[i]) for i in range(dim)]
+        lbs = [-need_to_pad[i] // 2 for i in range(dim)]
+        ubs = [annotation.shape[i] + need_to_pad[i] // 2 + need_to_pad[i] % 2 - roi_shape[i] for i in range(dim)]
+        if force_foreground and len(annotation.class_ids) > 0:
+            selected_class = choice(annotation.class_ids)
+            selected_voxel = choice(annotation.class_locations[selected_class])
+            bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
+        else:
+            bbox_lbs = [randint(lbs[i], ubs[i]) for i in range(dim)]
+        return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
+
+    def oversample_foreground(self, idx: int) -> bool:
+        return idx % self._batch_size >= round(self._batch_size * (1 - self._oversample_rate))
 
     @override
     def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = self._annotations.dataset()[idx]
-        force_fg = torch.rand(1).item() < self._fg_oversample
-        if force_fg:
-            roi = self._foreground_guided_random_roi(idx)
-        else:
-            roi = self._random_roi(idx)
-        return crop(image.unsqueeze(0), roi).squeeze(0), crop(label.unsqueeze(0), roi).squeeze(0)
+        force_foreground = self.oversample_foreground(idx)
+        lbs, ubs = self.random_roi(idx, force_foreground)
+        dataset = self._annotations.dataset()
+        idx = self.convert_idx(idx)
+        return crop_and_pad(dataset.image(idx), lbs, ubs), crop_and_pad(dataset.label(idx), lbs, ubs)

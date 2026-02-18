@@ -15,7 +15,7 @@ from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
 
 
-def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray",
+def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str | None = None, is_label: bool = False,
                 blocking: bool = False, screenshot_as: str | PathLike[str] | None = None) -> None:
     image = image.detach().cpu()
     if image.ndim < 2:
@@ -28,6 +28,8 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
         else:
             image = image.permute(1, 2, 0)
     image = auto_convert(image)
+    if not cmap:
+        cmap = "jet" if is_label else "gray"
     plt.imshow(image.numpy(), cmap, vmin=0, vmax=255)
     plt.title(title)
     plt.axis("off")
@@ -50,10 +52,17 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
         p.show()
 
 
-def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "gray", max_volume: int = 1e6,
+__LABEL_COLORMAP: list[str] = [
+    "#ffffff", "#2e4057", "#7a0f1c", "#004f4f", "#9a7b00", "#2c2f38", "#5c136f", "#113f2e", "#8a3b12", "#2b1a6f",
+    "#4a5a1a", "#006b6e", "#3b1f14", "#0a2c66", "#5a0f3c", "#0f5c3a"
+]
+
+
+def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | list[str] | None = None,
+                max_volume: int = 1e6, is_label: bool = False,
                 backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
                 screenshot_as: str | PathLike[str] | None = None) -> None:
-    image = image.detach().float().cpu()
+    image = image.detach().cpu()
     if image.ndim < 3:
         raise ValueError(f"`image` must have at least 3 dimensions, got {image.shape}")
     if image.ndim > 3:
@@ -62,11 +71,20 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str = "g
     total = d * h * w
     ratio = int(ceil((total / max_volume) ** (1 / 3))) if total > max_volume else 1
     if ratio > 1:
-        image = ensure_num_dimensions(nn.functional.avg_pool3d(ensure_num_dimensions(image, 5), kernel_size=ratio,
-                                                               stride=ratio, ceil_mode=True), 3)
-    image = image.numpy()
+        image = ensure_num_dimensions(nn.functional.avg_pool3d(
+            ensure_num_dimensions(image, 5).float(), kernel_size=ratio, stride=ratio, ceil_mode=True
+        ), 3).to(image.dtype)
     if backend == "auto":
         backend = "pyvista" if find_spec("pyvista") else "matplotlib"
+    if is_label:
+        max_id = image.max()
+        if max_id > 1 and torch.is_floating_point(image):
+            raise ValueError(f"Label must be class ids that are in [0, 1] or of integer type, got {image.dtype}")
+        if not cmap:
+            cmap = __LABEL_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__LABEL_COLORMAP) else "jet"
+    elif not cmap:
+        cmap = "gray"
+    image = image.numpy()
     match backend:
         case "matplotlib":
             warn("Using Matplotlib for 3D visualization is inefficient and inaccurate, consider using PyVista")

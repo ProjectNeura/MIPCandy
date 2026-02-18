@@ -4,7 +4,7 @@ from typing import Literal
 import torch
 from torch import nn
 
-from mipcandy.types import Colormap, Shape2d, Shape3d, Paddings2d, Paddings3d, Paddings
+from mipcandy.types import Colormap, Shape2d, Shape3d, Shape, Paddings2d, Paddings3d, Paddings
 
 
 def reverse_paddings(paddings: Paddings) -> Paddings:
@@ -124,18 +124,30 @@ class Restore3d(nn.Module):
         return x[:, pad_d0: d - pad_d1, pad_h0: h - pad_h1, pad_w0: w - pad_w1]
 
 
+class PadTo(Pad):
+    def __init__(self, min_shape: Shape, *, value: int = 0, mode: str = "constant", batch: bool = True) -> None:
+        super().__init__(value=value, mode=mode, batch=batch)
+        self._min_shape: Shape = min_shape
+        self._pad: Pad2d | Pad3d = (Pad2d if len(min_shape) == 2 else Pad3d)(min_shape, value=value, mode=mode,
+                                                                             batch=batch)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self._pad(x) if any(x.shape[i + (2 if self.batch else 1)] < min_size for i, min_size in enumerate(
+            self._min_shape)) else x
+
+
 class Normalize(nn.Module):
     def __init__(self, *, domain: tuple[float | None, float | None] = (0, None), strict: bool = False,
-                 method: Literal["linear", "intercept", "cut"] = "linear") -> None:
+                 method: Literal["linear", "intercept", "cut", "zscore"] = "linear") -> None:
         super().__init__()
         self._domain: tuple[float | None, float | None] = domain
         self._strict: bool = strict
-        self._method: Literal["linear", "intercept", "cut"] = method
+        self._method: Literal["linear", "intercept", "cut", "zscore"] = method
         self.requires_grad_(False)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         left, right = self._domain
-        if left is None and right is None:
+        if left is None and right is None and self._method != "zscore":
             return x
         r_l, r_r = x.min(), x.max()
         match self._method:
@@ -166,6 +178,23 @@ class Normalize(nn.Module):
                 if right is not None:
                     x = x.clamp(max=right)
                 return x
+            case "zscore":
+                if left is not None or right is not None:
+                    raise ValueError("Method \"zscore\" cannot have fixed ends")
+                return (x - x.mean()) / max(x.std(), torch.tensor(1e-8, device=x.device))
+
+
+class CTNormalize(nn.Module):
+    def __init__(self, mean_intensity: float, std_intensity: float, lower_bound: float, upper_bound: float) -> None:
+        super().__init__()
+        self._mean_intensity: float = mean_intensity
+        self._std_intensity: float = std_intensity
+        self._lower_bound: float = lower_bound
+        self._upper_bound: float = upper_bound
+        self.requires_grad_(False)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return (x.clip(self._lower_bound, self._upper_bound) - self._mean_intensity) / max(self._std_intensity, 1e-8)
 
 
 class ColorizeLabel(nn.Module):

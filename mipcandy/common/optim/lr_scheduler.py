@@ -18,15 +18,32 @@ class AbsoluteLinearLR(optim.lr_scheduler.LRScheduler):
         self._restart_step: int = 0
         super().__init__(optimizer, last_epoch)
 
-    def _interp(self, step: int) -> float:
-        step -= self._restart_step
-        r = self._k * step + self._b
+    def _interp(self, epoch: int) -> float:
+        epoch -= self._restart_step
+        r = self._k * epoch + self._b
         if r < self._min_lr:
             if self._restart:
-                self._restart_step = step
-                return self._interp(step)
+                self._restart_step = epoch
+                return self._interp(epoch)
             return self._min_lr
         return r
+
+    @override
+    def get_lr(self) -> list[float]:
+        target = self._interp(self.last_epoch)
+        return [target for _ in self.optimizer.param_groups]
+
+
+class PolyLRScheduler(optim.lr_scheduler.LRScheduler):
+    def __init__(self, optimizer: optim.Optimizer, initial_lr: float, max_steps: int, *, exponent: float = .9,
+                 last_epoch: int = -1) -> None:
+        self._initial_lr: float = initial_lr
+        self._max_steps: int = max_steps
+        self._exponent: float = exponent
+        super().__init__(optimizer, last_epoch)
+
+    def _interp(self, epoch: int) -> float:
+        return self._initial_lr * (1 - epoch / self._max_steps) ** self._exponent
 
     @override
     def get_lr(self) -> list[float]:
