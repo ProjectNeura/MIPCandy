@@ -67,21 +67,33 @@ def dice_similarity_coefficient_multiclass(outputs: torch.Tensor, labels: torch.
     return apply_multiclass_to_binary(dice_similarity_coefficient_binary, outputs, labels, num_classes, if_empty)
 
 
-def dice_similarity_coefficient_with_logits(outputs: torch.Tensor, labels: torch.Tensor, *,
-                                            if_empty: float = 1) -> torch.Tensor:
+def _dice_with_logits(outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     _args_check(outputs, labels, dtype=torch.float)
     axes = tuple(range(2, outputs.ndim))
     tp = (outputs * labels).sum(axes)
     fp = (outputs * (1 - labels)).sum(axes)
     fn = ((1 - outputs) * labels).sum(axes)
-    volume_sum = 2 * tp + fp + fn
+    return tp, 2 * tp + fp + fn
+
+
+def dice_similarity_coefficient_with_logits(outputs: torch.Tensor, labels: torch.Tensor, *,
+                                            if_empty: float = 1) -> torch.Tensor:
+    tp, volume_sum = _dice_with_logits(outputs, labels)
     if (volume_sum == 0).any():
         return torch.tensor(if_empty, dtype=torch.float)
-    return 2 * tp / volume_sum
+    dice = 2 * tp / volume_sum
+    return dice.mean()
 
 
-def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, batch_dice: bool = True,
-                          min_percentage_per_class: float | None = None) -> torch.Tensor:
+def dice_similarity_coefficient_with_logits_clip(outputs: torch.Tensor, labels: torch.Tensor, *,
+                                                 clip_min: float = 1e-8) -> torch.Tensor:
+    tp, volume_sum = _dice_with_logits(outputs, labels)
+    dice = 2 * tp / torch.clip(volume_sum, clip_min)
+    return dice.mean()
+
+
+def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, clip_min: float = 1e-8,
+                          batch_dice: bool = True, min_percentage_per_class: float | None = None) -> torch.Tensor:
     _args_check(outputs, labels)
     axes = tuple(range(2, outputs.ndim))
     if batch_dice:
@@ -93,7 +105,7 @@ def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth
         intersection = intersection.sum(0)
         output_sum = output_sum.sum(0)
         label_sum = label_sum.sum(0)
-    dice = (2 * intersection + smooth) / (torch.clip(label_sum + output_sum + smooth, 1e-8))
+    dice = (2 * intersection + smooth) / torch.clip(label_sum + output_sum + smooth, clip_min)
     if min_percentage_per_class:
         total = label_sum.sum()
         if total == 0:
