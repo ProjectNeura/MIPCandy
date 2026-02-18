@@ -19,7 +19,7 @@ def convert_ids_to_logits(ids: torch.Tensor, d: Literal[1, 2, 3], num_classes: i
 
 
 def convert_logits_to_ids(logits: torch.Tensor, *, channel_dim: int = 1) -> torch.Tensor:
-    return logits.argmax(channel_dim, keepdim=True)
+    return logits.round().int() if logits.shape[0] < 2 else logits.argmax(channel_dim, keepdim=True)
 
 
 def auto_convert(image: torch.Tensor) -> torch.Tensor:

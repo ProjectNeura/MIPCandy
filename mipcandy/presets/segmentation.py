@@ -176,8 +176,6 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         label_percentages = self.class_percentages(label)
         metrics.update(self.format_class_percentages(label_percentages, "label"))
         output_logits = self.apply_non_linearity(mask_output, 1)
-        output_percentages = self.class_percentages(
-            output_logits.round().int() if self.num_classes < 2 else convert_logits_to_ids(output_logits)
-        )
+        output_percentages = self.class_percentages(convert_logits_to_ids(output_logits))
         metrics.update(self.format_class_percentages(output_percentages, "output"))
         return -loss.item(), metrics, mask_output.squeeze(0)
