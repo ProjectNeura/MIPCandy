@@ -307,7 +307,7 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
         if len(foreground_voxels) == 0:
             raise ValueError("No foreground voxels found in dataset")
         all_fg = torch.cat(foreground_voxels)
-        all_fg_np = all_fg.numpy()
+        all_fg_np = all_fg.cpu().numpy()
         intensity_stats = (all_fg.mean().item(), all_fg.std().item(), float(np.percentile(all_fg_np, 0.5)),
                            float(np.percentile(all_fg_np, 99.5)))
     return InspectionAnnotations(dataset, background, intensity_stats, *r)
