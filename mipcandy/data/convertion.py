@@ -14,9 +14,7 @@ def convert_ids_to_logits(ids: torch.Tensor, d: Literal[1, 2, 3], num_classes: i
             ids = ids.squeeze(1)
         else:
             raise ValueError(f"`ids` should be {d} dimensional or {d + 1} dimensional with single channel")
-    shape = list(ids.shape)
-    shape.insert(1, num_classes)
-    logits = torch.zeros(shape, device=ids.device, dtype=torch.float32)
+    logits = torch.zeros((ids.shape[0], num_classes, *ids.shape[1:]), device=ids.device, dtype=torch.float32)
     logits.scatter_(1, ids.unsqueeze(1).long(), 1)
     return logits
 
