@@ -96,8 +96,7 @@ class DiceBCELossWithLogits(_SegmentationLoss):
         outputs = outputs.sigmoid()
         labels = labels.float()
         bce = nn.functional.binary_cross_entropy(outputs, labels)
-        soft_dice = soft_dice_coefficient(outputs, labels, smooth=self.smooth,
-                                          min_percentage_per_class=self.min_percentage_per_class)
+        soft_dice = soft_dice_coefficient(outputs, labels, smooth=self.smooth)
         metrics = {"soft dice": soft_dice.item(), "bce loss": bce.item()}
         c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - soft_dice)
         return c, metrics
