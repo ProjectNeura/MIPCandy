@@ -5,7 +5,7 @@ from torch import nn
 
 from mipcandy.data import convert_ids_to_logits, convert_logits_to_ids
 from mipcandy.metrics import do_reduction, soft_dice_coefficient, dice_similarity_coefficient_binary, \
-    dice_similarity_coefficient_with_logits_clip
+    dice_similarity_coefficient_with_logits
 
 
 class FocalBCEWithLogits(nn.Module):
@@ -56,7 +56,7 @@ class _SegmentationLoss(_Loss):
                 class_dice = dice_similarity_coefficient_binary(outputs == i, labels == i).item()
                 dice += class_dice
                 metrics[f"dice {i}"] = class_dice
-            metrics["dice"] = dice_similarity_coefficient_with_logits_clip(
+            metrics["dice"] = dice_similarity_coefficient_with_logits(
                 self.logitfy_no_grad(outputs), self.logitfy_no_grad(labels)
             ).item()
             return c, metrics
