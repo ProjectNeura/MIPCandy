@@ -5,21 +5,27 @@ import torch
 from mipcandy.types import Device
 
 
-def _args_check(output: torch.Tensor, label: torch.Tensor, *, dtype: torch.dtype | None = None,
+def _args_check(outputs: torch.Tensor, labels: torch.Tensor, *, dtype: torch.dtype | None = None,
                 device: Device | None = None) -> tuple[torch.dtype, Device]:
-    if output.shape != label.shape:
-        raise ValueError(f"Output ({output.shape}) and label ({label.shape}) must have the same shape")
-    if (output_dtype := output.dtype) != label.dtype or dtype and output_dtype != dtype:
-        raise TypeError(f"Output ({output_dtype}) and label ({label.dtype}) must both be {dtype}")
-    if (output_device := output.device) != label.device:
-        raise RuntimeError(f"Output ({output.device}) and label ({label.device}) must be on the same device")
-    if device and output_device != device:
-        raise RuntimeError(f"Tensors are expected to be on {device}, but instead they are on {output.device}")
-    return output_dtype, output_device
+    if outputs.shape != labels.shape:
+        raise ValueError(f"Outputs ({outputs.shape}) and labels ({labels.shape}) must have the same shape")
+    if (outputs_dtype := outputs.dtype) != labels.dtype or dtype and outputs_dtype != dtype:
+        raise TypeError(f"Outputs({outputs_dtype}) and labels ({labels.dtype}) must both be {dtype}")
+    if (outputs_device := outputs.device) != labels.device:
+        raise RuntimeError(f"Outputs ({outputs.device}) and labels ({labels.device}) must be on the same device")
+    if device and outputs_device != device:
+        raise RuntimeError(f"Tensors are expected to be on {device}, but instead they are on {outputs.device}")
+    return outputs_dtype, outputs_device
 
 
 class Metric(Protocol):
-    def __call__(self, output: torch.Tensor, label: torch.Tensor, *, if_empty: float = ...) -> torch.Tensor: ...
+    def __call__(self, outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = ...) -> torch.Tensor:
+        """
+        :param outputs: prediction of shape (B, C, ...)
+        :param labels: ground truth of shape (B, C, ...)
+        :param if_empty: the value to return if both outputs and labels are empty
+        """
+        ...
 
 
 def do_reduction(x: torch.Tensor, method: Literal["mean", "median", "sum", "none"] = "mean") -> torch.Tensor:
@@ -34,41 +40,56 @@ def do_reduction(x: torch.Tensor, method: Literal["mean", "median", "sum", "none
             return x
 
 
-def apply_multiclass_to_binary(metric: Metric, output: torch.Tensor, label: torch.Tensor, num_classes: int | None,
+def apply_multiclass_to_binary(metric: Metric, outputs: torch.Tensor, labels: torch.Tensor, num_classes: int | None,
                                if_empty: float, *, reduction: Literal["mean", "sum"] = "mean") -> torch.Tensor:
-    _args_check(output, label, dtype=torch.int)
+    _args_check(outputs, labels, dtype=torch.int)
     if not num_classes:
-        num_classes = max(output.max().item(), label.max().item())
+        num_classes = max(outputs.max().item(), labels.max().item())
     if num_classes == 0:
         return torch.tensor(if_empty, dtype=torch.float)
     else:
-        x = torch.tensor([metric(output == cls, label == cls, if_empty=if_empty) for cls in range(1, num_classes + 1)])
+        x = torch.tensor(
+            [metric(outputs == cls, labels == cls, if_empty=if_empty) for cls in range(1, num_classes + 1)])
         return do_reduction(x, reduction)
 
 
-def dice_similarity_coefficient_binary(output: torch.Tensor, label: torch.Tensor, *,
+def dice_similarity_coefficient_binary(outputs: torch.Tensor, labels: torch.Tensor, *,
                                        if_empty: float = 1) -> torch.Tensor:
-    _args_check(output, label, dtype=torch.bool)
-    volume_sum = output.sum() + label.sum()
+    _args_check(outputs, labels, dtype=torch.bool)
+    volume_sum = outputs.sum() + labels.sum()
     if volume_sum == 0:
         return torch.tensor(if_empty, dtype=torch.float)
-    return 2 * (output & label).sum() / volume_sum
+    return 2 * (outputs & labels).sum() / volume_sum
 
 
-def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Tensor, *, num_classes: int | None = None,
-                                           if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(dice_similarity_coefficient_binary, output, label, num_classes, if_empty)
+def dice_similarity_coefficient_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *,
+                                           num_classes: int | None = None, if_empty: float = 1) -> torch.Tensor:
+    return apply_multiclass_to_binary(dice_similarity_coefficient_binary, outputs, labels, num_classes, if_empty)
 
 
-def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1, batch: bool = True,
+def dice_similarity_coefficient_with_logits(outputs: torch.Tensor, labels: torch.Tensor, *,
+                                            if_empty: float = 1) -> torch.Tensor:
+    _args_check(outputs, labels, dtype=torch.float)
+    axes = tuple(range(2, outputs.ndim))
+    tp = (outputs * labels).sum(axes)
+    fp = (outputs * (1 - labels)).sum(axes)
+    fn = ((1 - outputs) * labels).sum(axes)
+    volume_sum = 2 * tp + fp + fn
+    if volume_sum == 0:
+        return torch.tensor(if_empty, dtype=torch.float)
+    return 2 * tp / volume_sum
+
+
+def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, batch_dice: bool = True,
                           min_percentage_per_class: float | None = None) -> torch.Tensor:
-    _args_check(output, label)
-    axes = tuple(range(2, output.ndim))
-    with torch.no_grad():
-        label_sum = label.sum(axes)
-    intersection = (output * label).sum(axes)
-    output_sum = output.sum(axes)
-    if batch:
+    _args_check(outputs, labels)
+    axes = tuple(range(2, outputs.ndim))
+    if batch_dice:
+        axes = (0,) + axes
+    label_sum = labels.sum(axes)
+    intersection = (outputs * labels).sum(axes)
+    output_sum = outputs.sum(axes)
+    if batch_dice:
         intersection = intersection.sum(0)
         output_sum = output_sum.sum(0)
         label_sum = label_sum.sum(0)
@@ -76,59 +97,59 @@ def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: 
     if min_percentage_per_class:
         total = label_sum.sum()
         if total == 0:
-            return torch.tensor(1, device=output.device, dtype=output.dtype)
+            return torch.tensor(1, device=outputs.device, dtype=outputs.dtype)
         min_voxels = total * min_percentage_per_class
         valid = label_sum >= min_voxels
         if valid.any():
             return dice[valid].mean()
-        return torch.tensor(1, device=output.device, dtype=output.dtype)
+        return torch.tensor(1, device=outputs.device, dtype=outputs.dtype)
     return dice.mean()
 
 
-def accuracy_binary(output: torch.Tensor, label: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    _args_check(output, label, dtype=torch.bool)
-    numerator = (output & label).sum() + (~output & ~label).sum()
-    denominator = numerator + (output & ~label).sum() + (label & ~output).sum()
+def accuracy_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
+    _args_check(outputs, labels, dtype=torch.bool)
+    numerator = (outputs & labels).sum() + (~outputs & ~labels).sum()
+    denominator = numerator + (outputs & ~labels).sum() + (labels & ~outputs).sum()
     return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else numerator / denominator
 
 
-def accuracy_multiclass(output: torch.Tensor, label: torch.Tensor, *, num_classes: int | None = None,
+def accuracy_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
                         if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(accuracy_binary, output, label, num_classes, if_empty)
+    return apply_multiclass_to_binary(accuracy_binary, outputs, labels, num_classes, if_empty)
 
 
-def _precision_or_recall(output: torch.Tensor, label: torch.Tensor, if_empty: float,
+def _precision_or_recall(outputs: torch.Tensor, labels: torch.Tensor, if_empty: float,
                          is_precision: bool) -> torch.Tensor:
-    _args_check(output, label, dtype=torch.bool)
-    tp = (output & label).sum()
-    denominator = output.sum() if is_precision else label.sum()
+    _args_check(outputs, labels, dtype=torch.bool)
+    tp = (outputs & labels).sum()
+    denominator = outputs.sum() if is_precision else labels.sum()
     return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else tp / denominator
 
 
-def precision_binary(output: torch.Tensor, label: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    return _precision_or_recall(output, label, if_empty, True)
+def precision_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
+    return _precision_or_recall(outputs, labels, if_empty, True)
 
 
-def precision_multiclass(output: torch.Tensor, label: torch.Tensor, *, num_classes: int | None = None,
+def precision_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
                          if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(precision_binary, output, label, num_classes, if_empty)
+    return apply_multiclass_to_binary(precision_binary, outputs, labels, num_classes, if_empty)
 
 
-def recall_binary(output: torch.Tensor, label: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    return _precision_or_recall(output, label, if_empty, False)
+def recall_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
+    return _precision_or_recall(outputs, labels, if_empty, False)
 
 
-def recall_multiclass(output: torch.Tensor, label: torch.Tensor, *, num_classes: int | None = None,
+def recall_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
                       if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(recall_binary, output, label, num_classes, if_empty)
+    return apply_multiclass_to_binary(recall_binary, outputs, labels, num_classes, if_empty)
 
 
-def iou_binary(output: torch.Tensor, label: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    _args_check(output, label, dtype=torch.bool)
-    denominator = (output | label).sum()
-    return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else (output & label).sum() / denominator
+def iou_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
+    _args_check(outputs, labels, dtype=torch.bool)
+    denominator = (outputs | labels).sum()
+    return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else (outputs & labels).sum() / denominator
 
 
-def iou_multiclass(output: torch.Tensor, label: torch.Tensor, *, num_classes: int | None = None,
+def iou_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
                    if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(iou_binary, output, label, num_classes, if_empty)
+    return apply_multiclass_to_binary(iou_binary, outputs, labels, num_classes, if_empty)
