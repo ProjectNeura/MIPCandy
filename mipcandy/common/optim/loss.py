@@ -37,7 +37,7 @@ class _SegmentationLoss(_Loss):
         self.num_classes: int = num_classes
         self.include_background: bool = include_background
 
-    def logitfy(self, ids: torch.Tensor) -> torch.Tensor:
+    def logitfy_no_grad(self, ids: torch.Tensor) -> torch.Tensor:
         with torch.no_grad():
             if self.num_classes != 1 and ids.shape[1] == 1:
                 if (d := ids.ndim - 2) not in (1, 2, 3):
@@ -56,7 +56,7 @@ class _SegmentationLoss(_Loss):
                 class_dice = dice_similarity_coefficient_binary(outputs == i, labels == i).item()
                 dice += class_dice
                 metrics[f"dice {i}"] = class_dice
-            outputs = self.logitfy(outputs)
+            outputs = self.logitfy_no_grad(outputs)
             metrics["dice"] = dice_similarity_coefficient_with_logits(outputs, labels).item()
             return c, metrics
 
@@ -74,7 +74,7 @@ class DiceCELossWithLogits(_SegmentationLoss):
     def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         ce = nn.functional.cross_entropy(outputs, labels[:, 0].long())
         outputs = outputs.softmax(1)
-        labels = self.logitfy(labels)
+        labels = self.logitfy_no_grad(labels)
         if not self.include_background:
             outputs = outputs[:, 1:]
             labels = labels[:, 1:]
