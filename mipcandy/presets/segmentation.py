@@ -73,9 +73,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def save_preview(self, image: torch.Tensor, label: torch.Tensor, output: torch.Tensor, *,
                      quality: float = .75) -> None:
-        output = self.apply_non_linearity(output, 0)
-        if output.shape[0] != 1:
-            output = convert_logits_to_ids(output, channel_dim=0).int()
+        output = convert_logits_to_ids(self.apply_non_linearity(output, 0), channel_dim=0)
         self._save_preview(image, "input", quality)
         self._save_preview(label.int(), "label", quality, is_label=True)
         self._save_preview(output, "prediction", quality, is_label=True)
