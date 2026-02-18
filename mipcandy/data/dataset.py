@@ -168,12 +168,8 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
     def set_transform(self, transform: JointTransform | None) -> None:
         self._transform = transform.to(self._device) if transform else None
 
-    def _construct_new(self, images: D, labels: D) -> Self:
-        new = self.construct_new(images, labels)
-        return new
-
     @abstractmethod
-    def construct_new(self, images: D, labels: D) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
         raise NotImplementedError
 
     def preload(self, output_folder: str | PathLike[str], *, do_transform: bool = False) -> None:
@@ -207,7 +203,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             else:
                 images_train.append(self._images[i])
                 labels_train.append(self._labels[i])
-        return self._construct_new(images_train, labels_train), self._construct_new(images_val, labels_val)
+        return self.construct_new(images_train, labels_train), self.construct_new(images_val, labels_val)
 
 
 class DatasetFromMemory(UnsupervisedDataset[Sequence[torch.Tensor]]):
@@ -234,7 +230,7 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         return self._labels[idx]
 
     @override
-    def construct_new(self, images: UnsupervisedDataset, labels: UnsupervisedDataset) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
         return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), transform=self._transform,
                              device=self._device)
 
@@ -378,7 +374,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._folded = False
 
     @override
-    def construct_new(self, images: list[str], labels: list[str]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
         if self._folded:
             raise ValueError("Cannot construct a new dataset from a fold")
         new = self.__class__(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
@@ -401,7 +397,7 @@ class BinarizedDataset(SupervisedDataset[tuple[None]]):
         return len(self._base)
 
     @override
-    def construct_new(self, images: tuple[None], labels: tuple[None]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
         raise NotImplementedError
 
     @override
