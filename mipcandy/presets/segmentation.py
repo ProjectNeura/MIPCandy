@@ -16,7 +16,7 @@ class DeepSupervisionWrapper(nn.Module):
         super().__init__()
         if weight_factors and all(x == 0 for x in weight_factors):
             raise ValueError("At least one weight factor should be nonzero")
-        self.weight_factors: tuple[float, ...] = tuple(weight_factors)
+        self.weight_factors: tuple[float, ...] | None = tuple(weight_factors) if weight_factors else None
         self.loss: nn.Module = loss
 
     @override
