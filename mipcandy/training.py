@@ -515,7 +515,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     early_stop_tolerance = es_tolerance
                     if save_preview:
                         self.save_preview(
-                            *self._validation_dataloader.dataset[self._tracker.worst_case],
+                            fast_load(f"{self.experiment_folder()}/worst_input.pt"),
+                            fast_load(f"{self.experiment_folder()}/worst_label.pt"),
                             fast_load(f"{self.experiment_folder()}/worst_output.pt"), quality=preview_quality
                         )
                 else:
@@ -588,6 +589,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
+                    fast_save(image, f"{self.experiment_folder()}/worst_input.pt")
+                    fast_save(label, f"{self.experiment_folder()}/worst_label.pt")
                     fast_save(output, f"{self.experiment_folder()}/worst_output.pt")
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
