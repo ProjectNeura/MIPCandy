@@ -85,13 +85,6 @@ def dice_similarity_coefficient_with_logits(outputs: torch.Tensor, labels: torch
     return dice.mean()
 
 
-def dice_similarity_coefficient_with_logits_clip(outputs: torch.Tensor, labels: torch.Tensor, *,
-                                                 clip_min: float = 1e-8) -> torch.Tensor:
-    tp, volume_sum = _dice_with_logits(outputs, labels)
-    dice = 2 * tp / torch.clip(volume_sum, clip_min)
-    return dice.mean()
-
-
 def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, clip_min: float = 1e-8,
                           batch_dice: bool = True) -> torch.Tensor:
     _args_check(outputs, labels)
