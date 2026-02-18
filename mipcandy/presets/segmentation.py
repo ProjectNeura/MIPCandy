@@ -94,10 +94,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         if self.num_classes < 2:
             if not self.include_background:
                 raise ValueError("Binary segmentation models must include background class")
-            loss = DiceBCELossWithLogits(min_percentage_per_class=1e-5)
+            loss = DiceBCELossWithLogits()
         else:
-            loss = DiceCELossWithLogits(self.num_classes, include_background=self.include_background,
-                                        min_percentage_per_class=1e-5)
+            loss = DiceCELossWithLogits(self.num_classes, include_background=self.include_background)
         if self.deep_supervision:
             if not self.deep_supervision_weights and self.deep_supervision_scales:
                 weights = np.array([1 / (2 ** i) for i in range(len(self.deep_supervision_scales))])
