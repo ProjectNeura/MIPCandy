@@ -93,7 +93,7 @@ def dice_similarity_coefficient_with_logits_clip(outputs: torch.Tensor, labels: 
 
 
 def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, clip_min: float = 1e-8,
-                          batch_dice: bool = True, min_percentage_per_class: float | None = None) -> torch.Tensor:
+                          batch_dice: bool = True) -> torch.Tensor:
     _args_check(outputs, labels)
     axes = tuple(range(2, outputs.ndim))
     if batch_dice:
@@ -106,15 +106,6 @@ def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth
         output_sum = output_sum.sum(0)
         label_sum = label_sum.sum(0)
     dice = (2 * intersection + smooth) / torch.clip(label_sum + output_sum + smooth, clip_min)
-    if min_percentage_per_class:
-        total = label_sum.sum()
-        if total == 0:
-            return torch.tensor(1, device=outputs.device, dtype=outputs.dtype)
-        min_voxels = total * min_percentage_per_class
-        valid = label_sum >= min_voxels
-        if valid.any():
-            return dice[valid].mean()
-        return torch.tensor(1, device=outputs.device, dtype=outputs.dtype)
     return dice.mean()
 
 

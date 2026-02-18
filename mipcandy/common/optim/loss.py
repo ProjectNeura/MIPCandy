@@ -64,13 +64,11 @@ class _SegmentationLoss(_Loss):
 
 class DiceCELossWithLogits(_SegmentationLoss):
     def __init__(self, num_classes: int, *, lambda_ce: float = 1, lambda_soft_dice: float = 1,
-                 smooth: float = 1e-5, include_background: bool = True,
-                 min_percentage_per_class: float | None = None) -> None:
+                 smooth: float = 1e-5, include_background: bool = True) -> None:
         super().__init__(num_classes, include_background)
         self.lambda_ce: float = lambda_ce
         self.lambda_soft_dice: float = lambda_soft_dice
         self.smooth: float = smooth
-        self.min_percentage_per_class: float | None = min_percentage_per_class
 
     def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
         ce = nn.functional.cross_entropy(outputs, labels[:, 0].long())
@@ -79,8 +77,7 @@ class DiceCELossWithLogits(_SegmentationLoss):
         if not self.include_background:
             outputs = outputs[:, 1:]
             labels = labels[:, 1:]
-        soft_dice = soft_dice_coefficient(outputs, labels, smooth=self.smooth,
-                                          min_percentage_per_class=self.min_percentage_per_class)
+        soft_dice = soft_dice_coefficient(outputs, labels, smooth=self.smooth)
         metrics = {"soft dice": soft_dice.item(), "ce loss": ce.item()}
         c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - soft_dice)
         return c, metrics
