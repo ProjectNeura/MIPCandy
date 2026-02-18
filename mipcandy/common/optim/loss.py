@@ -50,8 +50,6 @@ class _SegmentationLoss(_Loss):
             return self._forward(outputs, labels)
         with torch.no_grad():
             c, metrics = self._forward(outputs, labels)
-            if (d := labels.ndim - 2) not in (1, 2, 3):
-                raise ValueError(f"Expected labels to be 1D, 2D, or 3D, got {d} spatial dimensions")
             outputs = convert_logits_to_ids(outputs)
             dice = 0
             for i in range(0 if self.include_background else 1, self.num_classes):
