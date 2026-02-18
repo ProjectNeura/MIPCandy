@@ -128,8 +128,8 @@ class PadTo(Pad):
     def __init__(self, min_shape: Shape, *, value: int = 0, mode: str = "constant", batch: bool = True) -> None:
         super().__init__(value=value, mode=mode, batch=batch)
         self._min_shape: Shape = min_shape
-        self._pad2d: Pad2d = Pad2d(min_shape[0], value=value, mode=mode, batch=batch)
-        self._pad3d: Pad3d = Pad3d(min_shape[0], value=value, mode=mode, batch=batch)
+        self._pad2d: Pad2d = Pad2d(min_shape, value=value, mode=mode, batch=batch)
+        self._pad3d: Pad3d = Pad3d(min_shape, value=value, mode=mode, batch=batch)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return (self._pad2d(x) if x.ndim == (4 if self.batch else 3) else self._pad3d(x)) if any(

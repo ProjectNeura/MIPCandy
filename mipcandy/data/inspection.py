@@ -280,12 +280,10 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                 continue
             foreground_bbox = bbox_from_indices(indices, ndim)
             class_ids = label.unique().tolist()
-            if background in class_ids:
-                class_ids.remove(background)
             class_counts = {}
             class_bboxes = {}
             class_locations = {}
-            for class_id in [background] + class_ids:
+            for class_id in class_ids:
                 indices = (label == class_id).nonzero()
                 class_counts[class_id] = len(indices)
                 class_bboxes[class_id] = bbox_from_indices(indices, ndim)
@@ -295,7 +293,9 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                     indices = indices[sampled_idx]
                 class_locations[class_id] = [tuple(coord.tolist()[1:]) for coord in indices]
             r.append(InspectionAnnotation(
-                tuple(label.shape[1:]), foreground_bbox, tuple(class_ids), class_counts, class_bboxes, class_locations
+                tuple(label.shape[1:]), foreground_bbox, tuple(
+                    class_id for class_id in class_ids if class_id != background
+                ), class_counts, class_bboxes, class_locations
             ))
             image = dataset.image(idx)
             fg = image[label != background]

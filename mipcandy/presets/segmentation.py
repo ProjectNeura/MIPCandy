@@ -92,7 +92,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
     @override
     def build_criterion(self) -> nn.Module:
         if self.num_classes < 2:
-            loss = DiceBCELossWithLogits(include_background=self.include_background, min_percentage_per_class=1e-5)
+            if not self.include_background:
+                raise ValueError("Binary segmentation models must include background class")
+            loss = DiceBCELossWithLogits(min_percentage_per_class=1e-5)
         else:
             loss = DiceCELossWithLogits(self.num_classes, include_background=self.include_background,
                                         min_percentage_per_class=1e-5)
