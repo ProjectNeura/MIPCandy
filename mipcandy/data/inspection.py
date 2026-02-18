@@ -298,7 +298,10 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                 ), class_counts, class_bboxes, class_locations
             ))
             image = dataset.image(idx)
-            fg = image[label != background]
+            fg_mask = label != background
+            if image.shape[0] > 1:
+                fg_mask = fg_mask.expand_as(image)
+            fg = image[fg_mask]
             if len(fg) > 0:
                 foreground_voxels.append(fg)
         if len(foreground_voxels) == 0:
