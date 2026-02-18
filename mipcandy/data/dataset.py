@@ -168,7 +168,6 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
     def _construct_new(self, images: D, labels: D) -> Self:
         new = self.construct_new(images, labels)
-        new._preloaded = self._preloaded
         new._nd = self._nd
         return new
 
