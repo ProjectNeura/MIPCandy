@@ -56,8 +56,9 @@ class _SegmentationLoss(_Loss):
                 class_dice = dice_similarity_coefficient_binary(outputs == i, labels == i).item()
                 dice += class_dice
                 metrics[f"dice {i}"] = class_dice
-            outputs = self.logitfy_no_grad(outputs)
-            metrics["dice"] = dice_similarity_coefficient_with_logits(outputs, labels).item()
+            metrics["dice"] = dice_similarity_coefficient_with_logits(
+                self.logitfy_no_grad(outputs), self.logitfy_no_grad(labels)
+            ).item()
             return c, metrics
 
 
