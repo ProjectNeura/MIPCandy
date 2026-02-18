@@ -118,7 +118,7 @@ class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
 
     @override
     def save_checkpoint(self, model: nn.Module, path: str | PathLike[str]) -> None:
-        save_model(model, path)
+        save_model(getattr(model, "_orig_mod") if hasattr(model, "_orig_mod") else model, path)
 
     @abstractmethod
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
@@ -128,20 +128,18 @@ class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
     def compile_model(model: nn.Module) -> nn.Module:
         return torch.compile(model)
 
-    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, path: str | PathLike[str],
-                                      compile_model: bool) -> nn.Module:
+    def build_network_from_checkpoint(self, example_shape: AmbiguousShape, path: str | PathLike[str]) -> nn.Module:
         """
         Internally exposed interface for overriding. Use `load_model()` instead.
         """
         model = self.build_network(example_shape)
-        return self.load_checkpoint(self.compile_model(model) if compile_model else model, path)
+        return self.load_checkpoint(model, path)
 
     def load_model(self, example_shape: AmbiguousShape, compile_model: bool, *,
                    path: str | PathLike[str] | None = None) -> nn.Module:
-        if path:
-            return self.build_network_from_checkpoint(example_shape, path, compile_model).to(self._device)
-        model = self.build_network(example_shape).to(self._device)
-        return self.compile_model(model) if compile_model else model
+        m = (self.build_network_from_checkpoint(example_shape, path) if path else self.build_network(example_shape)).to(
+            self._device)
+        return self.compile_model(m) if compile_model else m
 
     def save_model(self, model: nn.Module, path: str | PathLike[str]) -> None:
         self.save_checkpoint(model, path)
