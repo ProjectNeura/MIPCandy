@@ -60,12 +60,24 @@ def dice_similarity_coefficient_multiclass(output: torch.Tensor, label: torch.Te
     return apply_multiclass_to_binary(dice_similarity_coefficient_binary, output, label, num_classes, if_empty)
 
 
+def dice_similarity_coefficient_with_logits(output: torch.Tensor, label: torch.Tensor, *,
+                                            if_empty: float = 1) -> torch.Tensor:
+    _args_check(output, label, dtype=torch.float)
+    axes = tuple(range(2, output.ndim))
+    tp = (output * label).sum(axes)
+    fp = (output * (1 - label)).sum(axes)
+    fn = ((1 - output) * label).sum(axes)
+    volume_sum = 2 * tp + fp + fn
+    if volume_sum == 0:
+        return torch.tensor(if_empty, dtype=torch.float)
+    return 2 * tp / volume_sum
+
+
 def soft_dice_coefficient(output: torch.Tensor, label: torch.Tensor, *, smooth: float = 1, batch: bool = True,
                           min_percentage_per_class: float | None = None) -> torch.Tensor:
     _args_check(output, label)
     axes = tuple(range(2, output.ndim))
-    with torch.no_grad():
-        label_sum = label.sum(axes)
+    label_sum = label.sum(axes)
     intersection = (output * label).sum(axes)
     output_sum = output.sum(axes)
     if batch:
