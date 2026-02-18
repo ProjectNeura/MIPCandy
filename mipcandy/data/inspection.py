@@ -404,13 +404,10 @@ class RandomROIDataset(ROIDataset):
         need_to_pad = [max(0, roi_shape[i] - annotation.shape[i]) for i in range(dim)]
         lbs = [-need_to_pad[i] // 2 for i in range(dim)]
         ubs = [annotation.shape[i] + need_to_pad[i] // 2 + need_to_pad[i] % 2 - roi_shape[i] for i in range(dim)]
-        if force_foreground:
-            if len(annotation.class_ids) == 0:
-                bbox_lbs = [randint(lbs[j], ubs[j]) for j in range(dim)]
-            else:
-                selected_class = choice(annotation.class_ids)
-                selected_voxel = choice(annotation.class_locations[selected_class])
-                bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
+        if force_foreground and len(annotation.class_ids) > 0:
+            selected_class = choice(annotation.class_ids)
+            selected_voxel = choice(annotation.class_locations[selected_class])
+            bbox_lbs = [max(lbs[i], selected_voxel[i] - roi_shape[i] // 2) for i in range(dim)]
         else:
             bbox_lbs = [randint(lbs[i], ubs[i]) for i in range(dim)]
         return bbox_lbs, [bbox_lbs[i] + roi_shape[i] for i in range(dim)]
