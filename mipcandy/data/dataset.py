@@ -120,7 +120,9 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
         self._transform: JointTransform | None = None
         self.set_transform(transform)
         self._preloaded: str = ""
-        self._nd: int = int(log10(len(self))) + 1
+
+    def _nd(self) -> int:
+        return int(log10(len(self))) + 1
 
     @override
     def __len__(self) -> int:
@@ -143,7 +145,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
         if self._preloaded:
             if idx >= len(self):
                 raise IndexError(f"Index {idx} out of range [0, {len(self)})")
-            idx = str(idx).zfill(self._nd)
+            idx = str(idx).zfill(self._nd())
             image, label = fast_load(f"{self._preloaded}/images/{idx}.pt"), fast_load(
                 f"{self._preloaded}/labels/{idx}.pt")
         else:
@@ -168,7 +170,6 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
 
     def _construct_new(self, images: D, labels: D) -> Self:
         new = self.construct_new(images, labels)
-        new._nd = self._nd
         return new
 
     @abstractmethod
@@ -185,7 +186,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
             makedirs(labels_path)
             for idx in range(len(self)):
                 image, label = self[idx] if do_transform else self.load(idx)
-                idx = str(idx).zfill(self._nd)
+                idx = str(idx).zfill(self._nd())
                 fast_save(image, f"{images_path}/{idx}.pt")
                 fast_save(label, f"{labels_path}/{idx}.pt")
         if do_transform:
