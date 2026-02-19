@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from mipcandy.data import convert_ids_to_logits, convert_logits_to_ids
-from mipcandy.metrics import do_reduction, dice_similarity_coefficient
+from mipcandy.metrics import do_reduction, binary_dice, dice_similarity_coefficient, soft_dice
 
 
 class FocalBCEWithLogits(nn.Module):
@@ -52,7 +52,7 @@ class _SegmentationLoss(_Loss):
             outputs = convert_logits_to_ids(outputs)
             dice = 0
             for i in range(0 if self.include_background else 1, self.num_classes):
-                class_dice = dice_similarity_coefficient(outputs == i, labels == i).item()
+                class_dice = binary_dice(outputs == i, labels == i).item()
                 dice += class_dice
                 metrics[f"dice {i}"] = class_dice
             metrics["dice"] = dice_similarity_coefficient(
@@ -76,9 +76,9 @@ class DiceCELossWithLogits(_SegmentationLoss):
         if not self.include_background:
             outputs = outputs[:, 1:]
             labels = labels[:, 1:]
-        soft_dice = soft_dice(outputs, labels, smooth=self.smooth)
-        metrics = {"soft dice": soft_dice.item(), "ce loss": ce.item()}
-        c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - soft_dice)
+        dice = soft_dice(outputs, labels, smooth=self.smooth)
+        metrics = {"soft dice": dice.item(), "ce loss": ce.item()}
+        c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - dice)
         return c, metrics
 
 
@@ -95,7 +95,7 @@ class DiceBCELossWithLogits(_SegmentationLoss):
         outputs = outputs.sigmoid()
         labels = labels.float()
         bce = nn.functional.binary_cross_entropy(outputs, labels)
-        soft_dice = soft_dice(outputs, labels, smooth=self.smooth)
-        metrics = {"soft dice": soft_dice.item(), "bce loss": bce.item()}
-        c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - soft_dice)
+        dice = soft_dice(outputs, labels, smooth=self.smooth)
+        metrics = {"soft dice": dice.item(), "bce loss": bce.item()}
+        c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - dice)
         return c, metrics
