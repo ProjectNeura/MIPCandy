@@ -10,6 +10,8 @@ def convert_ids_to_logits(ids: torch.Tensor, num_classes: int, *, channel_dim: i
     :param channel_dim: the index of the channel dimension
     :return: logits (..., num_classes, ...)
     """
+    if torch.is_floating_point(ids) or (ids < 0).any():
+        raise TypeError("Class ids must be positive integers")
     shape = list(ids.shape)
     shape[channel_dim] = num_classes
     logits = torch.zeros(shape, device=ids.device, dtype=torch.float32)
