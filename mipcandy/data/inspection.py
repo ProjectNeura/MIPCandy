@@ -272,7 +272,8 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
             ndim = label.ndim - 1
-            indices = (label != background).nonzero()
+            fg_mask = label != background
+            indices = fg_mask.nonzero()
             if len(indices) == 0:
                 r.append(InspectionAnnotation(
                     tuple(label.shape[1:]), (0, 0, 0, 0) if ndim == 2 else (0, 0, 0, 0, 0, 0), (), {}, {}, {})
@@ -291,14 +292,13 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                     target_samples = min(max_samples, len(indices))
                     sampled_idx = torch.randperm(len(indices))[:target_samples]
                     indices = indices[sampled_idx]
-                class_locations[class_id] = [tuple(coord.tolist()[1:]) for coord in indices]
+                class_locations[class_id] = tuple(tuple(loc) for loc in indices[:, 1:].tolist())
             r.append(InspectionAnnotation(
                 tuple(label.shape[1:]), foreground_bbox, tuple(
                     class_id for class_id in class_ids if class_id != background
                 ), class_counts, class_bboxes, class_locations
             ))
             image = dataset.image(idx)
-            fg_mask = label != background
             if image.shape[0] > 1:
                 fg_mask = fg_mask.expand_as(image)
             fg = image[fg_mask]
