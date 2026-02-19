@@ -7,7 +7,7 @@ from mipcandy.frontend import *
 from mipcandy.inference import parse_predictant, Predictor
 from mipcandy.layer import batch_int_multiply, batch_int_divide, LayerT, HasDevice, auto_device, WithPaddingModule, \
     WithNetwork
-from mipcandy.metrics import do_reduction, dice_similarity_coefficient, soft_dice
+from mipcandy.metrics import do_reduction, binary_dice, dice_similarity_coefficient, soft_dice
 from mipcandy.presets import *
 from mipcandy.profiler import ProfilerFrame, Profiler
 from mipcandy.run import config

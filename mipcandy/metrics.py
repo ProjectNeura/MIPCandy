@@ -16,7 +16,7 @@ def _args_check(outputs: torch.Tensor, labels: torch.Tensor, *, dtype: torch.dty
     return outputs_dtype, outputs_device
 
 
-def do_reduction(x: torch.Tensor, method: Reduction = "mean") -> torch.Tensor:
+def do_reduction(x: torch.Tensor, method: Reduction) -> torch.Tensor:
     match method:
         case "mean":
             return x.mean()
@@ -26,6 +26,22 @@ def do_reduction(x: torch.Tensor, method: Reduction = "mean") -> torch.Tensor:
             return x.sum()
         case "none":
             return x
+
+
+def binary_dice(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1,
+                reduction: Reduction = "mean") -> torch.Tensor:
+    """
+    :param outputs: boolean class ids (B, 1, ...)
+    :param labels: boolean class ids (B, 1, ...)
+    :param if_empty: the value to return if both outputs and labels are empty
+    :param reduction: the reduction method to apply to the dice score
+    """
+    _args_check(outputs, labels, dtype=torch.bool)
+    axes = tuple(range(2, outputs.ndim))
+    volume_sum = outputs.sum(axes) + labels.sum(axes)
+    if volume_sum == 0:
+        return torch.tensor(if_empty, dtype=torch.float)
+    return do_reduction(2 * (outputs & labels).sum(axes) / volume_sum, reduction)
 
 
 def dice_similarity_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1,
@@ -44,8 +60,7 @@ def dice_similarity_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, 
     volume_sum = 2 * tp + fp + fn
     if (volume_sum == 0).any():
         return torch.tensor(if_empty, dtype=torch.float)
-    dice = 2 * tp / volume_sum
-    return do_reduction(dice, reduction)
+    return do_reduction(2 * tp / volume_sum, reduction)
 
 
 def soft_dice(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, batch_dice: bool = True,
@@ -68,5 +83,4 @@ def soft_dice(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1,
         intersection = intersection.sum(0)
         output_sum = output_sum.sum(0)
         label_sum = label_sum.sum(0)
-    dice = (2 * intersection + smooth) / (label_sum + output_sum + smooth)
-    return do_reduction(dice, reduction)
+    return do_reduction((2 * intersection + smooth) / (label_sum + output_sum + smooth), reduction)
