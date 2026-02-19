@@ -1,6 +1,6 @@
 from importlib.util import find_spec
 from os import PathLike
-from typing import Any, Iterable, Sequence
+from typing import Any, Iterable, Sequence, Literal
 
 import torch
 from torch import nn
@@ -25,3 +25,4 @@ type AmbiguousShape = tuple[int, ...]
 type Paddings2d = tuple[int, int, int, int]
 type Paddings3d = tuple[int, int, int, int, int, int]
 type Paddings = Paddings2d | Paddings3d
+type Reduction = Literal["mean", "median", "sum", "none"]

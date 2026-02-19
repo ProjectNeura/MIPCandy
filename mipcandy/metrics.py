@@ -1,8 +1,6 @@
-from typing import Protocol, Literal
-
 import torch
 
-from mipcandy.types import Device
+from mipcandy.types import Device, Reduction
 
 
 def _args_check(outputs: torch.Tensor, labels: torch.Tensor, *, dtype: torch.dtype | None = None,
@@ -18,17 +16,7 @@ def _args_check(outputs: torch.Tensor, labels: torch.Tensor, *, dtype: torch.dty
     return outputs_dtype, outputs_device
 
 
-class Metric(Protocol):
-    def __call__(self, outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = ...) -> torch.Tensor:
-        """
-        :param outputs: prediction of shape (B, C, ...)
-        :param labels: ground truth of shape (B, C, ...)
-        :param if_empty: the value to return if both outputs and labels are empty
-        """
-        ...
-
-
-def do_reduction(x: torch.Tensor, method: Literal["mean", "median", "sum", "none"] = "mean") -> torch.Tensor:
+def do_reduction(x: torch.Tensor, method: Reduction = "mean") -> torch.Tensor:
     match method:
         case "mean":
             return x.mean()
@@ -40,53 +28,35 @@ def do_reduction(x: torch.Tensor, method: Literal["mean", "median", "sum", "none
             return x
 
 
-def apply_multiclass_to_binary(metric: Metric, outputs: torch.Tensor, labels: torch.Tensor, num_classes: int | None,
-                               if_empty: float, *, reduction: Literal["mean", "sum"] = "mean") -> torch.Tensor:
-    _args_check(outputs, labels, dtype=torch.int)
-    if not num_classes:
-        num_classes = max(outputs.max().item(), labels.max().item())
-    if num_classes == 0:
-        return torch.tensor(if_empty, dtype=torch.float)
-    else:
-        x = torch.tensor(
-            [metric(outputs == cls, labels == cls, if_empty=if_empty) for cls in range(1, num_classes + 1)])
-        return do_reduction(x, reduction)
-
-
-def dice_similarity_coefficient_binary(outputs: torch.Tensor, labels: torch.Tensor, *,
-                                       if_empty: float = 1) -> torch.Tensor:
-    _args_check(outputs, labels, dtype=torch.bool)
-    volume_sum = outputs.sum() + labels.sum()
-    if volume_sum == 0:
-        return torch.tensor(if_empty, dtype=torch.float)
-    return 2 * (outputs & labels).sum() / volume_sum
-
-
-def dice_similarity_coefficient_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *,
-                                           num_classes: int | None = None, if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(dice_similarity_coefficient_binary, outputs, labels, num_classes, if_empty)
-
-
-def _dice_with_logits(outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+def dice_similarity_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1,
+                                reduction: Reduction = "mean") -> torch.Tensor:
+    """
+    :param outputs: one-hot (B, N, ...)
+    :param labels: one-hot (B, N, ...)
+    :param if_empty: the value to return if both outputs and labels are empty
+    :param reduction: the reduction method to apply to the dice score
+    """
     _args_check(outputs, labels, dtype=torch.float)
     axes = tuple(range(2, outputs.ndim))
     tp = (outputs * labels).sum(axes)
     fp = (outputs * (1 - labels)).sum(axes)
     fn = ((1 - outputs) * labels).sum(axes)
-    return tp, 2 * tp + fp + fn
-
-
-def dice_similarity_coefficient_with_logits(outputs: torch.Tensor, labels: torch.Tensor, *,
-                                            if_empty: float = 1) -> torch.Tensor:
-    tp, volume_sum = _dice_with_logits(outputs, labels)
+    volume_sum = 2 * tp + fp + fn
     if (volume_sum == 0).any():
         return torch.tensor(if_empty, dtype=torch.float)
     dice = 2 * tp / volume_sum
-    return dice.mean()
+    return do_reduction(dice, reduction)
 
 
-def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, clip_min: float = 1e-8,
-                          batch_dice: bool = True) -> torch.Tensor:
+def soft_dice(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1, batch_dice: bool = True,
+              reduction: Reduction = "mean") -> torch.Tensor:
+    """
+    :param outputs: logits (B, C, ...)
+    :param labels: logits (B, C, ...)
+    :param smooth: the smoothness term to avoid division by zero
+    :param batch_dice: whether to compute dice score for each batch separately
+    :param reduction: the reduction method to apply to the dice score
+    """
     _args_check(outputs, labels)
     axes = tuple(range(2, outputs.ndim))
     if batch_dice:
@@ -98,54 +68,5 @@ def soft_dice_coefficient(outputs: torch.Tensor, labels: torch.Tensor, *, smooth
         intersection = intersection.sum(0)
         output_sum = output_sum.sum(0)
         label_sum = label_sum.sum(0)
-    dice = (2 * intersection + smooth) / torch.clip(label_sum + output_sum + smooth, clip_min)
-    return dice.mean()
-
-
-def accuracy_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    _args_check(outputs, labels, dtype=torch.bool)
-    numerator = (outputs & labels).sum() + (~outputs & ~labels).sum()
-    denominator = numerator + (outputs & ~labels).sum() + (labels & ~outputs).sum()
-    return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else numerator / denominator
-
-
-def accuracy_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
-                        if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(accuracy_binary, outputs, labels, num_classes, if_empty)
-
-
-def _precision_or_recall(outputs: torch.Tensor, labels: torch.Tensor, if_empty: float,
-                         is_precision: bool) -> torch.Tensor:
-    _args_check(outputs, labels, dtype=torch.bool)
-    tp = (outputs & labels).sum()
-    denominator = outputs.sum() if is_precision else labels.sum()
-    return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else tp / denominator
-
-
-def precision_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    return _precision_or_recall(outputs, labels, if_empty, True)
-
-
-def precision_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
-                         if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(precision_binary, outputs, labels, num_classes, if_empty)
-
-
-def recall_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    return _precision_or_recall(outputs, labels, if_empty, False)
-
-
-def recall_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
-                      if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(recall_binary, outputs, labels, num_classes, if_empty)
-
-
-def iou_binary(outputs: torch.Tensor, labels: torch.Tensor, *, if_empty: float = 1) -> torch.Tensor:
-    _args_check(outputs, labels, dtype=torch.bool)
-    denominator = (outputs | labels).sum()
-    return torch.tensor(if_empty, dtype=torch.float) if denominator == 0 else (outputs & labels).sum() / denominator
-
-
-def iou_multiclass(outputs: torch.Tensor, labels: torch.Tensor, *, num_classes: int | None = None,
-                   if_empty: float = 1) -> torch.Tensor:
-    return apply_multiclass_to_binary(iou_binary, outputs, labels, num_classes, if_empty)
+    dice = (2 * intersection + smooth) / (label_sum + output_sum + smooth)
+    return do_reduction(dice, reduction)
