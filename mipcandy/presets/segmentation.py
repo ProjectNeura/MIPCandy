@@ -121,7 +121,9 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
                 outputs = list(torch.unbind(outputs, dim=1))
             labels = self.prepare_deep_supervision_targets(labels, [m.shape[2:] for m in outputs])
         loss, metrics = toolbox.criterion(outputs, labels)
-        loss.backward()
+        self._do_backward(loss, toolbox)
+        if toolbox.scaler:
+            toolbox.scaler.unscale_(toolbox.optimizer)
         nn.utils.clip_grad_norm_(toolbox.model.parameters(), 12)
         return loss.item(), metrics
 
