@@ -1,25 +1,28 @@
-from typing import Literal
-
 import torch
 
 from mipcandy.common import Normalize
 
 
-def convert_ids_to_logits(ids: torch.Tensor, d: Literal[1, 2, 3], num_classes: int) -> torch.Tensor:
-    if ids.dtype != torch.int or ids.min() < 0:
-        raise TypeError("`ids` should be positive integers")
-    d += 1
-    if ids.ndim != d:
-        if ids.ndim == d + 1 and ids.shape[1] == 1:
-            ids = ids.squeeze(1)
-        else:
-            raise ValueError(f"`ids` should be {d} dimensional or {d + 1} dimensional with single channel")
-    logits = torch.zeros((ids.shape[0], num_classes, *ids.shape[1:]), device=ids.device, dtype=torch.float32)
-    logits.scatter_(1, ids.unsqueeze(1).long(), 1)
+def convert_ids_to_logits(ids: torch.Tensor, num_classes: int, *, channel_dim: int = 1) -> torch.Tensor:
+    """
+    :param ids: class ids (..., 1, ...)
+    :param num_classes: number of classes
+    :param channel_dim: the index of the channel dimension
+    :return: logits (..., num_classes, ...)
+    """
+    shape = list(ids.shape)
+    shape.insert(channel_dim, num_classes)
+    logits = torch.zeros(shape, device=ids.device, dtype=torch.float32)
+    logits.scatter_(channel_dim, ids.long(), 1)
     return logits
 
 
 def convert_logits_to_ids(logits: torch.Tensor, *, channel_dim: int = 1) -> torch.Tensor:
+    """
+    :param logits: logits (..., num_classes, ...)
+    :param channel_dim: the index of the channel dimension
+    :return: class ids (..., 1, ...)
+    """
     return logits.round().int() if logits.shape[channel_dim] < 2 else logits.argmax(channel_dim, keepdim=True)
 
 
