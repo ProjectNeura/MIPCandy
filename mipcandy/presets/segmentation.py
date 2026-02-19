@@ -153,26 +153,20 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         output = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         # (B, N, C, H, W, D) with the highest resolution is at index 0
-        if self.deep_supervision and output.ndim == label.ndim + 1:
-            mask_for_loss = output[:, 0]
-            mask_output = output[:, 0]
-        elif self.deep_supervision and isinstance(output, (list, tuple)):
-            mask_for_loss = output[0]
-            mask_output = output[0]
-        else:
-            mask_for_loss = output
-            mask_output = output
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = True
-        if self.deep_supervision and isinstance(toolbox.criterion, DeepSupervisionWrapper):
-            loss, metrics = toolbox.criterion([mask_for_loss], [label])
+        if self.deep_supervision:
+            if not isinstance(toolbox.criterion, DeepSupervisionWrapper):
+                raise TypeError("Deep supervision is enabled but criterion is not a `DeepSupervisionWrapper`")
+            output = output[0] if isinstance(output, (list, tuple)) else output[:, 0]
+            loss, metrics = toolbox.criterion([output], [label])
         else:
-            loss, metrics = toolbox.criterion(mask_for_loss, label)
+            loss, metrics = toolbox.criterion(output, label)
         if hasattr(toolbox.criterion, "validation_mode"):
             toolbox.criterion.validation_mode = False
         label_percentages = self.class_percentages(label)
         metrics.update(self.format_class_percentages(label_percentages, "label"))
-        output_logits = self.apply_non_linearity(mask_output, 1)
+        output_logits = self.apply_non_linearity(output, 1)
         output_percentages = self.class_percentages(convert_logits_to_ids(output_logits))
         metrics.update(self.format_class_percentages(output_percentages, "output"))
-        return -loss.item(), metrics, mask_output.squeeze(0)
+        return -loss.item(), metrics, output.squeeze(0)
