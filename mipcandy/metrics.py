@@ -72,7 +72,7 @@ def soft_dice(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1,
     :param batch_dice: whether to compute dice score for each batch separately
     :param reduction: the reduction method to apply to the dice score
     """
-    _args_check(outputs, labels)
+    _args_check(outputs, labels, dtype=torch.float)
     axes = tuple(range(2, outputs.ndim))
     if batch_dice:
         axes = (0,) + axes
