@@ -11,8 +11,8 @@ if find_spec("wandb"):
     class WandBFrontend(Frontend):
         def __init__(self, secrets: Settings) -> None:
             super().__init__(secrets)
-            self._entity: str = self.require_nonempty_secret("wandb_entity", require_type=str)
-            self._project: str = self.require_nonempty_secret("wandb_project", require_type=str)
+            self._entity: str = self.require_nonempty_secret("wandb_entity", required_type=str)
+            self._project: str = self.require_nonempty_secret("wandb_project", required_type=str)
             self._run: Run | None = None
 
         @override
