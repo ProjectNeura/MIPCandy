@@ -42,22 +42,6 @@ class _SegmentationLoss(_Loss):
                 return convert_ids_to_logits(ids.int(), self.num_classes)
         return ids.float()
 
-    def forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
-        if not self.validation_mode:
-            return self._forward(outputs, labels)
-        with torch.no_grad():
-            c, metrics = self._forward(outputs, labels)
-            outputs = convert_logits_to_ids(outputs)
-            dice = 0
-            for i in range(0 if self.include_background else 1, self.num_classes):
-                class_dice = binary_dice(outputs == i, labels == i).item()
-                dice += class_dice
-                metrics[f"dice {i}"] = class_dice
-            metrics["dice"] = dice_similarity_coefficient(
-                self.logitfy_no_grad(outputs), self.logitfy_no_grad(labels)
-            ).item()
-            return c, metrics
-
 
 class DiceCELossWithLogits(_SegmentationLoss):
     def __init__(self, num_classes: int, *, lambda_ce: float = 1, lambda_soft_dice: float = 1,
@@ -79,6 +63,20 @@ class DiceCELossWithLogits(_SegmentationLoss):
         c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - dice)
         return c, metrics
 
+    def forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        if not self.validation_mode:
+            return self._forward(outputs, labels)
+        with torch.no_grad():
+            c, metrics = self._forward(outputs, labels)
+            outputs = convert_logits_to_ids(outputs)
+            for i in range(0 if self.include_background else 1, self.num_classes):
+                class_dice = binary_dice(outputs == i, labels == i).item()
+                metrics[f"dice {i}"] = class_dice
+            metrics["dice"] = dice_similarity_coefficient(
+                self.logitfy_no_grad(outputs), self.logitfy_no_grad(labels)
+            ).item()
+            return c, metrics
+
 
 class DiceBCELossWithLogits(_SegmentationLoss):
     def __init__(self, *, lambda_bce: float = 1, lambda_soft_dice: float = 1,
@@ -97,3 +95,12 @@ class DiceBCELossWithLogits(_SegmentationLoss):
         metrics = {"soft dice": dice.item(), "bce loss": bce.item()}
         c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - dice)
         return c, metrics
+
+    def forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        if not self.validation_mode:
+            return self._forward(outputs, labels)
+        with torch.no_grad():
+            c, metrics = self._forward(outputs, labels)
+            outputs = convert_logits_to_ids(outputs).bool()
+            metrics["dice"] = binary_dice(outputs, labels.bool()).item()
+            return c, metrics
