@@ -50,6 +50,7 @@ class TrainerToolbox(object):
     scheduler: optim.lr_scheduler.LRScheduler
     criterion: nn.Module
     ema: nn.Module | None = None
+    scaler: torch.amp.GradScaler | None = None
 
 
 @dataclass
@@ -85,11 +86,14 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                                      **training_arguments) -> None:
         if self._unrecoverable:
             return
-        torch.save({
+        state_dicts = {
             "optimizer": toolbox.optimizer.state_dict(),
             "scheduler": toolbox.scheduler.state_dict(),
             "criterion": toolbox.criterion.state_dict()
-        }, f"{self.experiment_folder()}/state_dicts.pth")
+        }
+        if toolbox.scaler:
+            state_dicts["scaler"] = toolbox.scaler.state_dict()
+        torch.save(state_dicts, f"{self.experiment_folder()}/state_dicts.pth")
         with open(f"{self.experiment_folder()}/state_orb.json", "w") as f:
             dump({"tracker": asdict(tracker), "training_arguments": training_arguments}, f)
 
@@ -116,6 +120,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         toolbox.optimizer.load_state_dict(state_dicts["optimizer"])
         toolbox.scheduler.load_state_dict(state_dicts["scheduler"])
         toolbox.criterion.load_state_dict(state_dicts["criterion"])
+        if "scaler" in state_dicts:
+            toolbox.scaler = torch.amp.GradScaler()
+            toolbox.scaler.load_state_dict(state_dicts["scaler"])
         return toolbox
 
     def recover_from(self, experiment_id: str) -> Self:
@@ -391,16 +398,30 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     # Training methods
 
+    def _do_backward(self, loss: torch.Tensor, toolbox: TrainerToolbox) -> None:
+        if toolbox.scaler:
+            toolbox.scaler.scale(loss).backward()
+        else:
+            loss.backward()
+
     @abstractmethod
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         raise NotImplementedError
 
+    def _device_type(self) -> str:
+        return self._device.type if isinstance(self._device, torch.device) else str(self._device).split(":")[0]
+
     def train_batch(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
         toolbox.optimizer.zero_grad()
-        loss, metrics = self.backward(images, labels, toolbox)
-        toolbox.optimizer.step()
+        with torch.amp.autocast(self._device_type(), enabled=toolbox.scaler is not None):
+            loss, metrics = self.backward(images, labels, toolbox)
+        if toolbox.scaler:
+            toolbox.scaler.step(toolbox.optimizer)
+            toolbox.scaler.update()
+        else:
+            toolbox.optimizer.step()
         toolbox.scheduler.step()
         if toolbox.ema:
             toolbox.ema.update_parameters(toolbox.model)
@@ -434,7 +455,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def train(self, num_epochs: int, *, note: str = "", num_checkpoints: int = 5, compile_model: bool = True,
               ema: bool = True, seed: int | None = None, early_stop_tolerance: int = 5,
               val_score_prediction: bool = True, val_score_prediction_degree: int = 5, save_preview: bool = True,
-              preview_quality: float = .75) -> None:
+              preview_quality: float = .75, amp: bool = False) -> None:
         training_arguments = self.filter_train_params(**locals())
         self.init_experiment()
         if note:
@@ -462,6 +483,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         toolbox = (self.load_toolbox if self.recovery() else self.build_toolbox)(
             num_epochs, example_shape, compile_model, ema
         )
+        if amp and not toolbox.scaler:
+            toolbox.scaler = torch.amp.GradScaler()
+            self.log("Mixed precision training enabled")
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
         es_tolerance = early_stop_tolerance
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
@@ -543,7 +567,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def filter_train_params(**kwargs) -> dict[str, Setting]:
         return {k: v for k, v in kwargs.items() if k in (
             "note", "num_checkpoints", "compile_model", "ema", "seed", "early_stop_tolerance", "val_score_prediction",
-            "val_score_prediction_degree", "save_preview", "preview_quality"
+            "val_score_prediction_degree", "save_preview", "preview_quality", "amp"
         )}
 
     def train_with_settings(self, num_epochs: int, **kwargs) -> None:
@@ -573,7 +597,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         worst_score = float("+inf")
         metrics = {}
         num_cases = len(self._validation_dataloader)
-        with torch.no_grad(), Progress(
+        with torch.no_grad(), torch.amp.autocast(self._device_type(), enabled=toolbox.scaler is not None), Progress(
                 *Progress.get_default_columns(), SpinnerColumn(), console=self._console
         ) as progress:
             task = progress.add_task(f"Validating", total=num_cases)
