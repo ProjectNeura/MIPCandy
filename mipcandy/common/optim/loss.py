@@ -37,11 +37,9 @@ class _SegmentationLoss(_Loss):
         self.include_background: bool = include_background
 
     def logitfy_no_grad(self, ids: torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            if self.num_classes != 1 and ids.shape[1] == 1:
-                if (d := ids.ndim - 2) not in (1, 2, 3):
-                    raise ValueError(f"Expected labels to be 1D, 2D, or 3D, got {d} spatial dimensions")
-                return convert_ids_to_logits(ids.int(), d, self.num_classes)
+        if self.num_classes != 1 and ids.shape[1] == 1:
+            with torch.no_grad():
+                return convert_ids_to_logits(ids.int(), self.num_classes)
         return ids.float()
 
     def forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
