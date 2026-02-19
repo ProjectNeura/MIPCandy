@@ -11,7 +11,7 @@ def convert_ids_to_logits(ids: torch.Tensor, num_classes: int, *, channel_dim: i
     :return: logits (..., num_classes, ...)
     """
     shape = list(ids.shape)
-    shape.insert(channel_dim, num_classes)
+    shape[channel_dim] = num_classes
     logits = torch.zeros(shape, device=ids.device, dtype=torch.float32)
     logits.scatter_(channel_dim, ids.long(), 1)
     return logits
