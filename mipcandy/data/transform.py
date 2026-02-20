@@ -1,19 +1,23 @@
+from typing import Literal
+
 import torch
 from torch import nn
 
 from mipcandy.types import Transform
 
+type _Order = Literal["transform", "image_only", "label_only"]
+
 
 class JointTransform(nn.Module):
     def __init__(self, *, transform: Transform | None = None, image_only: Transform | None = None,
                  label_only: Transform | None = None, keys: tuple[str, str] = ("image", "label"),
-                 order: tuple[str, str, str] = ("transform", "image_only", "label_only")) -> None:
+                 order: tuple[_Order, _Order, _Order] = ("transform", "image_only", "label_only")) -> None:
         super().__init__()
         self.transform: Transform | None = transform
         self.image_only: Transform | None = image_only
         self.label_only: Transform | None = label_only
         self._keys: tuple[str, str] = keys
-        self._order: tuple[str, str, str] = order
+        self._order: tuple[_Order, _Order, _Order] = order
 
     def forward(self, image: torch.Tensor, label: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         ik, lk = self._keys
