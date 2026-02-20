@@ -90,7 +90,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             }, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], AmbiguousShape]) -> tuple[
-        AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
+        tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         depths = []
         widths = []
         heights = []
@@ -105,13 +105,13 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
                 widths.append(shape[2])
         return tuple(depths) if depths else None, tuple(heights), tuple(widths)
 
-    def shapes(self) -> tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
+    def shapes(self) -> tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         if self._shapes:
             return self._shapes
         self._shapes = self._get_shapes(lambda annotation: annotation.shape)
         return self._shapes
 
-    def foreground_shapes(self) -> tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
+    def foreground_shapes(self) -> tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         if self._foreground_shapes:
             return self._foreground_shapes
         self._foreground_shapes = self._get_shapes(lambda annotation: annotation.foreground_shape())
