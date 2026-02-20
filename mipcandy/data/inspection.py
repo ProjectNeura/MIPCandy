@@ -374,10 +374,10 @@ class RandomROIDataset(ROIDataset):
             self._images, self._labels = images, images.copy()
         self._batch_size: int = batch_size
         self._oversample_rate: float = oversample_rate
-        sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
-        sfs = [ceil(s / min_factor) * min_factor for s in sfs]
-        self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
-            min(sfs[0], 128), min(sfs[1], 128), min(sfs[2], 128))
+        median_shape = self._annotations.statistical_shape(percentile=self._percentile)
+        median_shape = [ceil(s / min_factor) * min_factor for s in median_shape]
+        self._roi_shape: Shape = (min(median_shape[0], 2048), min(median_shape[1], 2048)) if len(
+            median_shape) == 2 else (min(median_shape[0], 128), min(median_shape[1], 128), min(median_shape[2], 128))
 
     def convert_idx(self, idx: int) -> int:
         idx, idx2 = self._images[idx], self._labels[idx]
