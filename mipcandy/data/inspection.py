@@ -111,6 +111,12 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         self._shapes = self._get_shapes(lambda annotation: annotation.shape)
         return self._shapes
 
+    def statistical_shape(self, *, percentile: float = .95) -> Shape:
+        depths, heights, widths = self.shapes()
+        percentile *= 100
+        sfs = (round(np.percentile(heights, percentile)), round(np.percentile(widths, percentile)))
+        return (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
+
     def foreground_shapes(self) -> tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         if self._foreground_shapes:
             return self._foreground_shapes
@@ -118,13 +124,10 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
         return self._foreground_shapes
 
     def statistical_foreground_shape(self, *, percentile: float = .95) -> Shape:
-        if self._statistical_foreground_shape:
-            return self._statistical_foreground_shape
         depths, heights, widths = self.foreground_shapes()
         percentile *= 100
         sfs = (round(np.percentile(heights, percentile)), round(np.percentile(widths, percentile)))
-        self._statistical_foreground_shape = (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
-        return self._statistical_foreground_shape
+        return (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
 
     def crop_foreground(self, i: int, *, expand_ratio: float = 1) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._dataset.image(i), self._dataset.label(i)
