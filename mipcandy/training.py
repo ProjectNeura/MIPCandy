@@ -506,6 +506,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
                 self.show_metrics_per_case(epoch, metrics)
+                self.log(f"Validation worst case: {self._tracker.worst_case}")
                 self.show_metrics(epoch, metrics, "validation", lookup_prefix="val ")
                 if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))
