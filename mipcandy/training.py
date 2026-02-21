@@ -27,7 +27,7 @@ from mipcandy.data import fast_save, fast_load, empty_cache
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.profiler import Profiler
-from mipcandy.sanity_check import sanity_check
+from mipcandy.sanity_check import sanity_check, SanityCheckResult
 from mipcandy.types import Params, Setting, AmbiguousShape
 
 
@@ -391,6 +391,12 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     # Training methods
 
+    def sanity_check(self, template_model: nn.Module, example_shape: AmbiguousShape) -> SanityCheckResult:
+        try:
+            return sanity_check(template_model, example_shape, device=self._device)
+        finally:
+            del template_model
+
     @abstractmethod
     def backward(self, images: torch.Tensor, labels: torch.Tensor, toolbox: TrainerToolbox) -> tuple[float, dict[
         str, float]]:
@@ -454,7 +460,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         template_model = self.build_network(example_shape)
         model_name = template_model.__class__.__name__
         self.log(f"Model: {model_name}")
-        sanity_check_result = sanity_check(template_model, example_shape, device=self._device)
+        sanity_check_result = self.sanity_check(template_model, example_shape)
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         self.record_profiler()
@@ -467,7 +473,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
                                              sanity_check_result.num_macs, sanity_check_result.num_params, num_epochs,
                                              early_stop_tolerance)
-        del sanity_check_result, template_model, example_input
+        del sanity_check_result, example_input
         self.empty_cache()
         try:
             for epoch in range(self._tracker.epoch, self._tracker.epoch + num_epochs):
@@ -506,6 +512,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     self.log(f"Estimated time of completion in {etc:.1f} seconds at {datetime.fromtimestamp(
                         time() + etc):%m-%d %H:%M:%S}")
                 self.show_metrics_per_case(epoch, metrics)
+                self.log(f"Validation worst case: {self._tracker.worst_case}")
                 self.show_metrics(epoch, metrics, "validation", lookup_prefix="val ")
                 if score > self._tracker.best_score:
                     copy(checkpoint_path("latest"), checkpoint_path("best"))

@@ -79,8 +79,4 @@ def soft_dice(outputs: torch.Tensor, labels: torch.Tensor, *, smooth: float = 1,
     label_sum = labels.sum(axes)
     intersection = (outputs * labels).sum(axes)
     output_sum = outputs.sum(axes)
-    if batch_dice:
-        intersection = intersection.sum(0)
-        output_sum = output_sum.sum(0)
-        label_sum = label_sum.sum(0)
     return do_reduction((2 * intersection + smooth) / (label_sum + output_sum + smooth), reduction)
