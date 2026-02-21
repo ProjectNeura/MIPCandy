@@ -391,11 +391,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
 
     # Training methods
 
-    def sanity_check(self, example_shape: AmbiguousShape) -> SanityCheckResult:
-        self.log("Building a template model to run sanity check on...")
-        template_model = self.build_network(example_shape)
-        model_name = template_model.__class__.__name__
-        self.log(f"Model: {model_name}")
+    def sanity_check(self, template_model: nn.Module, example_shape: AmbiguousShape) -> SanityCheckResult:
         try:
             return sanity_check(template_model, example_shape, device=self._device)
         finally:
@@ -460,7 +456,11 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             example_input = padding_module(example_input)
         example_shape = tuple(example_input.shape[1:])
         self.log(f"Example input shape: {example_shape}")
-        sanity_check_result = self.sanity_check(example_shape)
+        self.log("Building a template model to run sanity check on...")
+        template_model = self.build_network(example_shape)
+        model_name = template_model.__class__.__name__
+        self.log(f"Model: {model_name}")
+        sanity_check_result = self.sanity_check(template_model, example_shape)
         self.log(str(sanity_check_result))
         self.log(f"Example output shape: {tuple(sanity_check_result.output.shape)}")
         self.record_profiler()
