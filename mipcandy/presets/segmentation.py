@@ -139,7 +139,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         return targets
 
     def class_percentages(self, ids: torch.Tensor) -> dict[int, float]:
-        bin_count = torch.bincount(ids.flatten(), minlength=self.num_classes)
+        bin_count = torch.bincount(ids.flatten().long(), minlength=self.num_classes)
         distribution = (bin_count / bin_count.sum()).cpu().tolist()
         return dict(enumerate(distribution))
 
