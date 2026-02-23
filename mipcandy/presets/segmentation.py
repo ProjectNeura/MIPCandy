@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from torch import nn, optim
 
-from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits, DiceCELossWithLogits
+from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits, DiceCELossWithLogits, Loss
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
 from mipcandy.training import Trainer, TrainerToolbox
 from mipcandy.types import Params
@@ -153,7 +153,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         output = (toolbox.ema if toolbox.ema else toolbox.model)(image)
         # (B, N, C, H, W, D) with the highest resolution is at index 0
-        if hasattr(toolbox.criterion, "validation_mode"):
+        if isinstance(toolbox.criterion, Loss):
             toolbox.criterion.validation_mode = True
         if self.deep_supervision:
             if not isinstance(toolbox.criterion, DeepSupervisionWrapper):
@@ -165,7 +165,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             loss, metrics = toolbox.criterion([output], [label])
         else:
             loss, metrics = toolbox.criterion(output, label)
-        if hasattr(toolbox.criterion, "validation_mode"):
+        if isinstance(toolbox.criterion, Loss):
             toolbox.criterion.validation_mode = False
         label_percentages = self.class_percentages(label)
         metrics.update(self.format_class_percentages(label_percentages, "label"))
