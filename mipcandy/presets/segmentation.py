@@ -152,7 +152,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         float, dict[str, float], torch.Tensor]:
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         output = (toolbox.ema if toolbox.ema else toolbox.model)(image)
-        # (B, N, C, H, W, D) with the highest resolution is at index 0
+        # the highest resolution is at index 0
         if isinstance(toolbox.criterion, Loss):
             toolbox.criterion.validation_mode = True
         if self.deep_supervision:
