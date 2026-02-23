@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, override, Any
 
 import torch
 from torch import nn
@@ -28,6 +28,15 @@ class _Loss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.validation_mode: bool = False
+
+    @override
+    def __setattr__(self, key: str, value: Any) -> None:
+        if key != "validation_mode":
+            return super().__setattr__(key, value)
+        self.validation_mode = value
+        for child in self.children():
+            if hasattr(child, "validation_mode"):
+                child.validation_mode = value
 
 
 class _SegmentationLoss(_Loss):
