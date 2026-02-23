@@ -158,7 +158,10 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         if self.deep_supervision:
             if not isinstance(toolbox.criterion, DeepSupervisionWrapper):
                 raise TypeError("Deep supervision is enabled but criterion is not a `DeepSupervisionWrapper`")
-            output = output[0] if isinstance(output, (list, tuple)) else output[:, 0]
+            if isinstance(output, (list, tuple)):
+                output = output[0]
+            elif output.ndim > label.ndim:
+                output = output[:, 0]
             loss, metrics = toolbox.criterion([output], [label])
         else:
             loss, metrics = toolbox.criterion(output, label)
