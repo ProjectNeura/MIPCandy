@@ -90,7 +90,7 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
             }, f)
 
     def _get_shapes(self, get_shape: Callable[[InspectionAnnotation], AmbiguousShape]) -> tuple[
-        AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
+        tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         depths = []
         widths = []
         heights = []
@@ -105,26 +105,29 @@ class InspectionAnnotations(Sequence[InspectionAnnotation]):
                 widths.append(shape[2])
         return tuple(depths) if depths else None, tuple(heights), tuple(widths)
 
-    def shapes(self) -> tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
+    def shapes(self) -> tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         if self._shapes:
             return self._shapes
         self._shapes = self._get_shapes(lambda annotation: annotation.shape)
         return self._shapes
 
-    def foreground_shapes(self) -> tuple[AmbiguousShape | None, AmbiguousShape, AmbiguousShape]:
+    def statistical_shape(self, *, percentile: float = .95) -> Shape:
+        depths, heights, widths = self.shapes()
+        percentile *= 100
+        sfs = (round(np.percentile(heights, percentile)), round(np.percentile(widths, percentile)))
+        return (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
+
+    def foreground_shapes(self) -> tuple[tuple[int, ...] | None, tuple[int, ...], tuple[int, ...]]:
         if self._foreground_shapes:
             return self._foreground_shapes
         self._foreground_shapes = self._get_shapes(lambda annotation: annotation.foreground_shape())
         return self._foreground_shapes
 
     def statistical_foreground_shape(self, *, percentile: float = .95) -> Shape:
-        if self._statistical_foreground_shape:
-            return self._statistical_foreground_shape
         depths, heights, widths = self.foreground_shapes()
         percentile *= 100
         sfs = (round(np.percentile(heights, percentile)), round(np.percentile(widths, percentile)))
-        self._statistical_foreground_shape = (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
-        return self._statistical_foreground_shape
+        return (round(np.percentile(depths, percentile)),) + sfs if depths else sfs
 
     def crop_foreground(self, i: int, *, expand_ratio: float = 1) -> tuple[torch.Tensor, torch.Tensor]:
         image, label = self._dataset.image(i), self._dataset.label(i)
@@ -272,7 +275,8 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
             label = dataset.label(idx).int()
             progress.update(task, advance=1, description=f"Inspecting dataset {tuple(label.shape)}")
             ndim = label.ndim - 1
-            indices = (label != background).nonzero()
+            fg_mask = label != background
+            indices = fg_mask.nonzero()
             if len(indices) == 0:
                 r.append(InspectionAnnotation(
                     tuple(label.shape[1:]), (0, 0, 0, 0) if ndim == 2 else (0, 0, 0, 0, 0, 0), (), {}, {}, {})
@@ -291,14 +295,13 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                     target_samples = min(max_samples, len(indices))
                     sampled_idx = torch.randperm(len(indices))[:target_samples]
                     indices = indices[sampled_idx]
-                class_locations[class_id] = [tuple(coord.tolist()[1:]) for coord in indices]
+                class_locations[class_id] = tuple(tuple(loc) for loc in indices[:, 1:].tolist())
             r.append(InspectionAnnotation(
                 tuple(label.shape[1:]), foreground_bbox, tuple(
                     class_id for class_id in class_ids if class_id != background
                 ), class_counts, class_bboxes, class_locations
             ))
             image = dataset.image(idx)
-            fg_mask = label != background
             if image.shape[0] > 1:
                 fg_mask = fg_mask.expand_as(image)
             fg = image[fg_mask]
@@ -371,10 +374,10 @@ class RandomROIDataset(ROIDataset):
             self._images, self._labels = images, images.copy()
         self._batch_size: int = batch_size
         self._oversample_rate: float = oversample_rate
-        sfs = self._annotations.statistical_foreground_shape(percentile=self._percentile)
-        sfs = [ceil(s / min_factor) * min_factor for s in sfs]
-        self._roi_shape: Shape = (min(sfs[0], 2048), min(sfs[1], 2048)) if len(sfs) == 2 else (
-            min(sfs[0], 128), min(sfs[1], 128), min(sfs[2], 128))
+        median_shape = self._annotations.statistical_shape(percentile=self._percentile)
+        median_shape = [ceil(s / min_factor) * min_factor for s in median_shape]
+        self._roi_shape: Shape = (min(median_shape[0], 2048), min(median_shape[1], 2048)) if len(
+            median_shape) == 2 else (min(median_shape[0], 128), min(median_shape[1], 128), min(median_shape[2], 128))
 
     def convert_idx(self, idx: int) -> int:
         idx, idx2 = self._images[idx], self._labels[idx]

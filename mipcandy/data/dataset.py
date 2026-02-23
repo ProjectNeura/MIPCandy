@@ -339,6 +339,9 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._prefix: str = prefix
         self._align_spacing: bool = align_spacing
 
+    def folder(self) -> str:
+        return self._folder
+
     @staticmethod
     def _create_subset(folder: str) -> None:
         if exists(folder) and len(listdir(folder)) > 0:

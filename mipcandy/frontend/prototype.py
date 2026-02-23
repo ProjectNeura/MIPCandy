@@ -1,6 +1,5 @@
 from typing import override
 
-
 from mipcandy.types import Setting, Settings
 
 
@@ -8,13 +7,13 @@ class Frontend(object):
     def __init__(self, secrets: Settings) -> None:
         self._secrets: Settings = secrets
 
-    def require_nonempty_secret(self, entry: str, *, require_type: type | None = None) -> Setting:
+    def require_nonempty_secret(self, entry: str, *, required_type: type | None = None) -> Setting:
         if entry not in self._secrets:
             raise ValueError(f"Missing secret {entry}")
         secret = self._secrets[entry]
-        if require_type is None or isinstance(secret, require_type):
+        if required_type is None or isinstance(secret, required_type):
             return secret
-        raise ValueError(f"Invalid secret type {type(secret)}, {require_type} expected")
+        raise ValueError(f"Invalid secret type {type(secret)}, {required_type} expected")
 
     def on_experiment_created(self, experiment_id: str, trainer: str, model: str, note: str, num_params: float,
                               num_macs: float, num_epochs: int, early_stop_tolerance: int) -> None:

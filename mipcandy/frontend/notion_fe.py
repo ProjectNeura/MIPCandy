@@ -10,8 +10,8 @@ from mipcandy.types import Settings
 class NotionFrontend(Frontend):
     def __init__(self, secrets: Settings) -> None:
         super().__init__(secrets)
-        self._api_key: str = self.require_nonempty_secret("notion_api_key", require_type=str)
-        self._database_id: str = self.require_nonempty_secret("notion_database_id", require_type=str)
+        self._api_key: str = self.require_nonempty_secret("notion_api_key", required_type=str)
+        self._database_id: str = self.require_nonempty_secret("notion_database_id", required_type=str)
         self._headers: dict[str, str] = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
