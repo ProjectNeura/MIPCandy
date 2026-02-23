@@ -27,16 +27,22 @@ class FocalBCEWithLogits(nn.Module):
 class Loss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
-        self.validation_mode: bool = False
+        self._validation_mode: bool = False
 
     @override
     def __setattr__(self, key: str, value: Any) -> None:
         if key != "validation_mode":
             return super().__setattr__(key, value)
-        self.validation_mode = value
+        self._validation_mode = value
         for child in self.children():
             if isinstance(child, Loss):
-                child.validation_mode = value
+                child._validation_mode = value
+
+    @override
+    def __getattr__(self, item: str) -> Any:
+        if item == "validation_mode":
+            return self._validation_mode
+        return super().__getattr__(item)
 
 
 class SegmentationLoss(Loss):
