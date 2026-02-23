@@ -24,7 +24,7 @@ class FocalBCEWithLogits(nn.Module):
         return do_reduction(loss, self.reduction)
 
 
-class _Loss(nn.Module):
+class Loss(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         self.validation_mode: bool = False
@@ -35,11 +35,11 @@ class _Loss(nn.Module):
             return super().__setattr__(key, value)
         self.validation_mode = value
         for child in self.children():
-            if hasattr(child, "validation_mode"):
+            if isinstance(child, Loss):
                 child.validation_mode = value
 
 
-class _SegmentationLoss(_Loss):
+class SegmentationLoss(Loss):
     def __init__(self, num_classes: int, include_background: bool) -> None:
         super().__init__()
         self.num_classes: int = num_classes
@@ -52,7 +52,7 @@ class _SegmentationLoss(_Loss):
         return ids.float()
 
 
-class DiceCELossWithLogits(_SegmentationLoss):
+class DiceCELossWithLogits(SegmentationLoss):
     def __init__(self, num_classes: int, *, lambda_ce: float = 1, lambda_soft_dice: float = 1,
                  smooth: float = 1e-5, include_background: bool = True) -> None:
         super().__init__(num_classes, include_background)
@@ -87,7 +87,7 @@ class DiceCELossWithLogits(_SegmentationLoss):
             return c, metrics
 
 
-class DiceBCELossWithLogits(_SegmentationLoss):
+class DiceBCELossWithLogits(SegmentationLoss):
     def __init__(self, *, lambda_bce: float = 1, lambda_soft_dice: float = 1,
                  smooth: float = 1e-5, min_percentage_per_class: float | None = None) -> None:
         super().__init__(1, True)
