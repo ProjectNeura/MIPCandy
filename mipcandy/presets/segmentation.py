@@ -1,5 +1,5 @@
 from abc import ABCMeta
-from typing import override, Sequence, Any
+from typing import override, Sequence
 
 import numpy as np
 import torch
@@ -11,23 +11,13 @@ from mipcandy.training import Trainer, TrainerToolbox
 from mipcandy.types import Params
 
 
-class DeepSupervisionWrapper(nn.Module):
+class DeepSupervisionWrapper(Loss):
     def __init__(self, loss: nn.Module, *, weight_factors: Sequence[float] | None = None) -> None:
         super().__init__()
         if weight_factors and all(x == 0 for x in weight_factors):
             raise ValueError("At least one weight factor should be nonzero")
         self.weight_factors: tuple[float, ...] | None = tuple(weight_factors) if weight_factors else None
         self.loss: nn.Module = loss
-
-    @override
-    def __getattr__(self, item: str) -> Any:
-        return self.loss.validation_mode if item == "validation_mode" else super().__getattr__(item)
-
-    @override
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == "validation_mode" and hasattr(self.loss, "validation_mode"):
-            self.loss.validation_mode = value
-        super().__setattr__(name, value)
 
     def forward(self, outputs: Sequence[torch.Tensor], targets: Sequence[torch.Tensor]) -> tuple[
         torch.Tensor, dict[str, float]]:
