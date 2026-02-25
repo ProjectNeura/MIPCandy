@@ -1,33 +1,23 @@
 from abc import ABCMeta
-from typing import override, Sequence, Any
+from typing import override, Sequence
 
 import numpy as np
 import torch
 from torch import nn, optim
 
-from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits, DiceCELossWithLogits
+from mipcandy.common import PolyLRScheduler, DiceBCELossWithLogits, DiceCELossWithLogits, Loss
 from mipcandy.data import visualize2d, visualize3d, overlay, auto_convert, convert_logits_to_ids
 from mipcandy.training import Trainer, TrainerToolbox
 from mipcandy.types import Params
 
 
-class DeepSupervisionWrapper(nn.Module):
+class DeepSupervisionWrapper(Loss):
     def __init__(self, loss: nn.Module, *, weight_factors: Sequence[float] | None = None) -> None:
         super().__init__()
         if weight_factors and all(x == 0 for x in weight_factors):
             raise ValueError("At least one weight factor should be nonzero")
         self.weight_factors: tuple[float, ...] | None = tuple(weight_factors) if weight_factors else None
         self.loss: nn.Module = loss
-
-    @override
-    def __getattr__(self, item: str) -> Any:
-        return self.loss.validation_mode if item == "validation_mode" else super().__getattr__(item)
-
-    @override
-    def __setattr__(self, name: str, value: Any) -> None:
-        if name == "validation_mode" and hasattr(self.loss, "validation_mode"):
-            self.loss.validation_mode = value
-        super().__setattr__(name, value)
 
     def forward(self, outputs: Sequence[torch.Tensor], targets: Sequence[torch.Tensor]) -> tuple[
         torch.Tensor, dict[str, float]]:
@@ -152,8 +142,8 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
         float, dict[str, float], torch.Tensor]:
         image, label = image.unsqueeze(0), label.unsqueeze(0)
         output = (toolbox.ema if toolbox.ema else toolbox.model)(image)
-        # (B, N, C, H, W, D) with the highest resolution is at index 0
-        if hasattr(toolbox.criterion, "validation_mode"):
+        # the highest resolution is at index 0
+        if isinstance(toolbox.criterion, Loss):
             toolbox.criterion.validation_mode = True
         if self.deep_supervision:
             if not isinstance(toolbox.criterion, DeepSupervisionWrapper):
@@ -165,7 +155,7 @@ class SegmentationTrainer(Trainer, metaclass=ABCMeta):
             loss, metrics = toolbox.criterion([output], [label])
         else:
             loss, metrics = toolbox.criterion(output, label)
-        if hasattr(toolbox.criterion, "validation_mode"):
+        if isinstance(toolbox.criterion, Loss):
             toolbox.criterion.validation_mode = False
         label_percentages = self.class_percentages(label)
         metrics.update(self.format_class_percentages(label_percentages, "label"))
