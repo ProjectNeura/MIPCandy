@@ -4,7 +4,7 @@ from mipcandy.config import load_settings, save_settings, load_secrets, save_sec
 from mipcandy.data import *
 from mipcandy.evaluation import EvalCase, EvalResult, Evaluator
 from mipcandy.frontend import *
-from mipcandy.inference import parse_predictant, Predictor
+from mipcandy.inference import parse_predictant, MetaPredictor, Predictor
 from mipcandy.layer import batch_int_multiply, batch_int_divide, LayerT, HasDevice, auto_device, WithPaddingModule, \
     WithNetwork
 from mipcandy.metrics import do_reduction, binary_dice, dice_similarity_coefficient, soft_dice
