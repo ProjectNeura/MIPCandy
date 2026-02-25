@@ -73,6 +73,22 @@ MIP Candy Supports [Notion](https://mipcandy-projectneura.notion.site), WandB, a
 <img src="home/assets/notion.png" alt="notion"/>
 </details>
 
+## Citation
+
+Should you find our work helpful to you, please cite our publication.
+
+```bibtex
+@misc{fu2026mipcandymodularpytorch,
+    title = {MIP Candy: A Modular PyTorch Framework for Medical Image Processing},
+    author = {Tianhao Fu and Yucheng Chen},
+    year = {2026},
+    eprint = {2602.21033},
+    archivePrefix = {arXiv},
+    primaryClass = {cs.CV},
+    url = {https://arxiv.org/abs/2602.21033},
+}
+```
+
 ## Installation
 
 Note that MIP Candy requires **Python >= 3.12**.
