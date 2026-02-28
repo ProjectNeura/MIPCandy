@@ -4,7 +4,7 @@ from os import PathLike
 
 import SimpleITK as SpITK
 import torch
-from rich import Console
+from rich.console import Console
 from safetensors.torch import save_file, load_file
 
 from mipcandy.data.convertion import auto_convert
