@@ -1,9 +1,10 @@
-from gc import collect
+from gc import collect, get_objects
 from math import floor
 from os import PathLike
 
 import SimpleITK as SpITK
 import torch
+from rich import Console
 from safetensors.torch import save_file, load_file
 
 from mipcandy.data.convertion import auto_convert
@@ -68,3 +69,14 @@ def empty_cache(device: Device) -> None:
             torch.cuda.empty_cache()
         case "mps":
             torch.mps.empty_cache()
+
+
+def dump_cuda_tensors(*, limit: int = 40, console: Console = Console()) -> None:
+    tensors = [obj for obj in get_objects() if torch.is_tensor(obj) and obj.is_cuda]
+    tensors.sort(key=lambda t: t.numel() * t.element_size(), reverse=True)
+    total = sum(t.numel() * t.element_size() for t in tensors)
+    console.print(f"CUDA tensors: {len(tensors)} | total={total / 1048576:.1f} MB")
+    for t in tensors[:limit]:
+        sz = t.numel() * t.element_size() / 1048576
+        console.print(
+            f"{sz:8.1f} MB | {tuple(t.shape)} | {t.dtype} | {t.device} | grad={t.requires_grad} | {t.grad_fn}")

@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader
 
 from mipcandy.common import quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
-from mipcandy.data import fast_save, fast_load, empty_cache
+from mipcandy.data import fast_save, fast_load, empty_cache, dump_cuda_tensors
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.profiler import Profiler
@@ -387,6 +387,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     # Performance
 
     def empty_cache(self) -> None:
+        dump_cuda_tensors(console=self._console)
         empty_cache(self._device)
 
     # Training methods
@@ -596,9 +597,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
-                    fast_save(image, f"{self.experiment_folder()}/worst_input.pt")
-                    fast_save(label, f"{self.experiment_folder()}/worst_label.pt")
-                    fast_save(output, f"{self.experiment_folder()}/worst_output.pt")
+                    fast_save(image.detach().cpu(), f"{self.experiment_folder()}/worst_input.pt")
+                    fast_save(label.detach().cpu(), f"{self.experiment_folder()}/worst_label.pt")
+                    fast_save(output.detach().cpu(), f"{self.experiment_folder()}/worst_output.pt")
+                    del image, label, output
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1,
