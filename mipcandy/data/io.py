@@ -71,7 +71,7 @@ def empty_cache(device: Device) -> None:
 
 
 def dump_cuda_tensors(*, limit: int = 40) -> str:
-    tensors = [obj for obj in get_objects() if torch.is_tensor(obj) and obj.is_cuda]
+    tensors = [obj for obj in get_objects() if isinstance(obj, torch.Tensor) and obj.is_cuda]
     tensors.sort(key=lambda t: t.numel() * t.element_size(), reverse=True)
     total = sum(t.numel() * t.element_size() for t in tensors)
     r = f"CUDA tensors: {len(tensors)} | total={total / 1048576:.1f} MB\n"
