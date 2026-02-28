@@ -387,7 +387,8 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     # Performance
 
     def empty_cache(self) -> None:
-        dump_cuda_tensors(console=self._console)
+        if self._profiler:
+            self.log(dump_cuda_tensors())
         empty_cache(self._device)
 
     # Training methods
