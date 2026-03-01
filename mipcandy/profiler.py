@@ -110,7 +110,7 @@ class Profiler(object):
             counted_tensors.append(tensor)
         if len(added_tensors) > limit:
             added_tensors = added_tensors[:limit]
-        r = (f"Total size diff: {allocated_tensors[0] - self._allocated_tensors[0]}\n"
+        r = (f"Total size diff: {allocated_tensors[0] - self._allocated_tensors[0]} MB\n"
              f"Added tensors:\n{"\t\n".join(added_tensors)}\nRemoved tensors:\n{"\t\n".join(removed_tensors)}\n")
         self._save(r)
         self._allocated_tensors = allocated_tensors

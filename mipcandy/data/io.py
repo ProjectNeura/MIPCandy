@@ -79,6 +79,6 @@ def dump_allocated_tensors() -> tuple[float, list[tuple[
         (obj, obj.numel() * obj.element_size() / 1048576) for obj in get_objects() if isinstance(obj, torch.Tensor)
     ]
     tensors.sort(key=lambda t: t[1], reverse=True)
-    return sum(t[1] for t in tensors) / 1048576, [
+    return sum(t[1] for t in tensors), [
         (sz, tuple(t.shape), t.dtype, t.device, t.requires_grad, str(t.grad_fn)) for t, sz in tensors
     ]
