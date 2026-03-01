@@ -121,7 +121,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         toolbox.scheduler.load_state_dict(state_dicts["scheduler"])
         toolbox.criterion.load_state_dict(state_dicts["criterion"])
         if "scaler" in state_dicts:
-            toolbox.scaler = torch.amp.GradScaler()
+            toolbox.scaler = torch.amp.GradScaler(self._device_type())
             toolbox.scaler.load_state_dict(state_dicts["scaler"])
         return toolbox
 
@@ -424,11 +424,14 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         with torch.amp.autocast(self._device_type(), enabled=toolbox.scaler is not None):
             loss, metrics = self.backward(images, labels, toolbox)
         if toolbox.scaler:
+            old_scale = toolbox.scaler.get_scale()
             toolbox.scaler.step(toolbox.optimizer)
             toolbox.scaler.update()
+            if old_scale <= toolbox.scaler.get_scale():
+                toolbox.scheduler.step()
         else:
             toolbox.optimizer.step()
-        toolbox.scheduler.step()
+            toolbox.scheduler.step()
         if toolbox.ema:
             toolbox.ema.update_parameters(toolbox.model)
         return loss, metrics
@@ -490,7 +493,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             num_epochs, example_shape, compile_model, ema
         )
         if amp and not toolbox.scaler:
-            toolbox.scaler = torch.amp.GradScaler()
+            toolbox.scaler = torch.amp.GradScaler(self._device_type())
             self.log("Mixed precision training enabled")
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
         es_tolerance = early_stop_tolerance
