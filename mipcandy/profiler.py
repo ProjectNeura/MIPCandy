@@ -88,24 +88,30 @@ class Profiler(object):
     def record_allocated_tensors(self, *, limit: int = 10) -> str:
         allocated_tensors = dump_allocated_tensors()
         counted_tensors = []
-        new_tensors = []
+        added_tensors = []
+        removed_tensors = []
         tensors, prev_tensors = allocated_tensors[1], self._allocated_tensors[1]
-        for tensor in tensors:
+        for tensor in tensors + prev_tensors:
             if tensor in counted_tensors:
                 continue
             sz, shape, dtype, device, requires_grad, grad_fn = tensor
             t = f"{sz:8.1f} MB | {shape} | {dtype} | {device} | grad={requires_grad} | {grad_fn}"
             if tensor in prev_tensors:
-                num_diff = tensors.count(tensor) - prev_tensors.count(tensor)
-                if num_diff > 0:
-                    new_tensors.append(f"{num_diff} x {t}")
+                if tensor in tensors:
+                    num_diff = tensors.count(tensor) - prev_tensors.count(tensor)
+                    if num_diff > 0:
+                        added_tensors.append(f"{num_diff} x {t}")
+                    if num_diff < 0:
+                        removed_tensors.append(f"{num_diff} x {t}")
+                else:
+                    removed_tensors.append(f"{-prev_tensors.count(tensor)} x {t}")
             else:
-                new_tensors.append(f"{tensors.count(tensor)} x {t}")
+                added_tensors.append(f"{tensors.count(tensor)} x {t}")
             counted_tensors.append(tensor)
-        if len(new_tensors) > limit:
-            new_tensors = new_tensors[:limit]
+        if len(added_tensors) > limit:
+            added_tensors = added_tensors[:limit]
         r = (f"Total size diff: {allocated_tensors[0] - self._allocated_tensors[0]}\n"
-             f"New tensors:\n{"\t\n".join(new_tensors)}\n")
+             f"Added tensors:\n{"\t\n".join(added_tensors)}\nRemoved tensors:\n{"\t\n".join(removed_tensors)}\n")
         self._save(r)
         self._allocated_tensors = allocated_tensors
         return r
