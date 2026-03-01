@@ -499,7 +499,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
                     self.log(f"Epoch {epoch} checkpoint saved")
                 self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
-                self.record_
+                self.record_profiler_allocated_tensors()
                 # Validation
                 score, metrics = self.validate(toolbox)
                 self.record_all({f"val {k}": v for k, v in metrics.items()})
@@ -541,6 +541,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self.save_progress()
                 self.save_metric_curves()
                 self.save_everything_for_recovery(toolbox, self._tracker, **training_arguments)
+                self.record_profiler_allocated_tensors()
                 self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics, early_stop_tolerance)
         except Exception as e:
             self.log("Training interrupted")
