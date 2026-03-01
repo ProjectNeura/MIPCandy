@@ -605,7 +605,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     fast_save(image.detach().cpu(), f"{self.experiment_folder()}/worst_input.pt")
                     fast_save(label.detach().cpu(), f"{self.experiment_folder()}/worst_label.pt")
                     fast_save(output.detach().cpu(), f"{self.experiment_folder()}/worst_output.pt")
-                    del image, label, output
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1,
