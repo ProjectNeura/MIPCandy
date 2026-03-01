@@ -7,7 +7,8 @@ from typing import Sequence, override
 import torch
 from psutil import cpu_percent, virtual_memory
 
-from mipcandy.types import Device
+from mipcandy.data import dump_allocated_tensors
+from mipcandy.types import Device, AmbiguousShape
 
 
 @dataclass
@@ -53,6 +54,8 @@ class Profiler(object):
         with open(save_as, "w") as f:
             f.write(f"# {title}\nTotal memory: {self.total_mem}, Total GPU memory: {self.total_gpu_mem}\n\n")
         self._t0: float = time()
+        self._allocated_tensors: tuple[float, list[tuple[
+            float, AmbiguousShape, torch.dtype, torch.device, bool, str]]] = (0, [])
 
     @staticmethod
     def get_cpu_usage() -> float:
@@ -76,11 +79,36 @@ class Profiler(object):
     def get_total_gpu_mem(device: Device) -> float:
         return torch.cuda.get_device_properties(device).total_memory
 
-    def _save(self, obj: ProfilerFrame | _LineBreak) -> None:
+    def _save(self, obj: ProfilerFrame | _LineBreak | str) -> None:
         with open(self.save_as, "a") as f:
             t = time()
-            f.write(f"{obj.export(t - self._t0)}\n")
+            f.write(obj + "\n" if isinstance(obj, str) else f"{obj.export(t - self._t0)}\n")
             self._t0 = t
+
+    def record_allocated_tensors(self, *, limit: int = 10) -> str:
+        allocated_tensors = dump_allocated_tensors()
+        counted_tensors = []
+        new_tensors = []
+        tensors, prev_tensors = allocated_tensors[1], self._allocated_tensors[1]
+        for tensor in tensors:
+            if tensor in counted_tensors:
+                continue
+            sz, shape, dtype, device, requires_grad, grad_fn = tensor
+            t = f"{sz:8.1f} MB | {shape} | {dtype} | {device} | grad={requires_grad} | {grad_fn}"
+            if tensor in prev_tensors:
+                num_diff = tensors.count(tensor) - prev_tensors.count(tensor)
+                if num_diff > 0:
+                    new_tensors.append(f"{num_diff} x {t}")
+            else:
+                new_tensors.append(f"{tensors.count(tensor)} x {t}")
+            counted_tensors.append(tensor)
+        if len(new_tensors) > limit:
+            new_tensors = new_tensors[:limit]
+        r = (f"Total size diff: {allocated_tensors[0] - self._allocated_tensors[0]}\n"
+             f"New tensors:\n{"\t\n".join(new_tensors)}\n")
+        self._save(r)
+        self._allocated_tensors = allocated_tensors
+        return r
 
     def record(self, *, stack_trace_offset: int = 1) -> ProfilerFrame:
         frame = ProfilerFrame(" -> ".join([f"{f.function}:{f.lineno}" for f in reversed(stack()[stack_trace_offset:])]),
@@ -91,5 +119,7 @@ class Profiler(object):
         self._save(frame)
         return frame
 
-    def line_break(self, message: str) -> None:
-        self._save(_LineBreak(message))
+    def line_break(self, message: str) -> _LineBreak:
+        r = _LineBreak(message)
+        self._save(r)
+        return r

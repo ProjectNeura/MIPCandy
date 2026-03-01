@@ -8,7 +8,7 @@ from safetensors.torch import save_file, load_file
 
 from mipcandy.data.convertion import auto_convert
 from mipcandy.data.geometric import ensure_num_dimensions
-from mipcandy.types import Device
+from mipcandy.types import Device, AmbiguousShape
 
 
 def fast_save(x: torch.Tensor, path: str | PathLike[str]) -> None:
@@ -70,12 +70,15 @@ def empty_cache(device: Device) -> None:
             torch.mps.empty_cache()
 
 
-def dump_cuda_tensors(*, limit: int = 40) -> str:
-    tensors = [obj for obj in get_objects() if isinstance(obj, torch.Tensor) and obj.is_cuda]
-    tensors.sort(key=lambda t: t.numel() * t.element_size(), reverse=True)
-    total = sum(t.numel() * t.element_size() for t in tensors)
-    r = f"CUDA tensors: {len(tensors)} | total={total / 1048576:.1f} MB\n"
-    for t in tensors[:limit]:
-        sz = t.numel() * t.element_size() / 1048576
-        r += f"{sz:8.1f} MB | {tuple(t.shape)} | {t.dtype} | {t.device} | grad={t.requires_grad} | {t.grad_fn}\n"
-    return r
+def dump_allocated_tensors() -> tuple[float, list[tuple[
+    float, AmbiguousShape, torch.dtype, torch.device, bool, str]]]:
+    """
+    :return: (total size in MB, [(size in MB, shape, dtype, device, requires_grad, grad_fn)])
+    """
+    tensors = [
+        (obj, obj.numel() * obj.element_size() / 1048576) for obj in get_objects() if isinstance(obj, torch.Tensor)
+    ]
+    tensors.sort(key=lambda t: t[1], reverse=True)
+    return sum(t[1] for t in tensors) / 1048576, [
+        (sz, tuple(t.shape), t.dtype, t.device, t.requires_grad, str(t.grad_fn)) for t, sz in tensors
+    ]

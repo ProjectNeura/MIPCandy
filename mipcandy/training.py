@@ -23,7 +23,7 @@ from torch.utils.data import DataLoader
 
 from mipcandy.common import quotient_regression, quotient_derivative, quotient_bounds
 from mipcandy.config import load_settings, load_secrets
-from mipcandy.data import fast_save, fast_load, empty_cache, dump_cuda_tensors
+from mipcandy.data import fast_save, fast_load, empty_cache
 from mipcandy.frontend import Frontend
 from mipcandy.layer import WithPaddingModule, WithNetwork
 from mipcandy.profiler import Profiler
@@ -263,6 +263,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             self._profiler.line_break(message)
             self.log(f"[PROFILER] {message}")
 
+    def record_profiler_allocated_tensors(self) -> None:
+        if self._profiler:
+            self.log(f"[PROFILER] {self._profiler.record_allocated_tensors()}")
+
     def save_metrics(self) -> None:
         df = DataFrame(self._metrics)
         df.index = range(1, len(df) + 1)
@@ -387,8 +391,6 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     # Performance
 
     def empty_cache(self) -> None:
-        if self._profiler:
-            self.log(dump_cuda_tensors())
         empty_cache(self._device)
 
     # Training methods
@@ -497,6 +499,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
                     self.log(f"Epoch {epoch} checkpoint saved")
                 self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
+                self.record_
                 # Validation
                 score, metrics = self.validate(toolbox)
                 self.record_all({f"val {k}": v for k, v in metrics.items()})
