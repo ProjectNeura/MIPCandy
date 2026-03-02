@@ -83,7 +83,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
         if not cmap:
             cmap = __LABEL_COLORMAP[:max_id + 1] if backend == "pyvista" and max_id < len(__LABEL_COLORMAP) else "jet"
     elif not cmap:
-        cmap = "gray"
+        cmap = "binary"
     image = image.numpy()
     match backend:
         case "matplotlib":

@@ -263,6 +263,10 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             self._profiler.line_break(message)
             self.log(f"[PROFILER] {message}")
 
+    def record_profiler_allocated_tensors(self) -> None:
+        if self._profiler:
+            self.log(f"[PROFILER] {self._profiler.record_allocated_tensors()}")
+
     def save_metrics(self) -> None:
         df = DataFrame(self._metrics)
         df.index = range(1, len(df) + 1)
@@ -495,6 +499,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                     copy(checkpoint_path("latest"), checkpoint_path(epoch))
                     self.log(f"Epoch {epoch} checkpoint saved")
                 self.log(f"Epoch {epoch} training completed in {time() - t0:.1f} seconds")
+                self.record_profiler_allocated_tensors()
                 # Validation
                 score, metrics = self.validate(toolbox)
                 self.record_all({f"val {k}": v for k, v in metrics.items()})
@@ -536,6 +541,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 self.save_progress()
                 self.save_metric_curves()
                 self.save_everything_for_recovery(toolbox, self._tracker, **training_arguments)
+                self.record_profiler_allocated_tensors()
                 self._frontend.on_experiment_updated(self._experiment_id, epoch, self._metrics, early_stop_tolerance)
         except Exception as e:
             self.log("Training interrupted")
@@ -596,9 +602,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                 score += case_score
                 if case_score < worst_score:
                     self._tracker.worst_case = idx
-                    fast_save(image, f"{self.experiment_folder()}/worst_input.pt")
-                    fast_save(label, f"{self.experiment_folder()}/worst_label.pt")
-                    fast_save(output, f"{self.experiment_folder()}/worst_output.pt")
+                    fast_save(image.detach().cpu(), f"{self.experiment_folder()}/worst_input.pt")
+                    fast_save(label.detach().cpu(), f"{self.experiment_folder()}/worst_label.pt")
+                    fast_save(output.detach().cpu(), f"{self.experiment_folder()}/worst_output.pt")
                     worst_score = case_score
                 try_append_all(case_metrics, metrics)
                 progress.update(task, advance=1,
