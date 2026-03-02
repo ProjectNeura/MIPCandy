@@ -51,7 +51,7 @@ class MyTrainer(SegmentationTrainer):
 
 <details>
 <summary>Satisfying command-line UI design</summary>
-<img src="home/assets/cli-ui.png" alt="cmd-ui"/>
+<img src="home/assets/console-outputs.png" alt="cmd-ui"/>
 </details>
 
 <details>
