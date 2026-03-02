@@ -898,6 +898,7 @@ class MyTrainer(SegmentationTrainer):
             <div class="code-card">
                 <div class="code-label">Example: train on the ACDC dataset</div>
                 <pre><code>from typing import override
+from os.path import exists
 
 from monai.networks.nets import DynUNet
 from torch import nn
