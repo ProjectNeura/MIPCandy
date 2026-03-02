@@ -5,42 +5,14 @@
           font-family="ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace"
           font-size="18">
     <tspan x="20" y="38">Added tensors:</tspan>
-        <tspan x="20" dy="24"><tspan fill="blue">1</tspan>
-            x   <tspan fill="blue">128.0</tspan> MB | (<tspan fill="blue">1</tspan>, <tspan
-                    fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">128</tspan>, <tspan
-                    fill="blue">128</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan
-                    fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
-        <tspan x="20" dy="24"><tspan fill="blue">80</tspan>
-            x  <tspan fill="blue">4.0</tspan> MB | (<tspan fill="blue">1048576</tspan>,) | torch.float32 | <tspan
-                    fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
-        <tspan x="20" dy="24"><tspan fill="blue">1</tspan>
-            x   <tspan fill="blue">2.0</tspan> MB | (<tspan fill="blue">1</tspan>, <tspan fill="blue">4</tspan>, <tspan
-                    fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">64</tspan>) |
-            torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
-        <tspan x="20" dy="24"><tspan fill="blue">80</tspan>
-            x  <tspan fill="blue">1.0</tspan> MB | (<tspan fill="blue">1048576</tspan>,) | torch.bool | <tspan
-                    fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
-        <tspan x="20" dy="24"><tspan fill="blue">1</tspan>
-            x   <tspan fill="blue">0.2</tspan> MB | (<tspan fill="blue">1</tspan>, <tspan fill="blue">4</tspan>, <tspan
-                    fill="blue">16</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">32</tspan>) |
-            torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24"><tspan fill="blue">1</tspan>&#160;x&#160;&#160;&#160;<tspan fill="blue">128.0</tspan> MB | (<tspan fill="blue">1</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">128</tspan>, <tspan fill="blue">128</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24"><tspan fill="blue">80</tspan>&#160;x&#160;&#160;<tspan fill="blue">4.0</tspan> MB | (<tspan fill="blue">1048576</tspan>,) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24"><tspan fill="blue">1</tspan>&#160;x&#160;&#160;&#160;<tspan fill="blue">2.0</tspan> MB | (<tspan fill="blue">1</tspan>, <tspan fill="blue">4</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">64</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24"><tspan fill="blue">80</tspan>&#160;x&#160;&#160;<tspan fill="blue">1.0</tspan> MB | (<tspan fill="blue">1048576</tspan>,) | torch.bool | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24"><tspan fill="blue">1</tspan>&#160;x&#160;&#160;&#160;<tspan fill="blue">0.2</tspan> MB | (<tspan fill="blue">1</tspan>, <tspan fill="blue">4</tspan>, <tspan fill="blue">16</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">32</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
         <tspan x="20" dy="24">Removed tensors:</tspan>
-        <tspan x="20" dy="24">-<tspan fill="blue">1</tspan> x  <tspan fill="blue">256.0</tspan> MB | (<tspan
-                fill="blue">2</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">128</tspan>, <tspan
-                fill="blue">128</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
-        <tspan x="20" dy="24">-<tspan fill="blue">1</tspan> x  <tspan fill="blue">4.0</tspan> MB | (<tspan
-                fill="blue">2</tspan>, <tspan fill="blue">4</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan
-                fill="blue">64</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
-        <tspan x="20" dy="24">-<tspan fill="blue">1</tspan> x  <tspan fill="blue">0.5</tspan> MB | (<tspan
-                fill="blue">2</tspan>, <tspan fill="blue">4</tspan>, <tspan fill="blue">16</tspan>, <tspan fill="blue">32</tspan>, <tspan
-                fill="blue">32</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> |
-            <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24">-<tspan fill="blue">1</tspan>&#160;x&#160;&#160;<tspan fill="blue">256.0</tspan> MB | (<tspan fill="blue">2</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">128</tspan>, <tspan fill="blue">128</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24">-<tspan fill="blue">1</tspan> x  <tspan fill="blue">4.0</tspan> MB | (<tspan fill="blue">2</tspan>, <tspan fill="blue">4</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">64</tspan>, <tspan fill="blue">64</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
+        <tspan x="20" dy="24">-<tspan fill="blue">1</tspan> x  <tspan fill="blue">0.5</tspan> MB | (<tspan fill="blue">2</tspan>, <tspan fill="blue">4</tspan>, <tspan fill="blue">16</tspan>, <tspan fill="blue">32</tspan>, <tspan fill="blue">32</tspan>) | torch.float32 | <tspan fill="green">cuda:0</tspan> | grad=<tspan fill="red">False</tspan> | <tspan fill="brown">None</tspan></tspan>
   </text>
 </svg>
