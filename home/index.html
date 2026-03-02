@@ -726,58 +726,93 @@
 
         <div class="features-grid">
             <article class="feature-card">
-                <div class="feature-tag">Training</div>
-                <div class="feature-title">Easy adaptation to your workflow</div>
+                <div class="feature-tag">Trainer</div>
+                <div class="feature-title">Thoughtful console logs</div>
                 <p class="feature-desc">
-                    Override a single method to plug in your own network architecture. Grab a tool from the box and
-                    customize your experiments.
-                </p>
-                <ul class="inline-list">
-                    <li>Sliding window</li>
-                    <li>ROI inspection &amp; cropping</li>
-                    <li>Automatic padding &amp; shape alignment</li>
-                </ul>
-            </article>
-
-            <article class="feature-card">
-                <div class="feature-tag">Interface</div>
-                <div class="feature-title">Thoughtful command-line UX</div>
-                <p class="feature-desc">
-                    A clean CLI layout makes it easy to configure experiments, track progress, and resume work without
-                    digging through scripts.
+                    We carefully designed the console outputs to be informative and actionable, providing insights into
+                    model performance and training progress. Not only scalar metrics are printed, we also
+                    track their trends over epochs and show per-case validation metrics.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="CLI UI" class="zoomable" src="assets/cli-ui.png">
+                    <img alt="console outputs" class="zoomable" src="assets/console-outputs.png">
                 </div>
             </article>
 
             <article class="feature-card">
-                <div class="feature-tag">Visualization</div>
-                <div class="feature-title">Built-in 2D &amp; 3D views</div>
+                <div class="feature-tag">Trainer</div>
+                <div class="feature-title">Built-in overlaid previews</div>
                 <p class="feature-desc">
-                    Inspect slices or volumes directly from the training pipeline for intuitive understanding of your
-                    data and predictions.
+                    Sometimes even when all metrics seem perfect, the model can still be misleading. MIP Candy
+                    does its best to help you "see" the model's performance by providing powerful built-in visualization
+                    utilities.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="2D and 3D visualization" class="zoomable" src="assets/visualization.png">
+                    <div style="display: flex;">
+                        <div style="width: 50%">
+                            <img alt="expected" class="zoomable" src="assets/fig-preview-expected.png">
+                        </div>
+                        <div style="width: 50%">
+                            <img alt="actual" class="zoomable" src="assets/fig-preview-actual.png">
+                        </div>
+                    </div>
+                    <div style="display: flex;">
+                        <div style="width: 33%">
+                            <img alt="input" class="zoomable" src="assets/fig-input.png">
+                        </div>
+                        <div style="width: 33%">
+                            <img alt="label" class="zoomable" src="assets/fig-label.png">
+                        </div>
+                        <div style="width: 33%">
+                            <img alt="output" class="zoomable" src="assets/fig-output.png">
+                        </div>
+                    </div>
                 </div>
             </article>
 
             <article class="feature-card">
-                <div class="feature-tag">Reliability</div>
-                <div class="feature-title">Interruption-tolerant runs</div>
+                <div class="feature-tag">Trainer</div>
+                <div class="feature-title">3D rendering</div>
                 <p class="feature-desc">
-                    Experiments can be safely paused and resumed with built-in recovery mechanisms, so cluster hiccups
-                    don’t cost you progress.
+                    Visualizing 3D volumes, which are widespread in medical imaging and other 3D data analysis tasks,
+                    can be challenging. MIP Candy provides simple and intuitive 3D visualization interfaces that
+                    allow you to visualize 3D volumes in a user-friendly manner. These methods are well sculpted to
+                    ensure negligible overhead added to the training process.
                 </p>
                 <div class="feature-thumb">
-                    <img alt="Recovery screenshots" class="zoomable" src="assets/recovery.png">
+                    <div style="display: flex;">
+                        <div style="width: 50%">
+                            <img alt="input" class="zoomable" src="assets/fig-3d-input.png">
+                        </div>
+                        <div style="width: 50%">
+                            <img alt="label" class="zoomable" src="assets/fig-3d-label.png">
+                        </div>
+                    </div>
+
                 </div>
             </article>
 
             <article class="feature-card">
-                <div class="feature-tag">Dashboards</div>
-                <div class="feature-title">Remote monitoring ready</div>
+                <div class="feature-tag">Trainer</div>
+                <div class="feature-title">Mertics plotting</div>
+                <p class="feature-desc">
+                    Everything saved into <span class="inline-code">metrics</span> will be automatically plotted and
+                    saved into the trainer folder.
+                </p>
+                <div class="feature-thumb">
+                    <div style="display: flex;">
+                        <div style="width: 50%">
+                            <img alt="progress" class="zoomable" src="assets/fig-progress.png">
+                        </div>
+                        <div style="width: 50%">
+                            <img alt="val score" class="zoomable" src="assets/fig-valscore.png">
+                        </div>
+                    </div>
+                </div>
+            </article>
+
+            <article class="feature-card">
+                <div class="feature-tag">Dashboard</div>
+                <div class="feature-title">Ready for remote monitoring</div>
                 <p class="feature-desc">
                     Connect to Notion, Weights &amp; Biases, and TensorBoard for rich experiment tracking and sharing
                     with your team.
@@ -788,12 +823,16 @@
             </article>
 
             <article class="feature-card">
-                <div class="feature-tag">Python&nbsp;3.12+</div>
-                <div class="feature-title">Modern Python, modern stack</div>
+                <div class="feature-tag">Profiler</div>
+                <div class="feature-title">Easy profiling</div>
                 <p class="feature-desc">
-                    Built for Python&nbsp;3.12 and above, MIP Candy takes advantage of modern typing and ecosystem
-                    improvements out of the box.
+                    As pipelines grow bigger and bigger, memory leakage and computational overhead become invisible
+                    problems. Our built-in profiler helps you investigate into sub-epoch level loggings to find the
+                    culprit.
                 </p>
+                <div class="feature-thumb">
+                    <img alt="profiler" class="zoomable" src="assets/profiler.svg">
+                </div>
             </article>
         </div>
     </section>
@@ -805,10 +844,11 @@
         <p class="text-block-body" style="max-width: 700px;">
             Start from <span class="inline-code">SegmentationTrainer</span> and only implement the network construction.
             MIP Candy handles data flow, loss computation, augmentation, checkpointing, and evaluation out of the box.
+            Learn all you can do in <a href="https://mipcandy-docs.projectneura.org">MIP Candy Docs</a>.
         </p>
 
         <div class="code-card" style="margin-top: 20px;">
-            <div class="code-label">Example — Custom model integration</div>
+            <div class="code-label">Example: custom model integration</div>
             <pre><code>from typing import override
 from torch import nn
 from mipcandy import SegmentationTrainer
@@ -851,40 +891,50 @@ class MyTrainer(SegmentationTrainer):
                 <h2 class="text-block-title">Train like a <b class="gradient-text">Pro</b> in a few lines</h2>
                 <p class="text-block-body">
                     Download a dataset, create a dataset wrapper, and hand it to a trainer. Below is an example using
-                    the PH2 dataset. To replicate an nnU-Net style training, you can add data augmentations and use the
-                    provided <span class="inline-code">SlidingSegmentationTrainer</span> instead of the current
-                    <span class="inline-code">SegmentationTrainer</span> to utilize the sliding window mechanism.
+                    the ACDC dataset. The example code to the right replicates most of nnU-Net's features but without
+                    augmentations.
                 </p>
             </div>
             <div class="code-card">
-                <div class="code-label">Example with PH2 dataset</div>
+                <div class="code-label">Example: train on the ACDC dataset</div>
                 <pre><code>from typing import override
+from os.path import exists
 
-from monai.networks.nets import BasicUNet
-from monai.transforms import Resized
+from monai.networks.nets import DynUNet
 from torch import nn
 from torch.utils.data import DataLoader
-from torchvision.transforms import Compose
 
-from mipcandy import SegmentationTrainer, AmbiguousShape, download_dataset, JointTransform, MONAITransform, Normalize, \
-    NNUNetDataset
+from mipcandy import SegmentationTrainer, AmbiguousShape, auto_device, download_dataset, NNUNetDataset, inspect, \
+    load_inspection_annotations, RandomROIDataset
 
 
 class UNetTrainer(SegmentationTrainer):
     @override
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
-        return BasicUNet(2, example_shape[0], self.num_classes)
+        kernel_size = [[3, 3, 3]] * 5
+        strides = [[1, 1, 1]] + [[2, 2, 2]] * 4
+        return DynUNet(spatial_dims=3, in_channels=example_shape[0], out_channels=self.num_classes,
+                       kernel_size=kernel_size, strides=strides, upsample_kernel_size=strides,
+                       deep_supervision=self.deep_supervision, deep_supr_num=2, res_block=True)
 
 
-download_dataset("nnunet_datasets/PH2", "tutorial/datasets/PH2")
-transform = JointTransform(transform=Compose([
-    Resized(("image", "label"), (560, 768)), MONAITransform(Normalize(domain=(0, 1), strict=True))
-]))
-dataset, val_dataset = NNUNetDataset("tutorial/datasets/PH2", transform=transform, device="cuda").fold()
-dataloader = DataLoader(dataset, 8, shuffle=True)
-val_dataloader = DataLoader(val_dataset, 1, shuffle=False)
-trainer = UNetTrainer("tutorial", dataloader, val_dataloader, device="cuda")
-trainer.train(1000, note="example with PH2 dataset")
+if __name__ == "__main__":
+    device = auto_device()
+    download_dataset("nnunet_datasets/ACDC", "tutorial/datasets/ACDC")
+    dataset = NNUNetDataset("tutorial/datasets/ACDC", align_spacing=True)
+    if exists("tutorial/datasets/ACDC/annotations.json"):
+        annotations = load_inspection_annotations("tutorial/datasets/ACDC/annotations.json", dataset)
+    else:
+        dataset.device(device=device)
+        annotations = inspect(dataset)
+        dataset.device(device="cpu")
+        annotations.save("tutorial/datasets/ACDC/annotations.json")
+    dataset = RandomROIDataset(annotations, 2)
+    train, val = dataset.fold()
+    train_loader = DataLoader(train, 2, True, num_workers=2, prefetch_factor=2, persistent_workers=True)
+    val_loader = DataLoader(val, 1, False)
+    trainer = UNetTrainer("tutorial", train_loader, val_loader, device=device)
+    trainer.train(1000, note="example with the ACDC dataset")
 </code></pre>
             </div>
         </div>
