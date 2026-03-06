@@ -19,60 +19,6 @@ ideas. MIP Candy takes care of all the rest, so you can focus on only the key ex
 
 :link: [Docs](https://mipcandy-docs.projectneura.org)
 
-## Key Features
-
-Why MIP Candy? :thinking:
-
-<details>
-<summary>Easy adaptation to fit your needs</summary>
-We provide tons of easy-to-use techniques for training that seamlessly support your customized experiments.
-
-- Sliding window
-- ROI inspection
-- ROI cropping to align dataset shape (100% or 33% foreground)
-- Automatic padding
-- ...
-
-You only need to override one method to create a trainer for your network architecture.
-
-```python
-from typing import override
-
-from torch import nn
-from mipcandy import SegmentationTrainer
-
-
-class MyTrainer(SegmentationTrainer):
-    @override
-    def build_network(self, example_shape: tuple[int, ...]) -> nn.Module:
-        ...
-```
-</details>
-
-<details>
-<summary>Satisfying command-line UI design</summary>
-<img src="home/assets/console-outputs.png" alt="cmd-ui"/>
-</details>
-
-<details>
-<summary>Built-in 2D and 3D visualization for intuitive understanding</summary>
-<img src="home/assets/visualization.png" alt="visualization"/>
-</details>
-
-<details>
-<summary>High availability with interruption tolerance</summary>
-Interrupted experiments can be resumed with ease.
-<img src="home/assets/recovery.png" alt="recovery"/>
-</details>
-
-<details>
-<summary>Support of various frontend platforms for remote monitoring</summary>
-
-MIP Candy Supports [Notion](https://mipcandy-projectneura.notion.site), WandB, and TensorBoard.
-
-<img src="home/assets/notion.png" alt="notion"/>
-</details>
-
 ## Citation
 
 Should you find our work helpful to you, please cite our publication.
@@ -99,30 +45,46 @@ pip install "mipcandy[standard]"
 
 ## Quick Start
 
-Below is a simple example of a nnU-Net style training. The batch size is set to 1 due to the varying shape of the
-dataset, although you can use a `ROIDataset` to align the shapes.
+Below is an example using the ACDC dataset. The example code replicates most of nnU-Net's features but without
+augmentations.
 
 ```python
 from typing import override
+from os.path import exists
 
-import torch
-from mipcandy_bundles.unet import UNetTrainer
+from monai.networks.nets import DynUNet
+from torch import nn
 from torch.utils.data import DataLoader
 
-from mipcandy import download_dataset, NNUNetDataset
+from mipcandy import SegmentationTrainer, AmbiguousShape, auto_device, download_dataset, NNUNetDataset, inspect, \
+    load_inspection_annotations, RandomROIDataset
 
 
-class PH2(NNUNetDataset):
+class UNetTrainer(SegmentationTrainer):
     @override
-    def load(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        image, label = super().load(idx)
-        return image.squeeze(0).permute(2, 0, 1), label
+    def build_network(self, example_shape: AmbiguousShape) -> nn.Module:
+        kernel_size = [[3, 3, 3]] * 5
+        strides = [[1, 1, 1]] + [[2, 2, 2]] * 4
+        return DynUNet(spatial_dims=3, in_channels=example_shape[0], out_channels=self.num_classes,
+                       kernel_size=kernel_size, strides=strides, upsample_kernel_size=strides,
+                       deep_supervision=self.deep_supervision, deep_supr_num=2, res_block=True)
 
 
-download_dataset("nnunet_datasets/PH2", "tutorial/datasets/PH2")
-dataset, val_dataset = PH2("tutorial/datasets/PH2", device="cuda").fold()
-dataloader = DataLoader(dataset, 1, shuffle=True)
-val_dataloader = DataLoader(val_dataset, 1, shuffle=False)
-trainer = UNetTrainer("tutorial", dataloader, val_dataloader, device="cuda")
-trainer.train(1000, note="a nnU-Net style example")
+if __name__ == "__main__":
+    device = auto_device()
+    download_dataset("nnunet_datasets/ACDC", "tutorial/datasets/ACDC")
+    dataset = NNUNetDataset("tutorial/datasets/ACDC", align_spacing=True)
+    if exists("tutorial/datasets/ACDC/annotations.json"):
+        annotations = load_inspection_annotations("tutorial/datasets/ACDC/annotations.json", dataset)
+    else:
+        dataset.device(device=device)
+        annotations = inspect(dataset)
+        dataset.device(device="cpu")
+        annotations.save("tutorial/datasets/ACDC/annotations.json")
+    dataset = RandomROIDataset(annotations, 2)
+    train, val = dataset.fold()
+    train_loader = DataLoader(train, 2, True, num_workers=2, prefetch_factor=2, persistent_workers=True)
+    val_loader = DataLoader(val, 1, False)
+    trainer = UNetTrainer("tutorial", train_loader, val_loader, device=device)
+    trainer.train(1000, note="example with the ACDC dataset")
 ```
