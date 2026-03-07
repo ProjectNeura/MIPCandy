@@ -429,11 +429,13 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             toolbox.scaler.update()
             if old_scale <= toolbox.scaler.get_scale():
                 toolbox.scheduler.step()
+                if toolbox.ema:
+                    toolbox.ema.update_parameters(toolbox.model)
         else:
             toolbox.optimizer.step()
             toolbox.scheduler.step()
-        if toolbox.ema:
-            toolbox.ema.update_parameters(toolbox.model)
+            if toolbox.ema:
+                toolbox.ema.update_parameters(toolbox.model)
         return loss, metrics
 
     def train_epoch(self, toolbox: TrainerToolbox) -> dict[str, list[float]]:
