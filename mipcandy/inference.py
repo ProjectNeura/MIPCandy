@@ -3,7 +3,7 @@ from collections.abc import Generator
 from math import log, ceil
 from os import PathLike, listdir
 from os.path import isdir, basename, exists
-from typing import Sequence
+from typing import Sequence, override
 
 import torch
 from torch import nn
@@ -69,7 +69,44 @@ class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             output = restoring_module(output)
         return output if batch else output.squeeze(0)
 
-    def _predict(self, x: SupportedPredictant | UnsupervisedDataset) -> Generator[
+    def _predict(self, x: SupportedPredictant | UnsupervisedDataset) -> tuple[list[torch.Tensor], list[str] | None]:
+        if isinstance(x, PathBasedUnsupervisedDataset):
+            return [self.predict_image(case) for case in x], x.paths()
+        if isinstance(x, UnsupervisedDataset):
+            return [self.predict_image(case) for case in x], None
+        images, filenames = parse_predictant(x, Loader)
+        return [self.predict_image(image) for image in images], filenames
+
+    def predict(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
+        return self._predict(x)[0]
+
+    @staticmethod
+    def save_prediction(output: torch.Tensor, path: str | PathLike[str]) -> None:
+        save_image(output, path)
+
+    def save_predictions(self, outputs: Sequence[torch.Tensor], folder: str | PathLike[str], *,
+                         filenames: Sequence[str | PathLike[str]] | None = None) -> None:
+        if not exists(folder):
+            raise FileNotFoundError(f"Folder {folder} does not exist")
+        if not filenames:
+            num_digits = ceil(log(len(outputs)))
+            filenames = [f"prediction_{str(i).zfill(num_digits)}.{
+            "png" if output.ndim == 3 and output.shape[0] in (1, 3) else "mha"}" for i, output in enumerate(outputs)]
+        for i, prediction in enumerate(outputs):
+            self.save_prediction(prediction, f"{folder}/{filenames[i]}")
+
+    def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset,
+                         folder: str | PathLike[str]) -> list[str] | None:
+        outputs, filenames = self._predict(x)
+        self.save_predictions(outputs, folder, filenames=filenames)
+        return filenames
+
+    def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
+        return self.predict(x)
+
+
+class StreamPredictor(Predictor):
+    def _stream(self, x: SupportedPredictant | UnsupervisedDataset) -> Generator[
         tuple[torch.Tensor, str | None], None, None]:
         if isinstance(x, PathBasedUnsupervisedDataset):
             for case, path in zip(x, x.paths()):
@@ -97,30 +134,18 @@ class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             else:
                 raise TypeError(f"Unexpected type of element {type(case)}")
 
-    def predict(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
-        return [output for output, _ in self._predict(x)]
+    @override
+    def predict(self, x: SupportedPredictant | UnsupervisedDataset) -> Generator[torch.Tensor, None, None]:
+        for output, _ in self._stream(x):
+            yield output
 
-    @staticmethod
-    def save_prediction(output: torch.Tensor, path: str | PathLike[str]) -> None:
-        save_image(output, path)
-
-    def save_predictions(self, outputs: Sequence[torch.Tensor], folder: str | PathLike[str], *,
-                         filenames: Sequence[str | PathLike[str]] | None = None) -> None:
-        if not exists(folder):
-            raise FileNotFoundError(f"Folder {folder} does not exist")
-        if not filenames:
-            num_digits = ceil(log(len(outputs)))
-            filenames = [f"prediction_{str(i).zfill(num_digits)}.{
-            "png" if output.ndim == 3 and output.shape[0] in (1, 3) else "mha"}" for i, output in enumerate(outputs)]
-        for i, prediction in enumerate(outputs):
-            self.save_prediction(prediction, f"{folder}/{filenames[i]}")
-
+    @override
     def predict_to_files(self, x: SupportedPredictant | UnsupervisedDataset,
                          folder: str | PathLike[str]) -> list[str] | None:
         if not exists(folder):
             raise FileNotFoundError(f"Folder {folder} does not exist")
         result: list[str] | None = None
-        for i, (output, name) in enumerate(self._predict(x)):
+        for i, (output, name) in enumerate(self._stream(x)):
             if name is not None:
                 if result is None:
                     result = []
@@ -131,5 +156,6 @@ class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
             self.save_prediction(output, f"{folder}/{name}")
         return result
 
-    def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> list[torch.Tensor]:
+    @override
+    def __call__(self, x: SupportedPredictant | UnsupervisedDataset) -> Generator[torch.Tensor, None, None]:
         return self.predict(x)
