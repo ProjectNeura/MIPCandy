@@ -99,9 +99,9 @@ class DiceBCELossWithLogits(SegmentationLoss):
         self.min_percentage_per_class: float | None = min_percentage_per_class
 
     def _forward(self, outputs: torch.Tensor, labels: torch.Tensor) -> tuple[torch.Tensor, dict[str, float]]:
+        labels = labels.to(dtype=outputs.dtype)
+        bce = nn.functional.binary_cross_entropy_with_logits(outputs, labels)
         outputs = outputs.sigmoid()
-        labels = labels.float()
-        bce = nn.functional.binary_cross_entropy(outputs, labels)
         dice = soft_dice(outputs, labels, smooth=self.smooth)
         metrics = {"soft dice": dice.item(), "bce loss": bce.item()}
         c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - dice)
