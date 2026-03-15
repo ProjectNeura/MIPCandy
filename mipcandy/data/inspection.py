@@ -302,6 +302,9 @@ def inspect(dataset: SupervisedDataset, *, background: int = 0, max_samples: int
                 ), class_counts, class_bboxes, class_locations
             ))
             image = dataset.image(idx)
+            if image.shape[1:] != label.shape[1:]:
+                raise ValueError(f"Image shape {image.shape} does not match label shape {label.shape} spatially at"
+                                 f"index {idx}")
             if image.shape[0] > 1:
                 fg_mask = fg_mask.expand_as(image)
             fg = image[fg_mask]
