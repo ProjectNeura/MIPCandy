@@ -497,6 +497,9 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         if amp and not toolbox.scaler:
             toolbox.scaler = torch.amp.GradScaler(self._device_type())
             self.log("Mixed precision training enabled")
+        elif not amp and toolbox.scaler:
+            toolbox.scaler = None
+            self.log("Mixed precision training disabled")
         checkpoint_path = lambda v: f"{self.experiment_folder()}/checkpoint_{v}.pth"
         es_tolerance = early_stop_tolerance
         self._frontend.on_experiment_created(self._experiment_id, self._trainer_variant, model_name, note,
