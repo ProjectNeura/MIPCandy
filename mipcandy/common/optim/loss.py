@@ -58,7 +58,7 @@ class DiceCELossWithLogits(_SegmentationLoss):
         if not self.include_background:
             outputs = outputs[:, 1:]
             labels = labels[:, 1:]
-        dice = soft_dice(outputs, labels, smooth=self.smooth)
+        dice = soft_dice(outputs.float(), labels.float(), smooth=self.smooth)
         metrics = {"soft dice": dice.item(), "ce loss": ce.item()}
         c = self.lambda_ce * ce + self.lambda_soft_dice * (1 - dice)
         return c, metrics
@@ -91,7 +91,7 @@ class DiceBCELossWithLogits(_SegmentationLoss):
         labels = labels.to(dtype=outputs.dtype)
         bce = nn.functional.binary_cross_entropy_with_logits(outputs, labels)
         outputs = outputs.sigmoid()
-        dice = soft_dice(outputs, labels, smooth=self.smooth)
+        dice = soft_dice(outputs.float(), labels.float(), smooth=self.smooth)
         metrics = {"soft dice": dice.item(), "bce loss": bce.item()}
         c = self.lambda_bce * bce + self.lambda_soft_dice * (1 - dice)
         return c, metrics
