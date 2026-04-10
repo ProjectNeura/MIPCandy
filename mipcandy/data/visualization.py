@@ -83,8 +83,7 @@ def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str 
         max_id = int(values.max())
         traces = []
         for cls in range(1, max_id + 1):
-            mask = (values == cls).astype(np.float32)
-            if mask.max() == 0:
+            if not np.any(values == cls):
                 continue
             color = (
                 cmap[min(cls, len(cmap) - 1)]
@@ -92,9 +91,9 @@ def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str 
                 else None
             )
             traces.append(go.Isosurface(
-                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=mask.ravel(), isomin=0.5, isomax=1.0, surface_count=1,
-                opacity=0.55, caps=dict(x_show=False, y_show=False, z_show=False), showscale=False, name=f"class {cls}",
-                colorscale=[[0.0, color], [1.0, color]] if color else "Jet"
+                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=cls, isomax=cls, surface_count=1,
+                opacity=.55, caps=dict(x_show=False, y_show=False, z_show=False), showscale=False, name=f"class {cls}",
+                colorscale=[[0.0, color], [1.0, color]] if color else "Jet",
             ))
         fig = go.Figure(data=traces)
     else:
@@ -106,7 +105,7 @@ def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str 
         isomin = float(np.percentile(nz, 10)) if nz.size > 0 else vmin
         isomax = vmax
         fig = go.Figure(data=[go.Volume(
-            x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=isomin, isomax=isomax, opacity=0.08,
+            x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=isomin, isomax=isomax, opacity=.08,
             surface_count=12, caps=dict(x_show=False, y_show=False, z_show=False), colorscale=colorscale,
         )])
     fig.update_layout(title=title, scene=dict(xaxis_title="W", yaxis_title="H", zaxis_title="D", aspectmode="data"),
