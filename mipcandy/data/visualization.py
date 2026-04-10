@@ -75,7 +75,9 @@ def _resolve_plotly_colorscale(cmap: str | list[str]) -> str | list:
 def _visualize3d_labels_with_plotly_mesh(image: np.ndarray, *, title: str | None, cmap: str | list[str],
                                          screenshot_as: str | PathLike[str] | None, show: bool) -> None:
     from plotly import graph_objects as go
-    from scipy.ndimage.measurements import marching_cubes
+    if not find_spec("skimage"):
+        raise ImportError("`skimage` is required for 3D label visualization, install it with `pip install skimage`")
+    from skimage.measure import marching_cubes
     traces = []
     max_id = int(image.max())
     for cls in range(1, max_id + 1):
@@ -98,7 +100,6 @@ def _visualize3d_labels_with_plotly_mesh(image: np.ndarray, *, title: str | None
         )
         traces.append(go.Mesh3d(x=x, y=y, z=z, i=i, j=j, k=k, color=color, opacity=0.55, name=f"class {cls}",
                                 showscale=False, flatshading=True))
-
     fig = go.Figure(data=traces)
     fig.update_layout(
         title=title,
