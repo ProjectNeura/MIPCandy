@@ -74,7 +74,7 @@ def _resolve_plotly_colorscale(cmap: str | list[str]) -> str | list:
 
 def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str | list[str], is_label: bool,
                              screenshot_as: str | PathLike[str] | None, show: bool) -> None:
-    import plotly.graph_objects as go
+    from plotly import graph_objects as go
     d, h, w = image.shape
     z, y, x = np.mgrid[0:d, 0:h, 0:w]
     values = image.astype(np.float32)
@@ -174,12 +174,13 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
             image = image.transpose(1, 2, 0)
             if blocking:
                 _visualize3d_with_pyvista(image, title, cmap, screenshot_as)
+                return
             ctx = get_context("spawn")
             ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as),
                         daemon=False).start()
         case "plotly":
             _visualize3d_with_plotly(image, title=title, cmap=cmap, is_label=is_label, screenshot_as=screenshot_as,
-                                     show=blocking and screenshot_as is None)
+                                     show=not (blocking and screenshot_as))
         case _:
             raise ValueError(f"Unsupported backend: {backend}")
 
