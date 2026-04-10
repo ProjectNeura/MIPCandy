@@ -91,9 +91,9 @@ def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str 
                 else None
             )
             traces.append(go.Isosurface(
-                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=cls, isomax=cls, surface_count=1,
-                opacity=.55, caps=dict(x_show=False, y_show=False, z_show=False), showscale=False, name=f"class {cls}",
-                colorscale=[[0.0, color], [1.0, color]] if color else "Jet",
+                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel().astype(np.float32), isomin=cls - .1,
+                isomax=cls + .1, surface_count=1, opacity=.55, caps=dict(x_show=False, y_show=False, z_show=False),
+                showscale=False, name=f"class {cls}", colorscale=[[0.0, color], [1.0, color]] if color else "Jet"
             ))
         fig = go.Figure(data=traces)
     else:
