@@ -104,7 +104,7 @@ def _visualize3d_labels_with_plotly_mesh(image: np.ndarray, *, title: str | None
     d, h, w = image.shape
     fig.update_layout(title=title, scene=dict(
         xaxis=dict(title="W", range=[0, w - 1]), yaxis=dict(title="H", range=[0, h - 1]),
-        zaxis=dict(title="D", range=[0, d - 1]), aspectmode="manual", aspectratio=dict(x=w, y=h, z=d)
+        zaxis=dict(title="D", range=[0, d - 1]), aspectmode="data"
     ), margin=dict(l=0, r=0, t=40 if title else 0, b=0))
     if screenshot_as:
         path = str(screenshot_as)
@@ -135,7 +135,7 @@ def _visualize3d_scalar_with_plotly_volume(image: np.ndarray, *, title: str | No
     d, h, w = image.shape
     fig.update_layout(title=title, scene=dict(
         xaxis=dict(title="W", range=[0, w - 1]), yaxis=dict(title="H", range=[0, h - 1]),
-        zaxis=dict(title="D", range=[0, d - 1]), aspectmode="manual", aspectratio=dict(x=w, y=h, z=d)
+        zaxis=dict(title="D", range=[0, d - 1]), aspectmode="data"
     ), margin=dict(l=0, r=0, t=40 if title else 0, b=0))
     if screenshot_as:
         path = str(screenshot_as)
