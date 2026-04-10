@@ -101,16 +101,11 @@ def _visualize3d_labels_with_plotly_mesh(image: np.ndarray, *, title: str | None
         traces.append(go.Mesh3d(x=x, y=y, z=z, i=i, j=j, k=k, color=color, opacity=0.55, name=f"class {cls}",
                                 showscale=False, flatshading=True))
     fig = go.Figure(data=traces)
-    fig.update_layout(
-        title=title,
-        scene=dict(
-            xaxis_title="W",
-            yaxis_title="H",
-            zaxis_title="D",
-            aspectmode="data",
-        ),
-        margin=dict(l=0, r=0, t=40 if title else 0, b=0),
-    )
+    d, h, w = image.shape
+    fig.update_layout(title=title, scene=dict(
+        xaxis=dict(title="W", range=[0, w - 1]), yaxis=dict(title="H", range=[0, h - 1]),
+        zaxis=dict(title="D", range=[0, d - 1]), aspectmode="manual", aspectratio=dict(x=w, y=h, z=d)
+    ), margin=dict(l=0, r=0, t=40 if title else 0, b=0))
     if screenshot_as:
         path = str(screenshot_as)
         if not path.endswith(".html"):
@@ -137,8 +132,11 @@ def _visualize3d_scalar_with_plotly_volume(image: np.ndarray, *, title: str | No
         x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=isomin, isomax=vmax, opacity=.08,
         surface_count=12, caps=dict(x_show=False, y_show=False, z_show=False), colorscale=colorscale
     )])
-    fig.update_layout(title=title, scene=dict(xaxis_title="W", yaxis_title="H", zaxis_title="D", aspectmode="data"),
-                      margin=dict(l=0, r=0, t=40 if title else 0, b=0))
+    d, h, w = image.shape
+    fig.update_layout(title=title, scene=dict(
+        xaxis=dict(title="W", range=[0, w - 1]), yaxis=dict(title="H", range=[0, h - 1]),
+        zaxis=dict(title="D", range=[0, d - 1]), aspectmode="manual", aspectratio=dict(x=w, y=h, z=d)
+    ), margin=dict(l=0, r=0, t=40 if title else 0, b=0))
     if screenshot_as:
         path = str(screenshot_as)
         if not path.endswith(".html"):
@@ -209,10 +207,10 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
         case "plotly":
             if is_label:
                 _visualize3d_labels_with_plotly_mesh(image, title=title, cmap=cmap, screenshot_as=screenshot_as,
-                    show=not (blocking and screenshot_as))
+                                                     show=not (blocking and screenshot_as))
             else:
                 _visualize3d_scalar_with_plotly_volume(image, title=title, cmap=cmap, screenshot_as=screenshot_as,
-                    show=not (blocking and screenshot_as))
+                                                       show=not (blocking and screenshot_as))
         case _:
             raise ValueError(f"Unsupported backend: {backend}")
 
