@@ -72,42 +72,70 @@ def _resolve_plotly_colorscale(cmap: str | list[str]) -> str | list:
     return mapping.get(cmap, cmap)
 
 
-def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str | list[str], is_label: bool,
-                             screenshot_as: str | PathLike[str] | None, show: bool) -> None:
+def _visualize3d_labels_with_plotly_mesh(image: np.ndarray, *, title: str | None, cmap: str | list[str],
+                                         screenshot_as: str | PathLike[str] | None, show: bool) -> None:
     from plotly import graph_objects as go
+    from scipy.ndimage.measurements import marching_cubes
+    traces = []
+    max_id = int(image.max())
+    for cls in range(1, max_id + 1):
+        mask = (image == cls)
+        if not np.any(mask):
+            continue
+        mask_f = mask.astype(np.float32)
+        if mask_f.sum() < 4:
+            continue
+        try:
+            verts, faces, _, _ = marching_cubes(mask_f, level=.5)
+        except ValueError:
+            continue
+        z, y, x = verts[:, 0], verts[:, 1], verts[:, 2]
+        i, j, k = faces[:, 0], faces[:, 1], faces[:, 2]
+        color = (
+            cmap[min(cls, len(cmap) - 1)]
+            if isinstance(cmap, list)
+            else None
+        )
+        traces.append(go.Mesh3d(x=x, y=y, z=z, i=i, j=j, k=k, color=color, opacity=0.55, name=f"class {cls}",
+                                showscale=False, flatshading=True))
+
+    fig = go.Figure(data=traces)
+    fig.update_layout(
+        title=title,
+        scene=dict(
+            xaxis_title="W",
+            yaxis_title="H",
+            zaxis_title="D",
+            aspectmode="data",
+        ),
+        margin=dict(l=0, r=0, t=40 if title else 0, b=0),
+    )
+    if screenshot_as:
+        path = str(screenshot_as)
+        if not path.endswith(".html"):
+            path += ".html"
+        fig.write_html(str(path))
+    if show:
+        fig.show()
+
+
+def _visualize3d_scalar_with_plotly_volume(image: np.ndarray, *, title: str | None, cmap: str | list[str],
+                                           screenshot_as: str | PathLike[str] | None, show: bool) -> None:
+    import plotly.graph_objects as go
     d, h, w = image.shape
     z, y, x = np.mgrid[0:d, 0:h, 0:w]
+    values = image.astype(np.float32)
     colorscale = _resolve_plotly_colorscale(cmap)
-    if is_label:
-        max_id = image.max()
-        traces = []
-        for cls in range(1, max_id + 1):
-            if not np.any(image == cls):
-                continue
-            color = (
-                cmap[min(cls, len(cmap) - 1)]
-                if isinstance(cmap, list)
-                else None
-            )
-            traces.append(go.Isosurface(
-                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=image, isomin=cls - .1, isomax=cls + .1, surface_count=1,
-                opacity=.55, caps=dict(x_show=False, y_show=False, z_show=False), showscale=False, name=f"class {cls}",
-                colorscale=[[0.0, color], [1.0, color]] if color else "Jet"
-            ))
-        fig = go.Figure(data=traces)
-    else:
-        values = image.astype(np.float32)
-        vmin = float(values.min())
-        vmax = float(values.max())
-        if vmax <= vmin:
-            vmax = vmin + 1e-6
-        nz = values[values > 0]
-        isomin = float(np.percentile(nz, 10)) if nz.size > 0 else vmin
-        isomax = vmax
-        fig = go.Figure(data=[go.Volume(
-            x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=isomin, isomax=isomax, opacity=.08,
-            surface_count=12, caps=dict(x_show=False, y_show=False, z_show=False), colorscale=colorscale,
-        )])
+    vmin = float(values.min())
+    vmax = float(values.max())
+    if vmax <= vmin:
+        vmax = vmin + 1e-6
+    nz = values[values > 0]
+    isomin = float(np.percentile(nz, 10)) if nz.size > 0 else vmin
+    fig = go.Figure(data=[go.Volume(
+        x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=isomin, isomax=vmax, opacity=.08,
+        surface_count=12, caps=dict(x_show=False, y_show=False, z_show=False), colorscale=colorscale
+    )])
     fig.update_layout(title=title, scene=dict(xaxis_title="W", yaxis_title="H", zaxis_title="D", aspectmode="data"),
                       margin=dict(l=0, r=0, t=40 if title else 0, b=0))
     if screenshot_as:
@@ -178,8 +206,12 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
             ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as),
                         daemon=False).start()
         case "plotly":
-            _visualize3d_with_plotly(image, title=title, cmap=cmap, is_label=is_label, screenshot_as=screenshot_as,
-                                     show=not (blocking and screenshot_as))
+            if is_label:
+                _visualize3d_labels_with_plotly_mesh(image, title=title, cmap=cmap, screenshot_as=screenshot_as,
+                    show=not (blocking and screenshot_as))
+            else:
+                _visualize3d_scalar_with_plotly_volume(image, title=title, cmap=cmap, screenshot_as=screenshot_as,
+                    show=not (blocking and screenshot_as))
         case _:
             raise ValueError(f"Unsupported backend: {backend}")
 
