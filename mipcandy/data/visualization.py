@@ -31,7 +31,8 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str | No
     if not cmap:
         cmap = "jet" if is_label else "gray"
     plt.imshow(image.numpy(), cmap, vmin=0, vmax=255)
-    plt.title(title)
+    if title:
+        plt.title(title)
     plt.axis("off")
     if screenshot_as:
         plt.savefig(screenshot_as)
@@ -47,9 +48,75 @@ def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
     p = Plotter(title=title, off_screen=bool(screenshot_as))
     p.add_volume(image, cmap=cmap)
     if screenshot_as:
-        p.screenshot(screenshot_as)
+        p.screenshot(str(screenshot_as))
     else:
         p.show()
+
+
+def _resolve_plotly_colorscale(cmap: str | list[str]) -> str | list:
+    if isinstance(cmap, list):
+        if len(cmap) == 1:
+            return [[0.0, cmap[0]], [1.0, cmap[0]]]
+        return [[i / (len(cmap) - 1), c] for i, c in enumerate(cmap)]
+    mapping = {
+        "gray": "Gray",
+        "binary": "Greys",
+        "jet": "Jet",
+        "viridis": "Viridis",
+        "plasma": "Plasma",
+        "inferno": "Inferno",
+        "magma": "Magma",
+        "cividis": "Cividis",
+    }
+    return mapping.get(cmap, cmap)
+
+
+def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str | list[str], is_label: bool,
+                             screenshot_as: str | PathLike[str] | None, show: bool) -> None:
+    import plotly.graph_objects as go
+    d, h, w = image.shape
+    z, y, x = np.mgrid[0:d, 0:h, 0:w]
+    values = image.astype(np.float32)
+    colorscale = _resolve_plotly_colorscale(cmap)
+    if is_label:
+        max_id = int(values.max())
+        traces = []
+        for cls in range(1, max_id + 1):
+            mask = (values == cls).astype(np.float32)
+            if mask.max() == 0:
+                continue
+            color = (
+                cmap[min(cls, len(cmap) - 1)]
+                if isinstance(cmap, list)
+                else None
+            )
+            traces.append(go.Isosurface(
+                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=mask.ravel(), isomin=0.5, isomax=1.0, surface_count=1,
+                opacity=0.55, caps=dict(x_show=False, y_show=False, z_show=False), showscale=False, name=f"class {cls}",
+                colorscale=[[0.0, color], [1.0, color]] if color else "Jet"
+            ))
+        fig = go.Figure(data=traces)
+    else:
+        vmin = float(values.min())
+        vmax = float(values.max())
+        if vmax <= vmin:
+            vmax = vmin + 1e-6
+        nz = values[values > 0]
+        isomin = float(np.percentile(nz, 10)) if nz.size > 0 else vmin
+        isomax = vmax
+        fig = go.Figure(data=[go.Volume(
+            x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel(), isomin=isomin, isomax=isomax, opacity=0.08,
+            surface_count=12, caps=dict(x_show=False, y_show=False, z_show=False), colorscale=colorscale,
+        )])
+    fig.update_layout(title=title, scene=dict(xaxis_title="W", yaxis_title="H", zaxis_title="D", aspectmode="data"),
+                      margin=dict(l=0, r=0, t=40 if title else 0, b=0))
+    if screenshot_as:
+        path = str(screenshot_as)
+        if not path.endswith(".html"):
+            path += ".html"
+        fig.write_html(str(path))
+    if show:
+        fig.show()
 
 
 __LABEL_COLORMAP: list[str] = [
@@ -59,8 +126,8 @@ __LABEL_COLORMAP: list[str] = [
 
 
 def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | list[str] | None = None,
-                max_volume: int = 1e6, is_label: bool = False,
-                backend: Literal["auto", "matplotlib", "pyvista"] = "auto", blocking: bool = False,
+                max_volume: int = int(1e6), is_label: bool = False,
+                backend: Literal["auto", "matplotlib", "pyvista", "plotly"] = "auto", blocking: bool = False,
                 screenshot_as: str | PathLike[str] | None = None) -> None:
     image = image.detach().cpu()
     if image.ndim < 3:
@@ -75,7 +142,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
             ensure_num_dimensions(image, 5).float(), kernel_size=ratio, stride=ratio, ceil_mode=True
         ), 3).to(image.dtype)
     if backend == "auto":
-        backend = "pyvista" if find_spec("pyvista") else "matplotlib"
+        backend = "plotly" if find_spec("plotly") else ("pyvista" if find_spec("pyvista") else "matplotlib")
     if is_label:
         max_id = image.max()
         if max_id > 1 and torch.is_floating_point(image):
@@ -93,7 +160,8 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
             fig = plt.figure()
             ax = fig.add_subplot(111, projection="3d")
             ax.voxels(image, facecolors=face_colors)
-            ax.set_title(title)
+            if title:
+                ax.set_title(title)
             if screenshot_as:
                 fig.savefig(screenshot_as)
                 if blocking:
@@ -103,10 +171,15 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
         case "pyvista":
             image = image.transpose(1, 2, 0)
             if blocking:
-                return _visualize3d_with_pyvista(image, title, cmap, screenshot_as)
+                _visualize3d_with_pyvista(image, title, cmap, screenshot_as)
             ctx = get_context("spawn")
-            return ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as),
-                               daemon=False).start()
+            ctx.Process(target=_visualize3d_with_pyvista, args=(image, title, cmap, screenshot_as),
+                        daemon=False).start()
+        case "plotly":
+            _visualize3d_with_plotly(image, title=title, cmap=cmap, is_label=is_label, screenshot_as=screenshot_as,
+                                     show=blocking and screenshot_as is None)
+        case _:
+            raise ValueError(f"Unsupported backend: {backend}")
 
 
 def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: float = .5,
