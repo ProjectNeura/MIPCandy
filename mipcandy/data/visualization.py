@@ -76,7 +76,7 @@ def _visualize3d_labels_with_plotly_mesh(image: np.ndarray, *, title: str | None
                                          screenshot_as: str | PathLike[str] | None, show: bool) -> None:
     from plotly import graph_objects as go
     if not find_spec("skimage"):
-        raise ImportError("`skimage` is required for 3D label visualization, install it with `pip install skimage`")
+        raise ImportError("`skimage` is required for 3D label visualization")
     from skimage.measure import marching_cubes
     traces = []
     max_id = int(image.max())

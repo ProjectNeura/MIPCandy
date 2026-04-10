@@ -19,7 +19,7 @@ dependencies = [
 
 [project.optional-dependencies]
 standard = ["plotly"]
-all = ["plotly", "skimage", "mipcandy-bundles"]
+all = ["plotly", "scikit-image", "mipcandy-bundles"]
 
 [tool.hatch.build.targets.sdist]
 only-include = ["mipcandy"]
