@@ -77,13 +77,12 @@ def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str 
     from plotly import graph_objects as go
     d, h, w = image.shape
     z, y, x = np.mgrid[0:d, 0:h, 0:w]
-    values = image.astype(np.float32)
     colorscale = _resolve_plotly_colorscale(cmap)
     if is_label:
-        max_id = int(values.max())
+        max_id = image.max()
         traces = []
         for cls in range(1, max_id + 1):
-            if not np.any(values == cls):
+            if not np.any(image == cls):
                 continue
             color = (
                 cmap[min(cls, len(cmap) - 1)]
@@ -91,12 +90,13 @@ def _visualize3d_with_plotly(image: np.ndarray, *, title: str | None, cmap: str 
                 else None
             )
             traces.append(go.Isosurface(
-                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=values.ravel().astype(np.float32), isomin=cls - .1,
-                isomax=cls + .1, surface_count=1, opacity=.55, caps=dict(x_show=False, y_show=False, z_show=False),
-                showscale=False, name=f"class {cls}", colorscale=[[0.0, color], [1.0, color]] if color else "Jet"
+                x=x.ravel(), y=y.ravel(), z=z.ravel(), value=image, isomin=cls - .1, isomax=cls + .1, surface_count=1,
+                opacity=.55, caps=dict(x_show=False, y_show=False, z_show=False), showscale=False, name=f"class {cls}",
+                colorscale=[[0.0, color], [1.0, color]] if color else "Jet"
             ))
         fig = go.Figure(data=traces)
     else:
+        values = image.astype(np.float32)
         vmin = float(values.min())
         vmax = float(values.max())
         if vmax <= vmin:
