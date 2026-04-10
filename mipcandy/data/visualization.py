@@ -40,6 +40,7 @@ def visualize2d(image: torch.Tensor, *, title: str | None = None, cmap: str | No
             plt.close()
             return
     plt.show(block=blocking)
+    plt.close()
 
 
 def _visualize3d_with_pyvista(image: np.ndarray, title: str | None, cmap: str,
@@ -168,6 +169,7 @@ def visualize3d(image: torch.Tensor, *, title: str | None = None, cmap: str | li
                     plt.close()
                     return
             plt.show(block=blocking)
+            plt.close()
         case "pyvista":
             image = image.transpose(1, 2, 0)
             if blocking:
