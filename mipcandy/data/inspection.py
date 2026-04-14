@@ -3,7 +3,7 @@ from json import dump, load
 from math import ceil
 from os import PathLike
 from random import randint, choice
-from typing import Sequence, override, Callable, Self, Any, Literal
+from typing import Sequence, override, Callable, Any, Literal
 
 import numpy as np
 import torch
@@ -328,7 +328,7 @@ class ROIDataset(SupervisedDataset[list[int]]):
         self._percentile: float = percentile
 
     @override
-    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> "ROIDataset":
         new = self.__class__(self._annotations, percentile=self._percentile)
         new._images = images
         new._labels = labels
@@ -394,7 +394,7 @@ class RandomROIDataset(ROIDataset):
         self._roi_shape = roi_shape
 
     @override
-    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> "RandomROIDataset":
         new = self.__class__(self._annotations, self._batch_size, oversample_rate=self._oversample_rate,
                              clamp=self._clamp, percentile=self._percentile)
         new._images = images

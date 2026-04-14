@@ -169,7 +169,7 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
         self._transform = transform.to(self._device) if transform else None
 
     @abstractmethod
-    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> "SupervisedDataset[D]":
         raise NotImplementedError
 
     def preload(self, output_folder: str | PathLike[str], *, do_transform: bool = False) -> None:
@@ -187,10 +187,10 @@ class SupervisedDataset(_AbstractDataset[tuple[torch.Tensor, torch.Tensor]], Gen
                 fast_save(label, f"{labels_path}/{idx}.pt")
         if do_transform:
             self._transform = None
-        self._preloaded = output_folder
+        self._preloaded = str(output_folder)
 
     def fold(self, *, fold: Literal[0, 1, 2, 3, 4, "all"] = "all", picker: type[KFPicker] = OrderedKFPicker) -> tuple[
-        Self, Self]:
+        "SupervisedDataset[D]", "SupervisedDataset[D]"]:
         indices = picker.pick(len(self), fold)
         images_train = []
         labels_train = []
@@ -230,7 +230,7 @@ class MergedDataset(SupervisedDataset[UnsupervisedDataset]):
         return self._labels[idx]
 
     @override
-    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> "MergedDataset":
         return MergedDataset(DatasetFromMemory(images), DatasetFromMemory(labels), transform=self._transform,
                              device=self._device)
 
@@ -284,7 +284,7 @@ class SimpleDataset(PathBasedUnsupervisedDataset):
     def __init__(self, folder: str | PathLike[str], is_label: bool, *, transform: Transform | None = None,
                  device: Device = "cpu") -> None:
         super().__init__(sorted(listdir(folder)), transform=transform, device=device)
-        self._folder: str = folder
+        self._folder: str = str(folder)
         self._is_label: bool = is_label
 
     @override
@@ -333,7 +333,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
                 self._multimodal_images[-1].append(image)
             if len(self._multimodal_images) != len(self._labels):
                 raise ValueError("Unmatched number of images and labels")
-        self._folder: str = folder
+        self._folder: str = str(folder)
         self._split: str = split
         self._folded: bool = False
         self._prefix: str = prefix
@@ -377,7 +377,7 @@ class NNUNetDataset(PathBasedSupervisedDataset):
         self._folded = False
 
     @override
-    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> "NNUNetDataset":
         if self._folded:
             raise ValueError("Cannot construct a new dataset from a fold")
         new = self.__class__(self._folder, split=self._split, prefix=self._prefix, align_spacing=self._align_spacing,
@@ -400,7 +400,7 @@ class BinarizedDataset(SupervisedDataset[tuple[None]]):
         return len(self._base)
 
     @override
-    def construct_new(self, images: list[Any], labels: list[Any]) -> Self:
+    def construct_new(self, images: list[Any], labels: list[Any]) -> "BinarizedDataset":
         raise NotImplementedError
 
     @override

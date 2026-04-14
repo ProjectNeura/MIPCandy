@@ -223,6 +223,8 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: floa
     """
     if image.ndim < 2 or label.ndim < 2:
         raise ValueError("Only 2D images can be overlaid")
+    if getattr(label_colorizer, "batch", False):
+        raise ValueError("`label_colorizer` must not handle the batch dimension")
     image = ensure_num_dimensions(image, 3)
     label = ensure_num_dimensions(label, 2)
     image = auto_convert(image)
@@ -241,7 +243,7 @@ def overlay(image: torch.Tensor, label: torch.Tensor, *, max_label_opacity: floa
     elif label.shape[0] == 1:
         label = label.repeat(3, 1, 1)
     if not (image_c == label.shape[0] == 3):
-        raise ValueError("Unsupported number of channels")
+        raise ValueError(f"Unmatched number of channels {image_c} and {label.shape[0]}, expected 3 channels for both")
     if alpha.max() > 0:
         alpha = alpha * max_label_opacity / alpha.max()
     return image * (1 - alpha) + label * alpha
