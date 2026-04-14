@@ -41,7 +41,7 @@ class LayerT(object):
                 self_kwargs[k] = kwargs.pop(v)
         return self.m(*args, **self_kwargs, **kwargs)
 
-    def copy(self) -> Self:
+    def copy(self) -> "LayerT":
         return self.__class__(self.m, **self.kwargs)
 
 
@@ -118,7 +118,7 @@ class WithNetwork(WithCheckpoint, HasDevice, metaclass=ABCMeta):
 
     @override
     def save_checkpoint(self, model: nn.Module, path: str | PathLike[str]) -> None:
-        save_model(getattr(model, "_orig_mod") if hasattr(model, "_orig_mod") else model, path)
+        save_model(getattr(model, "_orig_mod") if hasattr(model, "_orig_mod") else model, str(path))
 
     @abstractmethod
     def build_network(self, example_shape: AmbiguousShape) -> nn.Module:

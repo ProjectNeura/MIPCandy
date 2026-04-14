@@ -42,7 +42,7 @@ class Predictor(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                  checkpoint: str = "checkpoint_best.pth", device: Device = "cpu") -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
-        self._experiment_folder: str = experiment_folder
+        self._experiment_folder: str = str(experiment_folder)
         self._example_shape: AmbiguousShape = example_shape
         self._checkpoint: str = checkpoint
         self._model: nn.Module | None = None

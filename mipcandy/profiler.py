@@ -46,7 +46,7 @@ class _LineBreak(object):
 class Profiler(object):
     def __init__(self, title: str, save_as: str | PathLike[str], *, gpus: Sequence[Device] = ()) -> None:
         self.title: str = title
-        self.save_as: str = save_as
+        self.save_as: str = str(save_as)
         self.total_mem: float = self.get_total_mem()
         self.has_gpu: bool = len(gpus) > 0
         self._gpus: Sequence[Device] = gpus

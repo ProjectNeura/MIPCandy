@@ -65,7 +65,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
                  profiler: bool = False, device: torch.device | str = "cpu", console: Console = Console()) -> None:
         WithPaddingModule.__init__(self, device)
         WithNetwork.__init__(self, device)
-        self._trainer_folder: str = trainer_folder
+        self._trainer_folder: str = str(trainer_folder)
         self._trainer_variant: str = self.__class__.__name__
         self._experiment_id: str = "tbd"
         self._dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]] = dataloader
