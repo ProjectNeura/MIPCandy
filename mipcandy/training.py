@@ -59,6 +59,18 @@ class TrainerTracker(object):
     worst_case: int | None = None
 
 
+def set_seed(seed: int) -> None:
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
+    random_seed(seed)
+    np.random.seed(seed)
+    environ['PYTHONHASHSEED'] = str(seed)
+
+
 class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
     def __init__(self, trainer_folder: str | PathLike[str], dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]],
                  validation_dataloader: DataLoader[tuple[torch.Tensor, torch.Tensor]], *, recoverable: bool = True,
@@ -197,15 +209,7 @@ class Trainer(WithPaddingModule, WithNetwork, metaclass=ABCMeta):
         self._frontend = frontend(load_secrets(path=path_to_secrets) if path_to_secrets else load_secrets())
 
     def set_seed(self, seed: int) -> None:
-        np.random.seed(seed)
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
-        random_seed(seed)
-        np.random.seed(seed)
-        environ['PYTHONHASHSEED'] = str(seed)
+        set_seed(seed)
         if self.initialized():
             self.log(f"Set to manual seed {seed}")
 

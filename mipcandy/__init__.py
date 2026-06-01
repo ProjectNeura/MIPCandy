@@ -12,6 +12,6 @@ from mipcandy.presets import *
 from mipcandy.profiler import ProfilerFrame, Profiler
 from mipcandy.run import config
 from mipcandy.sanity_check import num_trainable_params, model_complexity_info, SanityCheckResult, sanity_check
-from mipcandy.training import TrainerToolbox, Trainer
+from mipcandy.training import TrainerToolbox, Trainer, set_seed
 from mipcandy.types import Setting, Settings, Params, Transform, SupportedPredictant, Colormap, Device, Shape2d, \
     Shape3d, Shape, AmbiguousShape, Paddings2d, Paddings3d, Paddings
