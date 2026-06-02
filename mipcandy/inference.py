@@ -1,5 +1,5 @@
 from abc import ABCMeta
-from collections.abc import Generator
+from typing import Generator
 from math import log, ceil
 from os import PathLike, listdir
 from os.path import isdir, basename, exists
