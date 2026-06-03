@@ -1,9 +1,8 @@
 from abc import ABCMeta
-from typing import Generator
 from math import log, ceil
 from os import PathLike, listdir
 from os.path import isdir, basename, exists
-from typing import Sequence, override
+from typing import Sequence, override, Generator
 
 import torch
 from torch import nn
