@@ -75,10 +75,19 @@ def dump_allocated_tensors() -> tuple[float, list[tuple[
     """
     :return: (total size in MB, [(size in MB, shape, dtype, device, requires_grad, grad_fn)])
     """
-    tensors = [
-        (obj, obj.numel() * obj.element_size() / 1048576) for obj in get_objects() if isinstance(obj, torch.Tensor)
-    ]
-    tensors.sort(key=lambda t: t[1], reverse=True)
-    return sum(t[1] for t in tensors), [
-        (sz, tuple(t.shape), t.dtype, t.device, t.requires_grad, str(t.grad_fn)) for t, sz in tensors
-    ]
+    tensors = []
+    for obj in get_objects():
+        try:
+            if not isinstance(obj, torch.Tensor):
+                continue
+        except ReferenceError:
+            continue
+        try:
+            tensors.append((
+                obj.numel() * obj.element_size() / 1048576, tuple(obj.shape), obj.dtype, obj.device, obj.requires_grad,
+                str(obj.grad_fn)
+            ))
+        except ReferenceError:
+            continue
+    tensors.sort(key=lambda t: t[0], reverse=True)
+    return sum(t[0] for t in tensors), tensors
